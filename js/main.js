@@ -241,4 +241,20 @@
       if (e.key === "Escape") close(); else if (e.key === "ArrowLeft") show(idx - 1); else if (e.key === "ArrowRight") show(idx + 1);
     });
   }
+
+  /* ---------- 3D 둘러보기 인라인 임베드 ---------- */
+  var embed = $("#tour-embed");
+  if (embed) {
+    var frame = $("iframe", embed);
+    $$("[data-tour-embed]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (!frame.getAttribute("src")) frame.setAttribute("src", frame.getAttribute("data-src"));
+        embed.hidden = false;
+        embed.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+    $$("[data-tour-close]").forEach(function (b) {
+      b.addEventListener("click", function () { embed.hidden = true; frame.removeAttribute("src"); });
+    });
+  }
 })();

@@ -41,7 +41,7 @@
       <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
     </a>
     <nav class="nav-links" id="nav-links" aria-label="주요 메뉴">
-      <a href="index.html">홈</a><a href="about.html">브랜드</a><a href="space.html" aria-current="page">공간</a><a href="program.html">프로그램·파트너</a><a href="history.html">아카이브</a>
+      <a href="index.html">홈</a><a href="about.html">브랜드</a><a href="space.html" aria-current="page">공간</a><a href="tour.html">3D 둘러보기</a><a href="program.html">프로그램·파트너</a><a href="history.html">아카이브</a>
       <span class="nav-cta"><a class="btn btn-primary btn-sm" href="contact.html">예약·문의</a></span>
     </nav>
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="메뉴 열기"><span></span></button>
@@ -73,7 +73,7 @@
     <div class="section-head reveal">
       <span class="eyebrow">Floor Plan</span>
       <h2 class="h2 mt-16">4층 한눈에 보기</h2>
-      <p class="lead">복도 하나를 따라 다섯 개의 룸과 24시간 코워킹·스터디카페, 네 개의 독립사무실이 이어집니다. 주출입구는 자동문이며, 들어서면 오른쪽에 휴게 공간과 5번룸이, 왼쪽 복도를 따라 1·2·3·4번룸과 코워킹, 독립사무실이 이어집니다. 평면도의 공간을 누르면 해당 안내로 이동합니다.</p>
+      <p class="lead">복도 하나를 따라 다섯 개의 룸과 24시간 코워킹·스터디카페, 네 개의 독립사무실이 놓여 있습니다. 주출입구로 들어서면 오른쪽에 휴게 공간과 5번룸이 있고, 왼쪽 복도를 따라 1·2·3·4번룸과 코워킹, 독립사무실이 이어집니다. 평면도의 공간을 누르면 해당 안내로 이동합니다.</p>
     </div>
     <div class="fp-wrap reveal">
       <p class="fp-hint">평면도는 좌우로 밀어서 볼 수 있습니다.</p>
@@ -205,22 +205,62 @@
     <p class="note mt-16">치수 단위 mm, 가로 × 세로. H는 바닥부터 천장까지의 높이입니다. 2026년 10월 실측 자료 기준이며 전체 배치도는 축척 없이 구획 관계만 나타냅니다. 벽 두께와 문 폭은 표기하지 않았습니다.</p>
 
     <div class="table-wrap mt-32 reveal">
-      <table class="table">
+      <table class="table table-stack">
         <thead><tr><th>공간</th><th>구역</th><th>크기 (가로 × 세로)</th><th>면적</th><th>천장 높이</th><th>최대 인원</th></tr></thead>
         <tbody>
-          <tr><td class="strong">1번룸</td><td><span class="en">D</span></td><td>8,020 × 4,470</td><td>35.8㎡ · 약 10.8평</td><td>2,320</td><td>25~30명</td></tr>
-          <tr><td class="strong">2번룸</td><td><span class="en">C</span></td><td>9,160 × 5,690</td><td>52.1㎡ · 약 15.8평</td><td>2,320</td><td>30~35명</td></tr>
-          <tr><td class="strong">3번룸</td><td><span class="en">B</span></td><td>6,970 × 2,900</td><td>20.2㎡ · 약 6.1평</td><td>—</td><td>12~18명</td></tr>
-          <tr><td class="strong">4번룸</td><td><span class="en">A</span></td><td>7,330 × 9,175</td><td>67.3㎡ · 약 20.3평</td><td>2,345</td><td>30~35명</td></tr>
-          <tr><td class="strong">5번룸</td><td><span class="en">L</span></td><td>5,716 × 7,595</td><td>43.4㎡ · 약 13.1평</td><td>3,116</td><td>25~30명</td></tr>
-          <tr><td class="strong">24시 코워킹 · 스터디카페</td><td><span class="en">I</span></td><td>9,590 × 7,900</td><td>75.8㎡ · 약 22.9평</td><td>2,500</td><td>30석</td></tr>
-          <tr><td class="strong">독립사무실 A호</td><td><span class="en">E</span></td><td>4,500 × 1,980</td><td>8.9㎡ · 약 2.7평</td><td>—</td><td>2~3인</td></tr>
-          <tr><td class="strong">독립사무실 B · C · D호</td><td><span class="en">F · G · H</span></td><td>3,260 × 1,830 / 3,210 × 1,830 / 3,285 × 1,840</td><td>각 약 6.0㎡ · 1.8평</td><td>—</td><td>각 1~2인</td></tr>
-          <tr><td class="strong">휴게 · 대기 공간</td><td><span class="en">M</span></td><td>5,675 × 1,976</td><td>11.2㎡ · 약 3.4평</td><td>2,450</td><td>공용</td></tr>
+          <tr><td class="strong" data-label="공간">1번룸</td><td data-label="구역"><span class="en">D</span></td><td data-label="크기 (가로 × 세로)">8,020 × 4,470</td><td data-label="면적">35.8㎡ · 약 10.8평</td><td data-label="천장 높이">2,320</td><td data-label="최대 인원">25~30명</td></tr>
+          <tr><td class="strong" data-label="공간">2번룸</td><td data-label="구역"><span class="en">C</span></td><td data-label="크기 (가로 × 세로)">9,160 × 5,690</td><td data-label="면적">52.1㎡ · 약 15.8평</td><td data-label="천장 높이">2,320</td><td data-label="최대 인원">30~35명</td></tr>
+          <tr><td class="strong" data-label="공간">3번룸</td><td data-label="구역"><span class="en">B</span></td><td data-label="크기 (가로 × 세로)">6,970 × 2,900</td><td data-label="면적">20.2㎡ · 약 6.1평</td><td data-label="천장 높이">—</td><td data-label="최대 인원">12~18명</td></tr>
+          <tr><td class="strong" data-label="공간">4번룸</td><td data-label="구역"><span class="en">A</span></td><td data-label="크기 (가로 × 세로)">7,330 × 9,175</td><td data-label="면적">67.3㎡ · 약 20.3평</td><td data-label="천장 높이">2,345</td><td data-label="최대 인원">30~35명</td></tr>
+          <tr><td class="strong" data-label="공간">5번룸</td><td data-label="구역"><span class="en">L</span></td><td data-label="크기 (가로 × 세로)">5,716 × 7,595</td><td data-label="면적">43.4㎡ · 약 13.1평</td><td data-label="천장 높이">3,116</td><td data-label="최대 인원">25~30명</td></tr>
+          <tr><td class="strong" data-label="공간">24시 코워킹 · 스터디카페</td><td data-label="구역"><span class="en">I</span></td><td data-label="크기 (가로 × 세로)">9,590 × 7,900</td><td data-label="면적">75.8㎡ · 약 22.9평</td><td data-label="천장 높이">2,500</td><td data-label="최대 인원">30석</td></tr>
+          <tr><td class="strong" data-label="공간">독립사무실 A호</td><td data-label="구역"><span class="en">E</span></td><td data-label="크기 (가로 × 세로)">4,500 × 1,980</td><td data-label="면적">8.9㎡ · 약 2.7평</td><td data-label="천장 높이">—</td><td data-label="최대 인원">2~3인</td></tr>
+          <tr><td class="strong" data-label="공간">독립사무실 B · C · D호</td><td data-label="구역"><span class="en">F · G · H</span></td><td data-label="크기 (가로 × 세로)">3,260 × 1,830 / 3,210 × 1,830 / 3,285 × 1,840</td><td data-label="면적">각 약 6.0㎡ · 1.8평</td><td data-label="천장 높이">—</td><td data-label="최대 인원">각 1~2인</td></tr>
+          <tr><td class="strong" data-label="공간">휴게 · 대기 공간</td><td data-label="구역"><span class="en">M</span></td><td data-label="크기 (가로 × 세로)">5,675 × 1,976</td><td data-label="면적">11.2㎡ · 약 3.4평</td><td data-label="천장 높이">2,450</td><td data-label="최대 인원">공용</td></tr>
         </tbody>
       </table>
     </div>
     <p class="note mt-16">면적은 표기 치수로 계산한 값입니다. 복도 폭은 가로 연결 구간 1,770, 독립사무실 앞 연결 구간 1,200, 주출입구 쪽 복도 상부 3,200 · 하부 1,675입니다.</p>
+  </div>
+</section>
+
+<!-- ===== 3D 둘러보기 ===== -->
+<section class="section bg" id="tour">
+  <div class="container">
+    <div class="split">
+      <div class="reveal">
+        <span class="eyebrow">3D Tour</span>
+        <h2 class="h2 mt-16">3D로 미리 둘러보기</h2>
+        <p class="lead">도면 치수를 그대로 옮긴 3D 공간입니다. 4층 전체를 입체로 보거나 위에서 내려다보고, 방 하나를 골라 사람 눈높이에서 안을 걸어 다닐 수 있습니다. 강의형·워크숍형·회의형 배치를 바꿔 가며 우리 모임에 맞는 룸을 미리 확인해 보세요.</p>
+        <ul class="checks mt-32">
+          <li><strong>전체 공간 둘러보기</strong> — 룸 1~5, 코워킹, 독립사무실의 위치와 연결 관계</li>
+          <li><strong>방별 보기</strong> — 실측 비율로 만든 방 안에서 입체 · 위에서 · 내부 시점 전환</li>
+          <li><strong>배치 비교</strong> — 강의형 · 워크숍형 · 회의형 · 빈 공간, 조명을 끈 상영 분위기</li>
+          <li><strong>이동</strong> — 드래그로 회전, 휠이나 두 손가락으로 확대, 내부에서는 방향키 · WASD로 걷기</li>
+        </ul>
+        <div class="actions">
+          <a class="btn btn-primary btn-lg" href="tour.html">3D 둘러보기 열기</a>
+          <button class="btn btn-outline btn-lg" type="button" data-tour-embed>이 페이지에서 바로 보기</button>
+        </div>
+        <p class="note mt-16">PC 크롬 · 엣지 · 사파리와 최신 모바일 브라우저에서 열립니다. 3D 화면이 뜨지 않는 환경에서는 원본 도면과 참고 이미지로 대신 안내합니다.</p>
+      </div>
+      <div class="media reveal">
+        <a class="tour-poster" href="tour.html" aria-label="3D 공간 둘러보기 열기">
+          <img src="images/tour-preview.webp" srcset="images/tour-preview-sm.webp 800w, images/tour-preview.webp 1600w" sizes="(max-width: 900px) 100vw, 50vw" alt="소셜팩토리 건대 4층 3D 전체 배치 — 룸 1~5, 코워킹, 독립사무실, 휴게 공간" width="1600" height="900" loading="lazy">
+          <span class="tour-play"><span class="tp-icon">3D</span><span>4층 전체를 입체로 보기</span></span>
+        </a>
+      </div>
+    </div>
+    <div class="tour-embed reveal" id="tour-embed" hidden>
+      <div class="tour-embed-head">
+        <strong>3D 공간 둘러보기</strong>
+        <span>
+          <a class="btn btn-outline btn-sm" href="tour.html" target="_blank" rel="noopener">새 창에서 크게 보기</a>
+          <button class="btn btn-ghost btn-sm" type="button" data-tour-close>닫기</button>
+        </span>
+      </div>
+      <iframe title="소셜팩토리 건대 3D 공간 둘러보기" data-src="tour.html" allowfullscreen loading="lazy"></iframe>
+    </div>
   </div>
 </section>
 
@@ -275,7 +315,7 @@
           <div><dt>어울리는 모임</dt><dd>강연, 설명회, 기업 세미나, 30명 규모 행사</dd></div>
           <div><dt>추천 배치</dt><dd><span class="badge outline">노테이블형</span> <span class="badge outline">III자형</span> <span class="badge outline">자유형</span></dd></div>
         </dl>
-        <p class="rd-note">가로 9m가 넘어 앞쪽에 스크린과 연단을 두고도 좌석을 넉넉히 놓을 수 있습니다. 4번룸과 같은 시간에 쓰면 60명 이상 행사를 두 방으로 나눠 진행합니다.</p>
+        <p class="rd-note">가로 9m가 넘어 앞쪽에 스크린과 연단을 두고도 좌석을 넉넉히 놓을 수 있습니다. 4번룸과 같은 시간에 쓰면 60명 이상 행사도 두 방으로 나눠 진행할 수 있습니다.</p>
         <div class="actions"><a class="btn btn-primary btn-sm" href="contact.html">2번룸 문의</a><a class="btn btn-ghost btn-sm" href="#floorplan">평면도에서 보기 ↑</a></div>
       </div>
     </article>
@@ -358,7 +398,7 @@
         <li>독립사무실: <span data-pricing="office"></span></li>
       </ul>
     </div>
-    <p class="note mt-24" data-pricing-fallback>요금은 공간, 시간대, 인원에 따라 다릅니다. 예약 채널에서 확인하거나 문의 폼으로 남겨 주세요. 기업·단체 대관과 정기 이용은 따로 견적을 드립니다. 각 룸의 테이블·의자·화이트보드 등 기본 비품과 스크린·음향 장비 구성은 오픈 시 확정해 예약 채널의 룸별 안내에 적습니다.</p>
+    <p class="note mt-24" data-pricing-fallback>요금은 공간, 시간대, 인원에 따라 다릅니다. 예약 채널에서 확인하거나 문의 폼으로 남겨 주세요. 기업·단체 대관과 정기 이용은 따로 견적을 드립니다. 각 룸의 테이블·의자·화이트보드 등 기본 비품과 스크린·음향 장비 구성은 오픈에 맞춰 확정하고 예약 채널의 룸별 안내에 적어 둡니다.</p>
   </div>
 </section>
 
@@ -445,7 +485,7 @@
         <div class="room-sign"><div class="no">PANTRY<small>휴게 · 대기 공간 · 구역 M</small></div><img class="dots" src="images/logo-dots.svg" alt=""></div>
         <div class="room-body">
           <div class="cap">공용 <small>5.68 × 1.98 m · 11.2㎡</small></div>
-          <p class="use">주출입구 오른쪽, 5번룸 옆에 있습니다. 먼저 도착한 참가자가 기다리거나 쉬는 시간에 음료를 마시며 이야기를 이어 가는 자리입니다. 룸 안의 소음이 복도로 새지 않도록 대화는 이곳에서 나눕니다.</p>
+          <p class="use">주출입구 오른쪽, 5번룸 옆에 있습니다. 먼저 도착한 참가자가 기다리거나 쉬는 시간에 음료를 마시며 이야기를 이어 가는 자리입니다. 쉬는 시간의 대화는 룸 안의 모임에 방해가 되지 않도록 이곳에서 나눕니다.</p>
           <div class="tags"><span class="badge outline">대기</span><span class="badge outline">휴식</span><span class="badge outline">음료</span></div>
         </div>
       </div>
@@ -455,7 +495,7 @@
           <li>주출입구는 자동문이며, 들어서면 폭 3.2m의 복도가 안쪽까지 이어집니다.</li>
           <li>오른쪽 복도 끝에 운영관리실과 창고가 있습니다. 이용자 출입 공간은 아닙니다.</li>
           <li>왼쪽으로 꺾이는 가로 연결 구간(폭 1.77m)을 따라 1·2·3·4번룸이, 코워킹 옆 연결 구간(폭 1.2m)을 따라 독립사무실이 있습니다.</li>
-          <li>룸 사인은 영문 번호 위에 한글 이름을 두 줄로 써서 평면도와 같은 이름으로 찾을 수 있습니다.</li>
+          <li>룸 사인에는 영문 번호와 한글 이름을 두 줄로 적어, 평면도에서 본 이름 그대로 찾을 수 있습니다.</li>
         </ul>
       </div>
     </div>
@@ -480,7 +520,7 @@
       </a>
       <a class="layout-card" href="images/space/08-circle.webp" data-lightbox>
         <img src="images/space/08-circle-sm.webp" alt="자유형·원형 배치" loading="lazy">
-        <div class="lc-body"><span class="badge">자유형 · 원형</span><h3>네트워킹 · 행사</h3><p>테이블을 벽으로 밀고 가운데를 비웁니다. 원형 토론, 네트워킹 파티, 소규모 행사.</p></div>
+        <div class="lc-body"><span class="badge">자유형 · 원형</span><h3>네트워킹 · 행사</h3><p>테이블을 벽으로 밀고 가운데를 비웁니다. 원형 토론, 네트워킹 파티, 소규모 행사에 씁니다.</p></div>
       </a>
     </div>
   </div>
@@ -565,7 +605,7 @@
   <div class="container">
     <div class="cta-band reveal">
       <div>
-        <h2>인원과 모임 성격을 알려 주시면<br>맞는 룸을 안내해 드립니다</h2>
+        <h2>인원과 모임 성격을 알려 주시면 <br>맞는 룸을 안내해 드립니다</h2>
         <p>강연, 세미나, 스터디, 워크숍, 입주 문의 모두 같은 창구에서 받습니다.</p>
       </div>
       <div class="actions">
@@ -590,6 +630,7 @@
         <ul>
           <li><a href="about.html">브랜드 이야기</a></li>
           <li><a href="space.html">공간 안내</a></li>
+          <li><a href="tour.html">3D 공간 둘러보기</a></li>
           <li><a href="program.html">프로그램·파트너</a></li>
           <li><a href="history.html">아카이브 2015–2021</a></li>
           <li><a href="contact.html">예약·문의</a></li>

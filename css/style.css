@@ -293,7 +293,7 @@ table.table td .en { font-weight: 800; color: var(--blue); }
 .swatch { border-radius: 12px; border: 1px solid var(--line); overflow: hidden; background: #fff; }
 .swatch .c { height: 72px; }
 .swatch .m { padding: 10px 12px; font-family: var(--font-en); font-size: 12px; font-weight: 700; color: var(--navy-80); }
-.swatch .m small { display: block; font-family: var(--font-kr); color: var(--muted); font-weight: 600; margin-top: 2px; }
+.swatch .m small { display: block; font-family: var(--font-kr); font-size: 12px; color: var(--muted); font-weight: 600; margin-top: 2px; }
 
 /* 아이콘 리스트(제휴 대상 등) */
 .pill-list { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -654,3 +654,70 @@ body.lb-locked { overflow: hidden; }
 }
 .fp-hint { display: none; font-size: 12.5px; color: var(--muted); margin: 0 0 8px; }
 @media (max-width: 800px) { .fp-hint { display: block; } }
+
+/* --------------------------------------------------------------------------
+   3D 둘러보기
+   -------------------------------------------------------------------------- */
+.tour-poster { display: block; position: relative; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-lg); background: #F1F4F8; }
+.tour-poster img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; transition: transform .6s ease; box-shadow: none; border-radius: 0; }
+.tour-poster:hover img { transform: scale(1.03); }
+.tour-play { position: absolute; left: 18px; bottom: 18px; display: inline-flex; align-items: center; gap: 12px; padding: 10px 16px 10px 10px; border-radius: 999px; background: rgba(24,35,58,.86); color: #fff; font-weight: 700; font-size: 14px; backdrop-filter: blur(6px); }
+.tour-play .tp-icon { width: 36px; height: 36px; border-radius: 50%; background: var(--blue); display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-en); font-weight: 800; font-size: 12px; letter-spacing: .04em; }
+.tour-embed { margin-top: 32px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.tour-embed[hidden] { display: none; }
+.tour-embed-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px 12px 20px; border-bottom: 1px solid var(--line); font-size: 15px; }
+.tour-embed-head span { display: inline-flex; gap: 6px; align-items: center; }
+.tour-embed iframe { display: block; width: 100%; height: min(82vh, 860px); border: 0; background: #F1F4F8; }
+.tour-banner { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 0; background: #fff; border: 1px solid var(--line); border-radius: 24px; overflow: hidden; color: inherit; transition: transform .2s ease, box-shadow .2s ease; }
+.tour-banner:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); color: inherit; }
+.tour-banner img { width: 100%; height: 100%; object-fit: cover; min-height: 240px; }
+.tour-banner .tb-body { padding: 36px 40px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.tour-banner .tb-body p { color: var(--muted); font-size: 15px; margin: 6px 0 14px; }
+@media (max-width: 900px) {
+  .tour-banner { grid-template-columns: 1fr; }
+  .tour-banner .tb-body { padding: 24px; }
+  .tour-embed iframe { height: 78vh; }
+}
+@media (max-width: 600px) {
+  .tour-embed-head { flex-direction: column; align-items: flex-start; }
+  .tour-play { left: 10px; bottom: 10px; font-size: 13px; }
+}
+
+/* --------------------------------------------------------------------------
+   검토 반영 (터치 영역 · 글자 크기 · 태블릿 정렬 · 모바일 표)
+   -------------------------------------------------------------------------- */
+/* 작은 글자 최소 11.5px 이상 */
+.brand .wordmark .kr { font-size: 11.5px; }
+.notice-bar .tag { font-size: 11.5px; }
+.scene .sc-cap .en { font-size: 11px; }
+.caption, .note { font-size: 13.5px; }
+
+/* 손가락으로 누르기 쉬운 링크 영역 */
+[hidden] { display: none !important; }
+.site-footer li { margin-bottom: 2px; }
+.site-footer li a { display: inline-block; padding: 7px 0; }
+.site-footer li a:hover { color: var(--blue); }
+.notice-bar a { display: inline-block; padding: 8px 0; }
+.page-hero .crumbs a { display: inline-block; padding: 9px 0; margin: -9px 0; }
+.caption a, .note a, .faq .a a, .lead a, .tagline a, .card p a { display: inline-block; padding: 7px 0; margin: -7px 0; color: var(--blue); font-weight: 700; }
+.btn-sm { min-height: 40px; }
+.chips .chip { min-height: 38px; }
+
+/* 태블릿: 3열 카드가 2열로 줄 때 홀로 남는 마지막 카드는 가로로 펼친다 */
+@media (min-width: 601px) and (max-width: 900px) {
+  .grid-3 > :last-child:nth-child(odd) { grid-column: span 2; }
+}
+
+/* 모바일: thead가 있는 표는 세로 카드형으로 */
+@media (max-width: 600px) {
+  .table-wrap:has(.table-stack) { overflow: visible; border: 0; background: transparent; border-radius: 0; }
+  table.table-stack { min-width: 0; border-collapse: separate; border-spacing: 0 10px; display: block; margin-top: -10px; }
+  .table-stack thead { display: none; }
+  .table-stack tbody, .table-stack tr, .table-stack td { display: block; width: 100%; }
+  .table-stack tr { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 6px 16px 10px; }
+  .table-stack td { border: 0; padding: 7px 0; display: grid; grid-template-columns: 84px 1fr; gap: 10px; align-items: start; font-size: 14.5px; }
+  .table-stack td::before { content: attr(data-label); font-size: 12.5px; font-weight: 700; color: var(--muted); padding-top: 2px; letter-spacing: 0.02em; }
+  .table-stack td:first-child { display: block; font-size: 16px; font-weight: 800; color: var(--navy); padding: 8px 0 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  .table-stack td:first-child::before { display: none; }
+  .table-stack tr:last-child td:first-child { border-bottom: 1px solid var(--line); }
+}
