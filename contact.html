@@ -1,18 +1,19 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" class="no-js">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>예약·문의 | 소셜팩토리</title>
-  <meta name="description" content="소셜팩토리 건대 예약과 문의. 카카오톡 채널, 예약 채널, 문의 폼, 오시는 길, 자주 묻는 질문.">
+  <script>document.documentElement.className=document.documentElement.className.replace("no-js","js");</script>
+  <title>대관과 이용 문의 | 소셜팩토리 건대</title>
+  <meta name="description" content="이용할 공간과 날짜, 인원을 알려 주시면 확인 후 안내해 드립니다. 대관·정기대관·기업 이용·코워킹·독립사무실·제휴 문의.">
   <meta name="theme-color" content="#2855E8">
-  <link rel="canonical" href="https://socialfactory.pages.dev/contact.html">
+  <link rel="canonical" href="https://socialfactory.co.kr/contact.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="소셜팩토리 SOCIAL FACTORY">
-  <meta property="og:title" content="예약·문의 | 소셜팩토리">
-  <meta property="og:description" content="소셜팩토리 건대 예약과 문의. 카카오톡 채널, 예약 채널, 문의 폼, 오시는 길, 자주 묻는 질문.">
-  <meta property="og:url" content="https://socialfactory.pages.dev/contact.html">
-  <meta property="og:image" content="https://socialfactory.pages.dev/images/og-image.jpg">
+  <meta property="og:title" content="대관과 이용 문의 | 소셜팩토리 건대">
+  <meta property="og:description" content="이용할 공간과 날짜, 인원을 알려 주시면 확인 후 안내해 드립니다. 대관·정기대관·기업 이용·코워킹·독립사무실·제휴 문의.">
+  <meta property="og:url" content="https://socialfactory.co.kr/contact.html">
+  <meta property="og:image" content="https://socialfactory.co.kr/images/og-image.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:locale" content="ko_KR">
@@ -23,15 +24,15 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="css/style.css">
-</head>
+  </head>
 <body>
 <a class="skip-link" href="#main">본문으로 바로가기</a>
-<div class="notice-bar">
+<div class="notice-bar" role="region" aria-label="운영 안내">
   <div class="container">
-    <span class="tag" data-sf="openLabel">2026 OPEN</span>
-    <span class="long">소셜팩토리가 건대에서 다시 문을 엽니다 · <span data-sf="addressShort">화양동 10-1 한아름건물 4F</span></span>
-    <span class="short">소셜팩토리 건대, 다시 문을 엽니다</span>
-    <a href="space.html">공간 보기 →</a>
+    <span class="tag" data-status-tag>COMING SOON</span>
+    <span class="long"><span data-status-text>오픈 준비 중 · 예약 채널은 오픈 안내와 함께 공개합니다</span> · <span data-sf="addressShort">화양동 10-1 한아름건물 4F</span></span>
+    <span class="short" data-status-text>오픈 준비 중</span>
+    <a href="space.html#rooms">공간 보기 →</a>
   </div>
 </div>
 <header class="site-header">
@@ -41,8 +42,8 @@
       <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
     </a>
     <nav class="nav-links" id="nav-links" aria-label="주요 메뉴">
-      <a href="index.html">홈</a><a href="about.html">브랜드</a><a href="space.html">공간</a><a href="tour.html">3D 둘러보기</a><a href="program.html">프로그램·파트너</a><a href="history.html">아카이브</a>
-      <span class="nav-cta"><a class="btn btn-primary btn-sm" href="contact.html">예약·문의</a></span>
+      <a href="space.html#rooms">공간 대관</a><a href="space.html#coworking">코워킹</a><a href="space.html#office">독립사무실</a><a href="guide.html">이용 안내</a><a href="about.html">소개</a>
+      <span class="nav-cta"><a class="btn btn-primary btn-sm" href="contact.html">대관 문의</a></span>
     </nav>
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="메뉴 열기"><span></span></button>
   </div>
@@ -52,27 +53,28 @@
 <section class="page-hero">
   <div class="container">
     <div class="crumbs"><a href="index.html">Home</a> / Contact</div>
-    <span class="eyebrow">Reservation &amp; Contact</span>
-    <h1 class="mt-16">예약과 문의</h1>
-    <p class="lead">상주 직원 없이 운영하며, 예약은 예약 채널에서, 문의는 카카오톡 채널과 문의 폼으로 받습니다. 기업·단체 대관, 프로그램 제휴, 입주, 공간 제안도 같은 폼으로 남겨 주시면 확인 후 연락드립니다.</p>
+    <span class="eyebrow">Contact</span>
+    <h1 class="mt-16">대관과 이용 문의</h1>
+    <p class="lead">이용할 공간과 날짜, 인원을 알려 주세요. 아직 방을 정하지 못하셨다면 어떤 모임인지 적어 주셔도 됩니다. 문의를 확인한 뒤 남겨 주신 연락처로 안내해 드립니다.</p>
   </div>
 </section>
 
 <!-- ===== 채널 + 위치 ===== -->
-<section class="section">
+<section class="section" id="channels">
   <div class="container">
     <div class="grid cols-contact">
       <div class="reveal">
         <span class="eyebrow">Channels</span>
-        <h2 class="h3 mt-16">예약·문의 채널</h2>
+        <h2 class="h3 mt-16">예약과 상담 채널</h2>
+        <p class="mt-8" style="font-size:14.5px; color: var(--muted);">예약 확정은 예약 채널의 절차를 따르고, 상담은 아래 채널과 문의 폼으로 받습니다. 문의 폼을 보낸 것만으로 예약이 확정되지는 않습니다.</p>
         <div class="channel-list mt-24">
-          <a class="channel" data-channel="kakao" hidden><span class="ic kakao">TALK</span><div><strong>카카오톡 채널</strong><span>문의와 상담의 기본 창구 · 출입 안내도 이곳으로 받습니다</span></div><span class="arrow">→</span></a>
-          <a class="channel" data-channel="naver" hidden><span class="ic naver">N</span><div><strong>네이버 예약</strong><span>룸 예약 · 건대 세미나실, 강연장, 회의실 검색</span></div><span class="arrow">→</span></a>
-          <a class="channel" data-channel="spacecloud" hidden><span class="ic sc">SC</span><div><strong>스페이스클라우드</strong><span>모임공간 전문 플랫폼 · 홍대 시절부터 써 온 채널</span></div><span class="arrow">→</span></a>
-          <a class="channel" data-channel="instagram" hidden><span class="ic insta">IG</span><div><strong>인스타그램</strong><span>프로그램 일정과 공간 소식</span></div><span class="arrow">→</span></a>
+          <a class="channel" data-channel="naver" hidden><span class="ic naver">N</span><div><strong>네이버 예약</strong><span>룸 예약 · 날짜와 시간 선택 후 결제</span></div><span class="arrow">→</span></a>
+          <a class="channel" data-channel="spacecloud" hidden><span class="ic sc">SC</span><div><strong>스페이스클라우드</strong><span>모임공간 플랫폼 · 예약과 결제</span></div><span class="arrow">→</span></a>
+          <a class="channel" data-channel="kakao" hidden><span class="ic kakao">TALK</span><div><strong>카카오톡 채널</strong><span>상담 · 이용 중 문의</span></div><span class="arrow">→</span></a>
           <a class="channel" data-channel="phone" hidden><span class="ic tel">TEL</span><div><strong>전화</strong><span data-channel-value></span></div><span class="arrow">→</span></a>
           <a class="channel" data-channel="email" hidden><span class="ic mail">@</span><div><strong>이메일</strong><span data-channel-value></span></div><span class="arrow">→</span></a>
-          <div class="channels-empty">예약·문의 채널을 준비하고 있습니다. 오픈 안내와 함께 공개하며, 그 전까지는 아래 문의 폼으로 남겨 주세요.</div>
+          <a class="channel" data-channel="instagram" hidden><span class="ic insta">IG</span><div><strong>인스타그램</strong><span>프로그램 일정과 공간 소식</span></div><span class="arrow">→</span></a>
+          <div class="channels-empty">예약·상담 채널은 오픈 안내와 함께 공개합니다. 그 전까지는 아래 문의 폼으로 남겨 주세요.</div>
         </div>
       </div>
       <div class="reveal">
@@ -84,12 +86,12 @@
             <li><span data-sf="directions" data-sf-hide="li"></span></li>
             <li><span data-sf="parking" data-sf-hide="li"></span></li>
             <li>룸 1~5: <span data-sf="hours.rooms">예약제 · 예약한 시간에 맞춰 이용</span></li>
-            <li>코워킹·스터디카페: <span data-sf="hours.coworking">24시간</span></li>
+            <li>코워킹: <span data-sf="hours.coworking">24시간</span> 기준</li>
           </ul>
           <div class="actions">
             <a class="btn btn-outline btn-sm" data-map="naver" href="#">네이버 지도</a>
             <a class="btn btn-outline btn-sm" data-map="kakao" href="#">카카오맵</a>
-            <a class="btn btn-ghost btn-sm" href="space.html#location">오시는 길 →</a>
+            <a class="btn btn-ghost btn-sm" href="guide.html#location">오시는 길 →</a>
           </div>
         </div>
       </div>
@@ -103,80 +105,128 @@
     <div class="section-head reveal">
       <span class="eyebrow">Inquiry</span>
       <h2 class="h2 mt-16">문의 남기기</h2>
-      <p class="lead">대관, 입주, 제휴, 기업 워크숍, 공간 제안 모두 이 폼으로 받습니다. 확인 후 적어 주신 연락처로 답을 드립니다.</p>
+      <p class="lead">대관, 정기대관, 기업·단체 이용, 코워킹, 독립사무실, 제휴 문의를 받습니다. 문의 목적을 고르면 필요한 항목만 보입니다.</p>
     </div>
-    <form id="inquiry-form" class="form reveal" novalidate>
-      <div class="field"><label for="f-name">이름 <span class="req">*</span></label><input id="f-name" name="name" type="text" autocomplete="name" required placeholder="이름 또는 단체명"></div>
-      <div class="field"><label for="f-phone">연락처 <span class="req">*</span></label><input id="f-phone" name="phone" type="tel" autocomplete="tel" required placeholder="010-0000-0000"></div>
-      <div class="field"><label for="f-email">이메일</label><input id="f-email" name="email" type="email" autocomplete="email" placeholder="답장을 메일로 받고 싶을 때"></div>
-      <div class="field"><label for="f-type">문의 유형</label>
-        <select id="f-type" name="type">
-          <option>공간 대관 (강연 · 세미나 · 회의 · 스터디)</option>
-          <option>24시 코워킹 · 스터디카페</option>
-          <option>독립사무실 입주 (소셜패밀리)</option>
-          <option>프로그램 · 강사 · 호스트 제휴</option>
-          <option>기업 · 단체 워크숍</option>
-          <option>공간 제안 (건물주 · 파트너)</option>
-          <option>기타</option>
+    <div class="form-disabled reveal" data-form-disabled hidden>문의 접수를 준비하고 있습니다. 오픈 안내와 함께 문의 폼과 상담 채널을 공개합니다.</div>
+    <div class="form-done reveal" data-form-done hidden role="status" aria-live="polite">
+      <h3>문의가 접수되었습니다</h3>
+      <p>접수번호 <span class="receipt" data-receipt></span></p>
+      <p>확인 후 남겨 주신 연락처로 안내해 드리겠습니다. 접수번호는 문의 내용을 확인할 때 쓰이니 메모해 두시면 좋습니다.</p>
+      <p data-reply-note hidden></p>
+      <div class="actions"><a class="btn btn-outline" href="space.html#rooms">공간 안내로 돌아가기</a><button class="btn btn-ghost" type="button" data-form-again>다른 문의 남기기</button></div>
+    </div>
+    <form id="inquiry-form" class="form reveal" novalidate data-form-wrap>
+      <input type="hidden" name="submissionId" value="">
+      <div class="field"><label for="f-purpose">문의 목적 <span class="req">*</span></label>
+        <select id="f-purpose" name="purpose" required>
+          <option value="rental">공간 대관 (강연 · 세미나 · 회의 · 스터디 · 워크숍)</option>
+          <option value="regular">정기대관 (매주 · 격주 같은 시간)</option>
+          <option value="business">기업 · 단체 이용 (견적 · 증빙 필요)</option>
+          <option value="coworking">코워킹 이용권</option>
+          <option value="office">독립사무실 입주</option>
+          <option value="partner">프로그램 · 강사 · 호스트 제휴</option>
+          <option value="proposal">공간 제안 (건물주 · 파트너)</option>
+          <option value="other">기타</option>
         </select>
       </div>
-      <div class="field"><label for="f-when">희망 일시</label><input id="f-when" name="when" type="text" placeholder="예: 10월 셋째 주 토요일 오후 2~5시"></div>
-      <div class="field"><label for="f-people">인원</label><input id="f-people" name="people" type="text" inputmode="numeric" placeholder="예: 25명"></div>
-      <div class="field full"><label for="f-message">문의 내용 <span class="req">*</span></label><textarea id="f-message" name="message" required placeholder="모임 성격, 필요한 배치나 장비, 정기 이용 여부 등을 적어 주시면 더 정확하게 안내해 드립니다."></textarea></div>
+      <div class="field"><label for="f-space">이용할 공간</label>
+        <select id="f-space" name="space">
+          <option value="undecided">아직 정하지 못했어요</option>
+          <option value="r1">1번룸 (25~30명)</option>
+          <option value="r2">2번룸 (30~35명)</option>
+          <option value="r3">3번룸 (12~18명)</option>
+          <option value="r4">4번룸 (30~35명)</option>
+          <option value="r5">5번룸 (25~30명)</option>
+          <option value="coworking">코워킹 공간</option>
+          <option value="office">독립사무실</option>
+        </select>
+        <p class="hint">룸 카드의 '대관 문의' 버튼으로 들어오면 자동으로 선택됩니다.</p>
+      </div>
+      <div class="field"><label for="f-name">이름 <span class="req">*</span></label><input id="f-name" name="name" type="text" autocomplete="name" required placeholder="이름 또는 단체명"><p class="field-error" hidden></p></div>
+      <div class="field"><label for="f-phone">연락처 <span class="req">*</span></label><input id="f-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" required placeholder="010-0000-0000"><p class="field-error" hidden></p></div>
+      <div class="field"><label for="f-email">이메일 <span class="req" data-email-required hidden>*</span></label><input id="f-email" name="email" type="email" autocomplete="email" placeholder="답장을 메일로 받고 싶을 때"><p class="hint">기업·단체 문의는 견적서를 받을 메일을 꼭 적어 주세요.</p><p class="field-error" hidden></p></div>
+      <div class="field" data-when-purpose="business" hidden><label for="f-company">회사 · 단체와 담당자</label><input id="f-company" name="company" type="text" autocomplete="organization" placeholder="예: ○○주식회사 교육팀 홍길동"></div>
+      <div class="field" data-when-purpose="rental regular business partner other"><label for="f-when">희망 일시</label><input id="f-when" name="when" type="text" placeholder="예: 10월 셋째 주 토요일 오후 2~5시"></div>
+      <div class="field" data-when-purpose="rental regular business partner coworking office other"><label for="f-people">인원</label><input id="f-people" name="people" type="text" inputmode="numeric" placeholder="예: 25명"></div>
+      <div class="field full" data-when-purpose="regular partner" hidden><label for="f-schedule">요일 · 주기 · 기간</label><input id="f-schedule" name="schedule" type="text" placeholder="예: 매주 화요일 19~21시, 3개월"></div>
+      <div class="field full"><label for="f-message">문의 내용 <span class="req">*</span></label><textarea id="f-message" name="message" required></textarea><p class="hint" data-purpose-hint>예: 20명 교육, 토요일 오후 2시간, 노트북 화면 연결 필요</p><p class="field-error" hidden></p></div>
       <div class="field full" style="position:absolute; left:-9999px;" aria-hidden="true"><label for="f-website">website</label><input id="f-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
       <div class="field full">
-        <label style="display:flex; align-items:flex-start; gap:10px; font-weight:500; font-size:14px; color: var(--navy-80);">
-          <input type="checkbox" name="consent" required style="width:18px; height:18px; margin-top:3px;">
-          <span>문의 응대를 위해 이름과 연락처를 수집·이용하는 데 동의합니다. 수집한 정보는 문의 처리 후 지체 없이 파기하며, 다른 목적으로 쓰지 않습니다. <span class="req">*</span></span>
+        <label class="consent" for="f-consent">
+          <input id="f-consent" type="checkbox" name="consent" required>
+          <span>문의 응대를 위해 아래 안내와 같이 개인정보를 수집·이용하는 데 동의합니다. <span class="req">*</span></span>
         </label>
+        <p class="field-error" hidden></p>
+        <details class="consent-detail">
+          <summary>수집 항목과 보유 기간 보기</summary>
+          <table>
+            <tr><th>수집 항목</th><td>이름(또는 단체명), 연락처, 이메일(선택), 문의 목적과 내용, 희망 일시·인원(선택), 접수 시각. 스팸과 중복 접수를 막기 위해 접속 정보(IP)의 일부를 암호화한 값을 함께 저장하며 원래 IP는 남기지 않습니다.</td></tr>
+            <tr><th>이용 목적</th><td>문의 응대와 상담, 예약·견적 안내</td></tr>
+            <tr><th>보유 기간</th><td><span data-retention>문의 처리 완료 후 6개월</span> 뒤 삭제합니다. 계약이나 결제로 이어진 경우 그 기록은 관련 법령에 따라 따로 보관합니다.</td></tr>
+            <tr><th>처리 방법</th><td>문의는 홈페이지 서버(Cloudflare)에 저장되고, 운영자에게 알림으로 전달됩니다.</td></tr>
+            <tr><th>거부권</th><td>동의하지 않을 수 있으며, 그 경우 문의 폼 접수는 되지 않습니다. 열려 있는 상담 채널로 연락하실 수 있습니다.</td></tr>
+            <tr><th>안내문 버전</th><td><span data-notice-version>2026-10-09</span></td></tr>
+          </table>
+        </details>
       </div>
       <div class="form-foot">
         <p class="form-status" role="status" aria-live="polite"></p>
         <button class="btn btn-primary btn-lg" type="submit">문의 보내기</button>
       </div>
+      <div class="form-fail" data-form-fail hidden role="alert">
+        <h3>문의가 접수되지 않았습니다</h3>
+        <p>작성한 내용은 그대로 남아 있습니다. 위의 '다시 보내기'를 눌러 한 번 더 시도하거나, 아래 방법으로 보내 주세요.</p>
+        <div class="actions">
+          <a class="btn btn-outline" data-fail-mail href="#" hidden>메일 앱으로 보내기</a>
+          <button class="btn btn-outline" type="button" data-fail-copy hidden>문의 내용 복사</button>
+        </div>
+        <p class="form-status" data-fail-status></p>
+        <textarea data-fail-manual hidden readonly aria-label="문의 내용"></textarea>
+        <div class="channel-list mt-16" data-fail-channels hidden>
+          <a class="channel" data-channel="kakao" hidden><span class="ic kakao">TALK</span><div><strong>카카오톡 채널</strong><span>복사한 내용을 붙여 넣어 보내 주세요</span></div><span class="arrow">→</span></a>
+          <a class="channel" data-channel="phone" hidden><span class="ic tel">TEL</span><div><strong>전화</strong><span data-channel-value></span></div><span class="arrow">→</span></a>
+          <a class="channel" data-channel="email" hidden><span class="ic mail">@</span><div><strong>이메일</strong><span data-channel-value></span></div><span class="arrow">→</span></a>
+        </div>
+        <p data-fail-none hidden>상담 채널은 오픈 안내와 함께 공개합니다. 잠시 후 다시 시도해 주세요.</p>
+      </div>
     </form>
   </div>
 </section>
 
-<!-- ===== 공간 제안 ===== -->
+<!-- ===== 제휴 · 공간 제안 (고객 대관과 분리) ===== -->
 <section class="section" id="propose">
-  <div class="container split">
-    <div class="reveal">
-      <span class="eyebrow">Next Social Factory</span>
-      <h2 class="h2 mt-16">다음 소셜팩토리가 될 <br>공간을 찾습니다</h2>
-      <p class="lead">소셜팩토리는 홍대의 지하 공간처럼 비어 있던 자리를 사람이 모이는 곳으로 바꿔 왔습니다. 건대를 시작으로 공간을 하나씩 넓혀 갑니다. 비어 있는 층이나 건물이 있다면 제안해 주세요.</p>
-      <ul class="checks mt-32">
-        <li>대학가·역세권의 층 전체 또는 일부 공간</li>
-        <li>강연·세미나·스터디·코워킹 용도로 쓸 수 있는 구획</li>
-        <li>최소 투자로 정돈하고 예약제·무인 운영으로 채우는 방식</li>
-        <li>건물주와의 협의 구조는 공간 조건에 맞춰 제안합니다</li>
-      </ul>
-      <div class="actions"><a class="btn btn-primary" href="#inquiry">공간 제안하기</a></div>
-    </div>
-    <div class="media reveal">
-      <img src="images/signage.webp" srcset="images/signage-sm.webp 800w, images/signage.webp 1536w" sizes="(max-width: 900px) 100vw, 50vw" alt="소셜팩토리 입구의 로고 월" width="822" height="1024" loading="lazy">
+  <div class="container">
+    <div class="grid grid-2 reveal" style="align-items: start;">
+      <div class="card flat">
+        <span class="eyebrow">Partners</span>
+        <h2 class="h3 mt-16">모임과 수업을 열고 싶은 분</h2>
+        <p class="mt-8">정기 클래스나 독서모임, 스터디를 운영하고 계신가요? 희망 일정과 인원, 필요한 배치를 알려 주세요. 공간 이용 조건을 확인하고 함께 진행할 수 있는 방식을 상담합니다.</p>
+        <div class="actions"><a class="btn btn-outline" href="program.html">프로그램 · 파트너 안내</a><a class="btn btn-primary" href="contact.html?purpose=partner#inquiry">제휴 문의</a></div>
+      </div>
+      <div class="card flat">
+        <span class="eyebrow">Next Space</span>
+        <h2 class="h3 mt-16">비어 있는 공간을 가진 분</h2>
+        <p class="mt-8">소셜팩토리는 건대를 시작으로 공간을 하나씩 넓혀 갑니다. 대학가·역세권의 층 전체 또는 일부 공간, 강연·세미나·스터디·코워킹 용도로 쓸 수 있는 구획이 있다면 제안해 주세요. 건물주와의 협의 구조는 공간 조건에 맞춰 제안합니다.</p>
+        <div class="actions"><a class="btn btn-primary" href="contact.html?purpose=proposal#inquiry">공간 제안하기</a></div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ===== FAQ ===== -->
+<!-- ===== 짧은 FAQ ===== -->
 <section class="section bg" id="faq">
   <div class="container">
     <div class="section-head reveal">
       <span class="eyebrow">FAQ</span>
-      <h2 class="h2 mt-16">자주 묻는 질문</h2>
+      <h2 class="h2 mt-16">문의 전에 자주 확인하는 것</h2>
     </div>
     <div class="faq reveal" style="max-width: 820px;">
-      <details><summary>예약은 어떻게 하나요?</summary><div class="a">예약 채널에서 공간, 날짜, 시간, 인원을 선택합니다. 채널이 열리기 전에는 카카오톡 채널이나 이 페이지의 문의 폼으로 받습니다.</div></details>
-      <details><summary>상주 직원이 있나요?</summary><div class="a">없습니다. 예약 시간에 맞춰 출입 방법을 문자나 카카오톡으로 보내 드리고, 이용 중 문의는 카카오톡 채널로 받습니다.</div></details>
-      <details><summary>룸 크기와 위치를 미리 볼 수 있나요?</summary><div class="a">공간 페이지의 <a href="space.html#floorplan">4층 평면도</a>에서 룸별 크기(mm)와 천장 높이, 위치를 볼 수 있고, <a href="tour.html">3D 둘러보기</a>에서 방 안을 사람 눈높이로 걸어 다니며 강의형·워크숍형·회의형 배치를 비교할 수 있습니다.</div></details>
-      <details><summary>룸의 수용 인원은 어떻게 보면 되나요?</summary><div class="a">표기한 인원은 배치에 따른 범위입니다. 의자만 두는 노테이블형이 가장 많이 앉고, ㄷ자형이나 ㅁ자형은 그보다 적습니다. 1번룸 25~30명, 2·4번룸 30~35명, 3번룸 12~18명, 5번룸 25~30명입니다.</div></details>
-      <details><summary>24시 코워킹·스터디카페는 언제 이용할 수 있나요?</summary><div class="a">24시간 운영하며 자유석 30석입니다. 이용권 종류와 출입 방법은 예약 채널에서 안내합니다.</div></details>
-      <details><summary>독립사무실에 사업자등록 주소지를 둘 수 있나요?</summary><div class="a">독립사무실은 실제 입주해 쓰는 1~3인 공간이며, 사업자등록 주소지로는 사용할 수 없습니다. 입주 문의 단계에서 먼저 안내해 드립니다.</div></details>
-      <details><summary>단체 대관이나 정기 이용 조건이 따로 있나요?</summary><div class="a">기업·단체 대관과 주 1회 이상 정기 이용은 문의 폼으로 조건을 협의합니다. 인원, 주기, 필요한 배치를 적어 주세요.</div></details>
-      <details><summary>주차는 가능한가요?</summary><div class="a"><span data-sf="parking">주차 안내는 예약 안내 메시지에서 확인해 주세요. 가능하면 대중교통 이용을 권합니다.</span></div></details>
-      <details><summary>홍대 소셜팩토리와 같은 곳인가요?</summary><div class="a">같은 브랜드입니다. 2015년 홍대에서 시작한 소셜팩토리가 2026년 건대에서 다시 문을 엽니다. 홍대·연남·신촌·합정·인천 지점은 코로나 시기에 모두 운영을 종료했습니다.</div></details>
+      <details><summary>예약은 언제 확정되나요?</summary><div class="a">선택한 예약 채널의 절차에 따라 확정됩니다. 문의 폼을 보낸 것만으로 예약이 확정되지는 않습니다. 상담으로 진행하는 예약은 이용 조건과 확정 절차를 따로 안내해 드립니다.</div></details>
+      <details><summary>표기된 인원까지 책상을 놓고 앉을 수 있나요?</summary><div class="a">표기 인원은 배치에 따라 달라집니다. 책상을 사용하는 경우에는 필요한 책상 수와 통로까지 확인해야 합니다. <a href="space.html#rooms">룸별 배치 사진과 이용 인원</a>을 확인한 뒤 예약해 주세요.</div></details>
+      <details><summary>60명 이상 행사를 한 번에 진행할 수 있나요?</summary><div class="a">한 방에 모두 모이는 행사와 여러 방으로 나눠 진행하는 행사는 조건이 다릅니다. 전체 인원과 진행 방식을 알려 주시면 룸 구성과 장비, 동선을 함께 확인해 드립니다.</div></details>
+      <details><summary>독립사무실에 사업자등록 주소지를 둘 수 있나요?</summary><div class="a"><span data-sf="policy.address" data-sf-empty="사업자등록 주소 사용이 필요한 경우 입주 상담 때 함께 알려 주세요. 계약 조건에 따라 안내해 드립니다.">사업자등록 주소 사용이 필요한 경우 입주 상담 때 함께 알려 주세요. 계약 조건에 따라 안내해 드립니다.</span></div></details>
     </div>
+    <div class="actions"><a class="btn btn-ghost" href="guide.html#faq">이용 안내와 전체 FAQ →</a></div>
   </div>
 </section>
 </main>
@@ -188,17 +238,20 @@
           <img class="mark" src="images/logo-mark.svg" alt="" width="40" height="40">
           <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
         </a>
-        <p class="tagline">모이면 만들어진다. 2015년 홍대에서 시작한 모임·강연·스터디 공간 소셜팩토리가 건대에서 다시 문을 엽니다.</p>
+        <p class="tagline">모이면 만들어진다. 2015년 홍대에서 시작한 모임공간 소셜팩토리의 건대 공간입니다. 룸 5개, 코워킹, 독립사무실을 안내합니다.</p>
       </div>
       <div>
         <h4>Menu</h4>
         <ul>
-          <li><a href="about.html">브랜드 이야기</a></li>
-          <li><a href="space.html">공간 안내</a></li>
-          <li><a href="tour.html">3D 공간 둘러보기</a></li>
-          <li><a href="program.html">프로그램·파트너</a></li>
-          <li><a href="history.html">아카이브 2015–2021</a></li>
-          <li><a href="contact.html">예약·문의</a></li>
+          <li><a href="space.html#rooms">공간 대관 (룸 1~5)</a></li>
+          <li><a href="space.html#coworking">코워킹</a></li>
+          <li><a href="space.html#office">독립사무실</a></li>
+          <li><a href="guide.html">이용 안내 · FAQ</a></li>
+          <li><a href="tour.html">3D로 공간 살펴보기</a></li>
+          <li><a href="about.html">소셜팩토리 소개</a></li>
+          <li><a href="program.html">프로그램 · 파트너</a></li>
+          <li><a href="history.html">지난 기록 2015–2021</a></li>
+          <li><a href="contact.html">대관과 이용 문의</a></li>
         </ul>
       </div>
       <div>
@@ -206,8 +259,8 @@
         <ul>
           <li><strong>소셜팩토리 건대</strong></li>
           <li data-sf="address">서울 광진구 화양동 10-1 한아름건물 4층</li>
-          <li>룸 5개 · 코워킹 30석 · 독립사무실 4실</li>
-          <li>코워킹·스터디카페 <span data-sf="hours.coworking">24시간</span></li>
+          <li>룸 5개 · 코워킹 · 독립사무실 4실</li>
+          <li>코워킹 <span data-sf="hours.coworking">24시간</span> 기준 · 룸은 예약제</li>
         </ul>
       </div>
       <div>
@@ -219,7 +272,7 @@
           <li><a data-channel="instagram" hidden>인스타그램</a></li>
           <li><a data-channel="phone" hidden><span data-channel-value>전화</span></a></li>
           <li><a data-channel="email" hidden><span data-channel-value>이메일</span></a></li>
-          <li class="channels-empty">예약·문의 채널을 준비하고 있습니다. 오픈 안내와 함께 공개합니다.</li>
+          <li class="channels-empty">예약·상담 채널은 오픈 안내와 함께 공개합니다. 그 전까지는 <a href="contact.html">문의 폼</a>으로 남겨 주세요.</li>
         </ul>
       </div>
     </div>

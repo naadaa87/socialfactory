@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>문의 관리 | 소셜팩토리</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <style>
+    :root { --blue:#2855E8; --navy:#18233A; --bg:#F7F8FA; --line:#E3E7EE; --muted:#5B6578; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: var(--bg); color: var(--navy); font-size: 14px; }
+    header { background:#fff; border-bottom:1px solid var(--line); padding: 14px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+    header h1 { font-size: 16px; margin:0; }
+    header .sp { flex:1; }
+    main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+    .card { background:#fff; border:1px solid var(--line); border-radius: 14px; padding: 20px; }
+    input, select, button { font: inherit; }
+    input[type=password], select { border:1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 220px; }
+    button { border:0; border-radius: 10px; padding: 10px 14px; background: var(--blue); color:#fff; font-weight:700; cursor:pointer; }
+    button.ghost { background:#fff; color: var(--navy); border:1.5px solid var(--line); }
+    .msg { color: var(--muted); margin: 10px 0 0; }
+    .err { color: #C0392B; }
+    table { width:100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+    th, td { text-align:left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+    th { background: var(--bg); font-size: 12px; color: var(--muted); position: sticky; top: 0; }
+    td.msgcell { max-width: 420px; white-space: pre-wrap; }
+    .tag { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: var(--bg); color: var(--navy); }
+    .tag.new { background: #DCE7FF; color: var(--blue); }
+    .tag.done { background: #E6F6EC; color: #1D8A4E; }
+    .tag.fail { background: #FDECEA; color: #C0392B; }
+    .wrap { overflow-x: auto; }
+    .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top: 14px; }
+    @media (max-width: 700px) { main { padding: 12px; } th, td { padding: 8px 6px; } }
+  </style>
+</head>
+<body>
+<header>
+  <h1>소셜팩토리 문의 관리</h1>
+  <span class="sp"></span>
+  <a href="index.html" style="color:var(--muted); text-decoration:none;">← 홈페이지</a>
+</header>
+<main>
+  <section class="card" id="login">
+    <p>Cloudflare Pages 설정의 <b>ADMIN_KEY</b> 값을 입력하면 최근 문의를 볼 수 있습니다. 키는 이 브라우저 탭에만 보관되며 주소창에 남지 않습니다.</p>
+    <div class="toolbar">
+      <input id="key" type="password" placeholder="관리자 키" autocomplete="current-password">
+      <button id="go">불러오기</button>
+      <button class="ghost" id="logout" hidden>키 지우기</button>
+    </div>
+    <p class="msg" id="login-msg"></p>
+  </section>
+
+  <section class="card" id="list" hidden style="margin-top:16px;">
+    <div class="toolbar">
+      <select id="filter">
+        <option value="">전체 상태</option>
+        <option value="new">새 문의</option>
+        <option value="in_progress">진행 중</option>
+        <option value="done">처리 완료</option>
+      </select>
+      <button class="ghost" id="reload">새로고침</button>
+      <button class="ghost" id="csv">CSV 내려받기</button>
+      <span class="msg" id="count"></span>
+    </div>
+    <div class="wrap">
+      <table>
+        <thead><tr><th>접수번호</th><th>접수 시각</th><th>상태</th><th>목적 · 공간</th><th>이름 · 연락처</th><th>일정 · 인원</th><th>내용</th><th>알림</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var P = { rental: "공간 대관", regular: "정기대관", business: "기업·단체", coworking: "코워킹", office: "독립사무실", partner: "제휴", proposal: "공간 제안", other: "기타" };
+  var S = { r1: "1번룸", r2: "2번룸", r3: "3번룸", r4: "4번룸", r5: "5번룸", coworking: "코워킹", office: "독립사무실", undecided: "미정", "": "-" };
+  var ST = { new: "새 문의", in_progress: "진행 중", done: "처리 완료" };
+  var key = ""; try { key = sessionStorage.getItem("sf_admin_key") || ""; } catch (e) {}
+  var rows = [];
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  var api = function (method, body, q) {
+    return fetch("/api/inquiry" + (q || ""), { method: method, headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); });
+  };
+  var render = function () {
+    var tb = $("#rows"); tb.innerHTML = "";
+    rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      var notify = r.notify_status || "-";
+      var ncls = /^sent/.test(notify) ? "done" : (/^failed/.test(notify) ? "fail" : "");
+      tr.innerHTML = '<td><b>' + esc(r.receipt) + '</b></td><td>' + esc(r.created_at) + '</td>' +
+        '<td><select data-id="' + r.id + '"><option value="new"' + (r.status === "new" ? " selected" : "") + '>새 문의</option><option value="in_progress"' + (r.status === "in_progress" ? " selected" : "") + '>진행 중</option><option value="done"' + (r.status === "done" ? " selected" : "") + '>처리 완료</option></select></td>' +
+        '<td>' + esc(P[r.purpose] || r.purpose) + '<br><span class="tag">' + esc(S[r.space] || r.space || "-") + '</span></td>' +
+        '<td>' + esc(r.name) + (r.company ? '<br>' + esc(r.company) : '') + '<br><a href="tel:' + esc(String(r.phone).replace(/[^0-9+]/g, "")) + '">' + esc(r.phone) + '</a>' + (r.email ? '<br><a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : '') + '</td>' +
+        '<td>' + esc(r.when_text || "-") + '<br>' + esc(r.people || "-") + (r.schedule ? '<br>' + esc(r.schedule) : '') + '</td>' +
+        '<td class="msgcell">' + esc(r.message) + '</td>' +
+        '<td><span class="tag ' + ncls + '">' + esc(notify) + '</span>' + (r.consent ? '' : '<br><span class="tag fail">동의 없음</span>') + '</td>';
+      tb.appendChild(tr);
+    });
+    $("#count").textContent = rows.length + "건";
+    Array.prototype.forEach.call(tb.querySelectorAll("select[data-id]"), function (sel) {
+      sel.addEventListener("change", function () {
+        api("PATCH", { id: parseInt(sel.getAttribute("data-id"), 10), status: sel.value }).then(function (res) {
+          if (!(res.j && res.j.ok)) alert("상태를 바꾸지 못했습니다. 다시 시도해 주세요.");
+        });
+      });
+    });
+  };
+  var load = function () {
+    var f = $("#filter").value;
+    $("#login-msg").textContent = "불러오는 중…"; $("#login-msg").className = "msg";
+    api("GET", null, "?limit=300" + (f ? "&status=" + f : "")).then(function (res) {
+      if (res.status === 401) { $("#login-msg").textContent = "키가 맞지 않거나 ADMIN_KEY가 설정되지 않았습니다."; $("#login-msg").className = "msg err"; $("#list").hidden = true; return; }
+      if (res.status === 503) { $("#login-msg").textContent = "D1 데이터베이스(DB)가 연결되지 않았습니다. README 3번을 확인해 주세요."; $("#login-msg").className = "msg err"; return; }
+      if (!(res.j && res.j.ok)) { $("#login-msg").textContent = "불러오지 못했습니다."; $("#login-msg").className = "msg err"; return; }
+      rows = res.j.results || []; render();
+      $("#login-msg").textContent = "불러왔습니다."; $("#list").hidden = false; $("#logout").hidden = false;
+      try { sessionStorage.setItem("sf_admin_key", key); } catch (e) {}
+    }).catch(function () { $("#login-msg").textContent = "서버에 연결하지 못했습니다. 배포된 주소에서 열어 주세요."; $("#login-msg").className = "msg err"; });
+  };
+  $("#go").addEventListener("click", function () { key = $("#key").value.trim(); if (!key) { $("#login-msg").textContent = "키를 입력해 주세요."; return; } load(); });
+  $("#key").addEventListener("keydown", function (e) { if (e.key === "Enter") $("#go").click(); });
+  $("#reload").addEventListener("click", load);
+  $("#filter").addEventListener("change", load);
+  $("#logout").addEventListener("click", function () { key = ""; try { sessionStorage.removeItem("sf_admin_key"); } catch (e) {} $("#key").value = ""; $("#list").hidden = true; $("#logout").hidden = true; $("#login-msg").textContent = "키를 지웠습니다."; });
+  $("#csv").addEventListener("click", function () {
+    var head = ["receipt", "created_at", "status", "purpose", "space", "name", "phone", "email", "company", "when_text", "people", "schedule", "message", "consent", "notice_version", "notify_status"];
+    var lines = [head.join(",")].concat(rows.map(function (r) { return head.map(function (k) { return '"' + String(r[k] == null ? "" : r[k]).replace(/"/g, '""') + '"'; }).join(","); }));
+    var blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "socialfactory-inquiries.csv"; a.click();
+  });
+  if (key) { $("#key").value = key; load(); }
+})();
+</script>
+</body>
+</html>

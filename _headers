@@ -4,14 +4,23 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 
+# 이미지는 같은 이름으로 교체할 수 있도록 하루만 캐시합니다 (교체 후 늦어도 다음 날 반영)
 /images/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
 
 /css/*
-  Cache-Control: public, max-age=86400
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
 
 /js/*
-  Cache-Control: public, max-age=3600
+  Cache-Control: public, max-age=600, stale-while-revalidate=3600
+
+/admin.html
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
+/api/*
+  X-Robots-Tag: noindex
+  Cache-Control: no-store

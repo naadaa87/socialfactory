@@ -424,8 +424,8 @@ table.table td .en { font-weight: 800; color: var(--blue); }
 /* --------------------------------------------------------------------------
    Reveal animation
    -------------------------------------------------------------------------- */
-.reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
-.reveal.is-in { opacity: 1; transform: none; }
+html.js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
+html.js .reveal.is-in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .reveal { opacity: 1; transform: none; transition: none; }
@@ -721,3 +721,184 @@ body.lb-locked { overflow: hidden; }
   .table-stack td:first-child::before { display: none; }
   .table-stack tr:last-child td:first-child { border-bottom: 1px solid var(--line); }
 }
+
+
+/* --------------------------------------------------------------------------
+   개편 (2026-10-09): 공간 선택 중심 구성 · 문의 상태 · 이미지 표기 · 접근성
+   -------------------------------------------------------------------------- */
+:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; border-radius: 6px; }
+.btn:focus-visible { outline-offset: 3px; }
+.is-empty { color: var(--muted); font-weight: 500; }
+.is-empty::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--grey); margin: 0 7px 1px 0; }
+
+/* 이미지 표기 (완성 예상 · 활용 예시) — 사진 바로 위에 붙는 라벨 */
+.img-wrap { position: relative; display: block; }
+.img-tag { position: absolute; left: 10px; top: 10px; z-index: 2; padding: 4px 9px; border-radius: 6px; background: rgba(24,35,58,0.72); color: #fff; font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; backdrop-filter: blur(4px); pointer-events: none; }
+.img-tag.light { background: rgba(255,255,255,0.86); color: var(--navy); }
+.hero .visual .img-tag { left: 14px; top: 14px; }
+
+/* 운영 상태 배너 */
+html[data-status="open"] .notice-bar .tag { background: #1D8A4E; }
+
+/* 히어로 (기능 중심 제목) */
+.hero .lockup.small { gap: 14px; margin-bottom: 28px; }
+.hero .lockup.small .mark { width: 56px; height: 56px; }
+.hero .lockup.small .word .en { font-size: clamp(20px, 2vw, 24px); }
+.hero .lockup.small .word .kr { font-size: 13px; letter-spacing: 0.2em; margin-top: 6px; }
+.hero .slogan { font-weight: 700; color: var(--blue); letter-spacing: 0.02em; font-size: 14px; }
+.hero h1.fn { font-size: clamp(34px, 4.6vw, 56px); line-height: 1.15; letter-spacing: -0.035em; }
+.hero h1.fn .sub { display: block; font-size: 0.56em; font-weight: 700; color: var(--blue); letter-spacing: -0.02em; margin-top: 10px; }
+.hero .addr { margin-top: 18px; display: inline-flex; align-items: center; gap: 10px; font-weight: 600; color: var(--navy-80); font-size: 15px; }
+.hero .addr .sq { width: 30px; height: 30px; border-radius: 8px; background: var(--blue); color: #fff; font-family: var(--font-en); font-weight: 800; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; }
+.hero .sub-links { margin-top: 14px; font-size: 14px; }
+.hero .sub-links a { color: var(--blue); font-weight: 700; display: inline-block; padding: 6px 0; }
+
+/* 룸 고르기 */
+.picker { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; }
+.picker label { display: block; font-size: 13px; font-weight: 700; color: var(--navy-80); margin-bottom: 8px; }
+.picker select { width: 100%; border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px; font-weight: 600; background: #fff; color: var(--navy); }
+.picker select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 4px var(--blue-25); }
+.picker .btn { min-height: 46px; }
+.picker-result { grid-column: 1 / -1; font-size: 13.5px; color: var(--muted); margin-top: -2px; }
+.room-card { display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, opacity .2s ease; position: relative; }
+.room-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+.room-card.is-strong { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-25); }
+.room-card.is-dim { opacity: 0.55; }
+.room-card .rc-media { position: relative; display: block; }
+.room-card .rc-media img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.room-card .rc-pick { position: absolute; right: 10px; top: 10px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 800; padding: 5px 10px; border-radius: 999px; display: none; }
+.room-card.is-strong .rc-pick { display: inline-block; }
+.room-card .rc-body { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.room-card .rc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.room-card .rc-no { font-family: var(--font-en); font-weight: 800; font-size: 13px; letter-spacing: 0.1em; color: var(--muted); }
+.room-card h3 { font-size: 19px; letter-spacing: -0.02em; }
+.room-card .rc-cap { font-family: var(--font-en); font-weight: 800; font-size: 24px; color: var(--blue); line-height: 1; }
+.room-card .rc-cap small { font-family: var(--font-kr); font-size: 12.5px; color: var(--navy); font-weight: 700; margin-left: 3px; }
+.room-card .rc-use { color: var(--muted); font-size: 14px; }
+.room-card .rc-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--navy-80); }
+.room-card .rc-meta span::before { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); margin: 0 7px 2px 0; }
+.room-card .rc-price { font-size: 13.5px; color: var(--navy); }
+.room-card .actions { margin-top: auto; padding-top: 10px; gap: 8px; }
+.room-card .actions .btn { flex: 1 1 auto; }
+.rooms-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+.rooms-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+/* 룸 상세 공통 블록 (사진 → 배치별 인원 → 장비 → 요금 → 입퇴실) */
+.rd-title { font-size: clamp(22px, 2.4vw, 28px); font-weight: 800; letter-spacing: -0.03em; margin-top: 6px; }
+.rd-blocks { margin-top: 22px; display: grid; gap: 12px; }
+.rd-block { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: var(--bg); }
+.rd-block h4 { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; color: var(--navy-80); display: flex; align-items: center; gap: 8px; }
+.rd-block h4::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+.rd-block p, .rd-block li { font-size: 14.5px; color: var(--navy); margin-top: 8px; line-height: 1.6; }
+.seat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+.seat-grid div { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 10px 9px; text-align: center; }
+.seat-grid .k { display: block; font-size: 12px; color: var(--muted); font-weight: 700; }
+.seat-grid .v { display: block; font-weight: 800; color: var(--navy); font-size: 15px; margin-top: 4px; }
+.seat-grid .v.is-empty { font-size: 12.5px; font-weight: 600; }
+.seat-grid .v.is-empty::before { display: none; }
+.rd-media .rd-main { position: relative; }
+
+/* 비교표 */
+.compare td.strong a { color: var(--navy); }
+.compare .cap { font-family: var(--font-en); font-weight: 800; color: var(--blue); font-size: 16px; }
+.compare .cap small { font-family: var(--font-kr); font-size: 12px; color: var(--navy); margin-left: 2px; }
+
+/* 배치 안내 표 */
+.layout-list { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+.layout-item { background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.layout-item .img-wrap img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.layout-item .li-body { padding: 16px 18px 18px; }
+.layout-item .li-body .old { font-size: 12px; color: var(--muted); font-weight: 600; }
+.layout-item h3 { font-size: 17px; margin-top: 2px; }
+.layout-item p { font-size: 13.5px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+
+/* 정기대관 · 코워킹 · 사무실 카드 */
+.feature-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.feature { display: grid; grid-template-columns: 0.9fr 1.1fr; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.feature .img-wrap img { width: 100%; height: 100%; object-fit: cover; min-height: 220px; }
+.feature .f-body { padding: 26px 28px; display: flex; flex-direction: column; gap: 10px; }
+.feature .f-body h3 { font-size: 20px; letter-spacing: -0.02em; }
+.feature .f-body p { color: var(--muted); font-size: 14.5px; }
+.feature .f-body .actions { margin-top: auto; padding-top: 6px; }
+
+/* 문의 폼 상태 */
+.form-status.warn { color: #B7791F; }
+.field-error { font-size: 12.5px; color: #C0392B; font-weight: 600; margin-top: 6px; }
+.field [aria-invalid="true"] { border-color: #C0392B; }
+.field .consent { display: flex; align-items: flex-start; gap: 10px; font-weight: 500; font-size: 14px; color: var(--navy-80); }
+.field .consent input { width: 18px; height: 18px; margin-top: 3px; flex: none; }
+.consent-detail { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 0 16px; }
+.consent-detail summary { cursor: pointer; padding: 12px 0; font-size: 13.5px; font-weight: 700; color: var(--navy-80); }
+.consent-detail table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 12px; }
+.consent-detail th, .consent-detail td { text-align: left; vertical-align: top; padding: 6px 8px 6px 0; border-top: 1px solid var(--line); }
+.consent-detail th { width: 92px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+.form-done, .form-fail { border-radius: var(--radius); padding: 28px 30px; background: #fff; border: 1px solid var(--line); }
+.form-done { border-color: #BFE3CC; background: #F3FBF6; }
+.form-done .receipt { font-family: var(--font-en); font-weight: 800; font-size: 22px; color: #1D8A4E; letter-spacing: 0.04em; }
+.form-fail { border-color: #F2C9C4; background: #FFF7F5; margin-top: 16px; grid-column: 1 / -1; }
+.form-fail h3, .form-done h3 { font-size: 18px; }
+.form-fail p, .form-done p { font-size: 14.5px; color: var(--navy-80); margin-top: 8px; }
+.form-fail .actions { margin-top: 14px; }
+.form-fail textarea { width: 100%; min-height: 160px; margin-top: 12px; border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; font-size: 13.5px; }
+.form-disabled { padding: 28px 30px; border: 1px dashed var(--grey); border-radius: var(--radius); background: #fff; color: var(--navy-80); }
+
+/* 서브 내비 (공간 페이지 안 이동) */
+.subnav { display: flex; flex-wrap: wrap; gap: 8px; }
+.subnav a { padding: 9px 14px; border-radius: 999px; border: 1.5px solid var(--line); background: #fff; font-weight: 700; font-size: 13.5px; color: var(--navy-80); }
+.subnav a:hover { border-color: var(--blue); color: var(--blue); }
+
+/* 짧은 안내 (FAQ 미리보기) */
+.faq.compact details { margin-bottom: 8px; }
+.faq.compact summary { padding: 15px 0; font-size: 15px; }
+
+/* 과거 기록 표시 */
+.past-note { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); font-size: 13.5px; color: var(--navy-80); font-weight: 600; }
+.past-note::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--grey); }
+
+/* 요금 표 */
+.price-table td.k { width: 160px; font-weight: 700; color: var(--navy); }
+
+@media (max-width: 1080px) {
+  .rooms-5 { grid-template-columns: repeat(3, 1fr); }
+  .layout-list { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 900px) {
+  .picker { grid-template-columns: 1fr 1fr; }
+  .picker .btn { grid-column: 1 / -1; }
+  .rooms-5 { grid-template-columns: repeat(2, 1fr); }
+  .rooms-2, .feature-row { grid-template-columns: 1fr; }
+  .feature { grid-template-columns: 1fr; }
+  .feature .img-wrap img { min-height: 0; aspect-ratio: 16 / 9; }
+  .layout-list { grid-template-columns: repeat(2, 1fr); }
+  .seat-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 601px) and (max-width: 900px) {
+  .rooms-5 > :last-child:nth-child(odd) { grid-column: span 2; }
+  .layout-list > :last-child:nth-child(odd) { grid-column: span 2; }
+}
+@media (max-width: 600px) {
+  .picker { grid-template-columns: 1fr; padding: 16px; }
+  .rooms-5, .layout-list { grid-template-columns: 1fr; }
+  .seat-grid { grid-template-columns: repeat(2, 1fr); }
+  .form-done, .form-fail { padding: 20px; }
+  .hero .addr { font-size: 14px; }
+}
+
+.card.navy .is-empty { color: rgba(255,255,255,0.72); }
+.card.navy .is-empty::before { background: rgba(255,255,255,0.4); }
+.card.navy .h3 { color: #fff; }
+.office-card .img-tag { font-size: 11px; }
+.hero .float .sq { font-size: 18px; }
+.notice-bar .short { max-width: 60vw; }
+.hero .lockup.small .word .kr { letter-spacing: 0.04em; }
+@media (min-width: 901px) {
+  .room-detail .rd-media { position: sticky; top: calc(var(--nav-h) + 24px); }
+}
+
+@media (max-width: 600px) { .table-stack td .cell { display: block; min-width: 0; } }
+.checks li a, .rd-block a, .rd-specs a, .form-done a, .channels-empty a, .lead a { display: inline-block; padding: 8px 0; margin: -8px 0; color: var(--blue); font-weight: 700; }
+.compare td.strong a { display: inline-block; padding: 8px 0; margin: -8px 0; }
+table.compare { min-width: 840px; }
+.compare td.strong, .compare .cap { white-space: nowrap; }
+@media (max-width: 600px) { table.compare.table-stack { min-width: 0; } }
+.compare td:nth-child(4) { white-space: nowrap; }

@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /admin.html
 
-Sitemap: https://socialfactory.pages.dev/sitemap.xml
+Sitemap: https://socialfactory.co.kr/sitemap.xml
