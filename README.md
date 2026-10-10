@@ -67,6 +67,12 @@ robots.txt, sitemap.xml   검색엔진용
 - 2026-10-10 메인 영상 반영: html 전부, `tour.html`, `css/style.css`, `js/main.js`, `_headers`, `README.md`, `video/` 폴더와 `images/hero/` 폴더 새로 추가, `images/aerial/05-topview*.webp` 새 파일
 - 2026-10-10 이미지 반영: html 전부, `css/style.css`, `js/main.js`, `images/og-image.jpg`, `images/space/27~39` 새 파일, `images/aerial/` 폴더 새로 추가. 저장소의 `images/space` 에서 01·02·04·05·06·13·16·19·20·21·22번 파일은 더 이상 쓰지 않으니 지워도 됩니다.
 
+### 올린 뒤 화면이 깨져 보일 때
+새 html과 브라우저에 남아 있던 예전 CSS·JS가 섞이면 레이아웃이 어긋나고 영상이 나오지 않습니다. 2026-10-10 이후 html은 CSS·JS 주소 끝에 `?v=버전` 값을 붙여 부르므로 새로 올리면 바로 새 파일을 받습니다. 그래도 이상하면 `Ctrl+Shift+R`(Mac은 `Cmd+Shift+R`)로 새로고침하거나 시크릿 창에서 확인해 주세요.
+`js/site-config.js` 를 GitHub에서 직접 고친 경우에는 5분 안에 반영됩니다.
+
+여러 번에 나눠 올릴 때는 폴더 위치를 그대로 지켜 주세요. `images` 폴더 안의 `space`, `tour` 폴더나 이미지 파일을 저장소 맨 위에 올리면 화면에는 쓰이지 않는 복사본만 늘어납니다.
+
 ### Cloudflare Pages에 연결하기
 1. dash.cloudflare.com → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
 2. GitHub 계정을 연결하고 `socialfactory` 저장소 선택

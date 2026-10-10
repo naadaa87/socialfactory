@@ -14,11 +14,12 @@
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
 
+# CSS·JS는 html에서 ?v=버전 값을 붙여 부르므로, 새로 배포하면 바로 새 파일을 받습니다
 /css/*
-  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+  Cache-Control: public, max-age=300
 
 /js/*
-  Cache-Control: public, max-age=600, stale-while-revalidate=3600
+  Cache-Control: public, max-age=300
 
 /admin.html
   X-Robots-Tag: noindex, nofollow
