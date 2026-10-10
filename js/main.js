@@ -528,6 +528,50 @@
     });
   }
 
+  /* ---------- 메인 소개 영상 (화면에 보일 때만 재생 · 동작 줄이기 설정 존중) ---------- */
+  $$(".hv-film").forEach(function (film) {
+    var v = $("video", film), btn = $("[data-video-toggle]", film);
+    if (!v) return;
+    var mm = function (q) { return window.matchMedia && window.matchMedia(q).matches; };
+    var saveData = navigator.connection && navigator.connection.saveData;
+    var userPaused = mm("(prefers-reduced-motion: reduce)") || !!saveData;
+    var loaded = false;
+    var setState = function (paused) {
+      film.classList.toggle("is-paused", paused);
+      if (btn) btn.setAttribute("aria-label", paused ? "소개 영상 재생" : "소개 영상 일시정지");
+    };
+    var play = function () {
+      if (!loaded) {
+        loaded = true;
+        var sm = mm("(max-width: 700px)");
+        var mp4 = v.canPlayType && v.canPlayType('video/mp4; codecs="avc1.640028"');
+        var webm = v.canPlayType && v.canPlayType('video/webm; codecs="vp9"');
+        var key = (!mp4 && webm) ? (sm ? "data-webm-sm" : "data-webm") : (sm ? "data-src-sm" : "data-src");
+        v.src = v.getAttribute(key);
+      }
+      var p = v.play();
+      if (p && p.catch) p.catch(function () { setState(true); });
+    };
+    v.addEventListener("playing", function () { film.classList.add("is-playing"); setState(false); });
+    v.addEventListener("pause", function () { setState(true); });
+    v.addEventListener("error", function () { film.classList.remove("is-playing"); if (btn) btn.hidden = true; });
+    setState(userPaused);
+    if (btn) {
+      btn.hidden = false;
+      btn.addEventListener("click", function () {
+        if (v.paused) { userPaused = false; play(); } else { userPaused = true; v.pause(); }
+      });
+    }
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { if (!userPaused) play(); }
+          else if (!v.paused) v.pause();
+        });
+      }, { threshold: 0.2 }).observe(film);
+    } else if (!userPaused) play();
+  });
+
   /* ---------- 조감도: 번호와 목록을 함께 강조 ---------- */
   $$(".aerial-map").forEach(function (map) {
     $$("[data-am]", map).forEach(function (el) {

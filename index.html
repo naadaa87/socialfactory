@@ -51,30 +51,33 @@
 </header>
 <main id="main">
 <!-- ===== 히어로 ===== -->
-<section class="hero">
+<section class="hero hero-v2">
   <div class="container inner">
-    <div class="copy">
+    <div class="hv-head">
       <div class="meta"><span class="w">SOCIAL FACTORY KONDAE</span><span>EST. 2015</span></div>
-      <div class="lockup small">
-        <img class="mark" src="images/logo-mark.svg" alt="소셜팩토리 심볼" width="56" height="56">
-        <div class="word"><span class="en">SOCIAL <br>FACTORY</span><span class="kr">모이면 만들어진다</span></div>
-      </div>
-      <h1 class="fn">강의와 모임, 일할 자리까지<span class="sub">소셜팩토리 건대</span></h1>
-      <p class="lead">강연과 세미나, 스터디와 워크숍을 위한 룸 5개가 있습니다. 혼자 집중할 수 있는 코워킹 공간과 1~3인 독립사무실도 같은 층에서 이용할 수 있습니다. 사진과 이용 조건을 보고 필요한 공간을 골라 보세요.</p>
+      <h1 class="fn">강의와 모임, <br>일할 자리까지<span class="sub">소셜팩토리 건대</span></h1>
+    </div>
+    <div class="hv-side">
+      <p class="lead">강연과 세미나, 스터디와 워크숍을 위한 룸 5개가 있습니다. 혼자 집중할 수 있는 코워킹 공간과 1~3인 독립사무실도 같은 층에서 이용할 수 있습니다.</p>
       <p class="addr"><span class="sq">4F</span><span data-sf="address">서울 광진구 화양동 10-1 한아름건물 4층</span></p>
+      <ul class="quick"><li>룸 5개 · 12~35명</li><li><span>시간당 <span data-sf="pricing.from">12,000</span>원부터</span></li><li><span>코워킹 <span data-sf="hours.coworking">24시간</span></span></li></ul>
       <div class="actions">
         <a class="btn btn-primary btn-lg" href="#rooms">공간 고르기</a>
         <a class="btn btn-outline btn-lg" href="contact.html?purpose=rental">대관 문의하기</a>
+        <a class="btn btn-ghost hv-3d" href="tour.html">3D로 살펴보기 →</a>
       </div>
-      <p class="sub-links"><a href="tour.html">3D로 공간 살펴보기 →</a></p>
     </div>
-    <div class="visual">
-      <span class="img-tag">완성 예상 이미지</span>
-      <img src="images/space/30-r2-forum-navy.webp" srcset="images/space/30-r2-forum-navy-sm.webp 800w, images/space/30-r2-forum-navy.webp 1600w" sizes="(max-width: 900px) 100vw, 50vw" alt="소셜팩토리 건대 2번룸 완성 예상 이미지 — 네이비 벽의 스크린과 연단을 향해 의자를 놓은 강연 배치" width="1600" height="900" fetchpriority="high">
-      <div class="float">
-        <span class="sq">5</span>
-        <div><strong>룸 5개 · 시간당 <span data-sf="pricing.from">12,000</span>원부터</strong><span>12~35명 · 부가세 포함 · 인원 추가 요금 없음</span></div>
-      </div>
+    <figure class="hv-film">
+      <img class="hv-poster" src="images/hero/brand-poster.webp" srcset="images/hero/brand-poster-sm.webp 640w, images/hero/brand-poster.webp 1280w" sizes="(max-width: 1180px) 100vw, 1180px" alt="" width="1280" height="720" fetchpriority="high">
+      <video class="hv-video" muted loop playsinline preload="none" data-src="video/brand-720.mp4" data-src-sm="video/brand-480.mp4" data-webm="video/brand-720.webm" data-webm-sm="video/brand-480.webm" width="1280" height="720" aria-label="소셜팩토리 건대 소개 영상 — 입구의 로고 사인, 소모임과 네트워킹, 세미나와 워크숍, 브랜드 소품 장면"></video>
+      <button class="hv-toggle" type="button" data-video-toggle aria-label="소개 영상 일시정지" hidden><span class="i-pause" aria-hidden="true"></span><span class="i-play" aria-hidden="true"></span></button>
+    </figure>
+    <div class="hv-cards">
+      <a class="hv-plan" href="#floor">
+        <img src="images/aerial/05-topview-xs.webp" srcset="images/aerial/05-topview-xs.webp 360w, images/aerial/05-topview-sm.webp 800w" sizes="160px" alt="소셜팩토리 건대 4층을 위에서 내려다본 배치" width="360" height="255">
+        <span class="hv-plan-body"><small>4F FLOOR</small><strong>4층 한눈에 보기</strong><span>룸과 코워킹, 사무실 위치</span></span>
+        <span class="hv-arrow" aria-hidden="true">→</span>
+      </a>
     </div>
   </div>
 </section>
@@ -118,7 +121,7 @@
 
     <div class="rooms-5 mt-24 reveal" id="room-list">
       <article class="room-card" data-room-card data-min="25" data-max="30" data-uses="lecture desk group">
-        <a class="rc-media img-wrap" href="space.html#room-1"><span class="img-tag">완성 예상 이미지</span><span class="rc-pick">추천</span><img src="images/space/27-r1-desk-lecture-sm.webp" alt="1번룸 완성 예상 이미지 — 칠판과 연단을 향한 책상 강의형 배치" loading="lazy" width="800" height="500"></a>
+        <a class="rc-media img-wrap" href="space.html#room-1"><span class="rc-pick">추천</span><img src="images/space/27-r1-desk-lecture-sm.webp" alt="1번룸 — 칠판과 연단을 향한 책상 강의형 배치" loading="lazy" width="800" height="500"></a>
         <div class="rc-body">
           <div class="rc-head"><h3>1번룸</h3><span class="rc-no">ROOM 01</span></div>
           <div class="rc-cap">25~30<small>명</small></div>
@@ -129,7 +132,7 @@
         </div>
       </article>
       <article class="room-card" data-room-card data-min="30" data-max="35" data-uses="lecture desk event">
-        <a class="rc-media img-wrap" href="space.html#room-2"><span class="img-tag">완성 예상 이미지</span><span class="rc-pick">추천</span><img src="images/space/29-r2-theater-navy-sm.webp" alt="2번룸 완성 예상 이미지 — 스크린을 향해 의자를 놓은 강연 배치" loading="lazy" width="800" height="500"></a>
+        <a class="rc-media img-wrap" href="space.html#room-2"><span class="rc-pick">추천</span><img src="images/space/29-r2-theater-navy-sm.webp" alt="2번룸 — 스크린을 향해 의자를 놓은 강연 배치" loading="lazy" width="800" height="500"></a>
         <div class="rc-body">
           <div class="rc-head"><h3>2번룸</h3><span class="rc-no">ROOM 02</span></div>
           <div class="rc-cap">30~35<small>명</small></div>
@@ -140,7 +143,7 @@
         </div>
       </article>
       <article class="room-card" data-room-card data-min="12" data-max="18" data-uses="meeting">
-        <a class="rc-media img-wrap" href="space.html#room-3"><span class="img-tag">완성 예상 이미지</span><span class="rc-pick">추천</span><img src="images/space/11-meeting-screen-sm.webp" alt="3번룸 완성 예상 이미지 — 긴 테이블의 회의 배치" loading="lazy" width="800" height="500"></a>
+        <a class="rc-media img-wrap" href="space.html#room-3"><span class="rc-pick">추천</span><img src="images/space/11-meeting-screen-sm.webp" alt="3번룸 — 긴 테이블의 회의 배치" loading="lazy" width="800" height="500"></a>
         <div class="rc-body">
           <div class="rc-head"><h3>3번룸</h3><span class="rc-no">ROOM 03</span></div>
           <div class="rc-cap">12~18<small>명</small></div>
@@ -151,7 +154,7 @@
         </div>
       </article>
       <article class="room-card" data-room-card data-min="30" data-max="35" data-uses="group lecture desk meeting event">
-        <a class="rc-media img-wrap" href="space.html#room-4"><span class="img-tag">완성 예상 이미지</span><span class="rc-pick">추천</span><img src="images/space/33-r4-u-shape-sm.webp" alt="4번룸 완성 예상 이미지 — 테이블을 ㄷ자로 놓은 회의형 배치" loading="lazy" width="800" height="500"></a>
+        <a class="rc-media img-wrap" href="space.html#room-4"><span class="rc-pick">추천</span><img src="images/space/33-r4-u-shape-sm.webp" alt="4번룸 — 테이블을 ㄷ자로 놓은 회의형 배치" loading="lazy" width="800" height="500"></a>
         <div class="rc-body">
           <div class="rc-head"><h3>4번룸</h3><span class="rc-no">ROOM 04</span></div>
           <div class="rc-cap">30~35<small>명</small></div>
@@ -162,7 +165,7 @@
         </div>
       </article>
       <article class="room-card" data-room-card data-min="25" data-max="30" data-uses="lecture desk event">
-        <a class="rc-media img-wrap" href="space.html#room-5"><span class="img-tag">완성 예상 이미지</span><span class="rc-pick">추천</span><img src="images/space/03-lecture-board-sm.webp" alt="5번룸 완성 예상 이미지 — 강의 배치" loading="lazy" width="800" height="500"></a>
+        <a class="rc-media img-wrap" href="space.html#room-5"><span class="rc-pick">추천</span><img src="images/space/03-lecture-board-sm.webp" alt="5번룸 — 강의 배치" loading="lazy" width="800" height="500"></a>
         <div class="rc-body">
           <div class="rc-head"><h3>5번룸</h3><span class="rc-no">ROOM 05</span></div>
           <div class="rc-cap">25~30<small>명</small></div>
@@ -173,7 +176,7 @@
         </div>
       </article>
     </div>
-    <p class="note mt-16">요금은 시간당 · 부가세 포함이며 룸 단위로 받습니다(인원 추가 요금 없음). 평일 저녁과 주말 오전은 그 사이 요금, 이른 아침(07~09시)과 늦은 밤(23~24시)은 평일 낮의 절반입니다. 표기 인원은 배치와 필요한 장비에 따라 달라집니다. 룸 이미지는 도면을 바탕으로 만든 완성 예상 이미지입니다.</p>
+    <p class="note mt-16">요금은 시간당 · 부가세 포함이며 룸 단위로 받습니다(인원 추가 요금 없음). 평일 저녁과 주말 오전은 그 사이 요금, 이른 아침(07~09시)과 늦은 밤(23~24시)은 평일 낮의 절반입니다. 표기 인원은 배치와 필요한 장비에 따라 달라집니다.</p>
     <div class="actions">
       <a class="btn btn-primary" href="space.html#rooms">룸 5개 비교하기</a>
       <a class="btn btn-outline" href="pricing.html">시간대별 요금 보기</a>
@@ -193,14 +196,14 @@
     </div>
     <figure class="aerial-map reveal">
       <div class="am-stage">
-        <span class="img-tag">완성 예상 조감도</span>
-        <a class="am-zoom" href="images/aerial/01-front.webp" data-lightbox data-img-tag="완성 예상 조감도" data-alt="소셜팩토리 건대 4층 완성 예상 조감도 — 정면 위에서 내려다본 룸 5개와 코워킹 공간, 독립사무실, 휴게 공간" aria-label="조감도 크게 보기">크게 보기</a>
-        <img src="images/aerial/01-front.webp" srcset="images/aerial/01-front-sm.webp 800w, images/aerial/01-front.webp 1600w" sizes="(max-width: 1180px) 100vw, 1180px" alt="소셜팩토리 건대 4층 완성 예상 조감도 — 정면 위에서 내려다본 룸 5개와 코워킹 공간, 독립사무실, 휴게 공간" width="1600" height="900" loading="lazy">
+        
+        <a class="am-zoom" href="images/aerial/01-front.webp" data-lightbox data-alt="소셜팩토리 건대 4층 조감도 — 정면 위에서 내려다본 룸 5개와 코워킹 공간, 독립사무실, 휴게 공간" aria-label="조감도 크게 보기">크게 보기</a>
+        <img src="images/aerial/01-front.webp" srcset="images/aerial/01-front-sm.webp 800w, images/aerial/01-front.webp 1600w" sizes="(max-width: 1180px) 100vw, 1180px" alt="소셜팩토리 건대 4층 조감도 — 정면 위에서 내려다본 룸 5개와 코워킹 공간, 독립사무실, 휴게 공간" width="1600" height="900" loading="lazy">
         <a href="space.html#room-1" class="am-pin is-room" data-am="r1" style="left:43.5%;top:69.4%" aria-label="1번룸 안내로 이동"><b aria-hidden="true">1</b><span class="am-label" aria-hidden="true">1번룸</span></a><a href="space.html#room-2" class="am-pin is-room" data-am="r2" style="left:25.1%;top:71.5%" aria-label="2번룸 안내로 이동"><b aria-hidden="true">2</b><span class="am-label" aria-hidden="true">2번룸</span></a><a href="space.html#room-3" class="am-pin is-room" data-am="r3" style="left:23.1%;top:57.4%" aria-label="3번룸 안내로 이동"><b aria-hidden="true">3</b><span class="am-label" aria-hidden="true">3번룸</span></a><a href="space.html#room-4" class="am-pin is-room" data-am="r4" style="left:23.1%;top:36.8%" aria-label="4번룸 안내로 이동"><b aria-hidden="true">4</b><span class="am-label" aria-hidden="true">4번룸</span></a><a href="space.html#room-5" class="am-pin is-room" data-am="r5" style="left:75.4%;top:42.5%" aria-label="5번룸 안내로 이동"><b aria-hidden="true">5</b><span class="am-label" aria-hidden="true">5번룸</span></a><a href="space.html#coworking" class="am-pin is-zone" data-am="cowork" style="left:50.2%;top:32.6%" aria-label="코워킹 · 스터디 공간 안내로 이동"><b aria-hidden="true">코</b><span class="am-label" aria-hidden="true">코워킹</span></a><a href="space.html#office" class="am-pin is-zone" data-am="office" style="left:36.3%;top:34.0%" aria-label="독립사무실 A~D호 안내로 이동"><b aria-hidden="true">사</b><span class="am-label" aria-hidden="true">독립사무실</span></a><span class="am-pin is-zone" data-am="lounge" style="left:79.3%;top:61.6%" aria-hidden="true"><b aria-hidden="true">휴</b><span class="am-label" aria-hidden="true">휴게·대기</span></span><a href="space.html#location" class="am-pin is-zone" data-am="entry" style="left:69.4%;top:73.7%" aria-label="주출입구 — 오시는 길 안내로 이동"><b aria-hidden="true">입</b><span class="am-label" aria-hidden="true">주출입구</span></a>
       </div>
       <figcaption class="am-side">
         <ol class="am-legend"><li><a href="space.html#room-1" class="am-item is-room" data-am="r1"><b aria-hidden="true">1</b><span><strong>1번룸</strong><small>25~30명 · 35.8㎡</small></span></a></li><li><a href="space.html#room-2" class="am-item is-room" data-am="r2"><b aria-hidden="true">2</b><span><strong>2번룸</strong><small>30~35명 · 52.1㎡</small></span></a></li><li><a href="space.html#room-3" class="am-item is-room" data-am="r3"><b aria-hidden="true">3</b><span><strong>3번룸</strong><small>12~18명 · 20.2㎡</small></span></a></li><li><a href="space.html#room-4" class="am-item is-room" data-am="r4"><b aria-hidden="true">4</b><span><strong>4번룸</strong><small>30~35명 · 67.3㎡</small></span></a></li><li><a href="space.html#room-5" class="am-item is-room" data-am="r5"><b aria-hidden="true">5</b><span><strong>5번룸</strong><small>25~30명 · 43.4㎡</small></span></a></li><li><a href="space.html#coworking" class="am-item is-zone" data-am="cowork"><b aria-hidden="true">코</b><span><strong>코워킹 · 스터디 공간</strong><small><span data-sf="rooms.coworking.seats">30석</span> · <span data-sf="hours.coworking">24시간</span></small></span></a></li><li><a href="space.html#office" class="am-item is-zone" data-am="office"><b aria-hidden="true">사</b><span><strong>독립사무실 A~D호</strong><small>1~3인 · 시간권부터</small></span></a></li><li><span class="am-item is-zone" data-am="lounge"><b aria-hidden="true">휴</b><span><strong>휴게 · 대기 공간</strong><small>이용자 공용</small></span></span></li><li><a href="space.html#location" class="am-item is-zone" data-am="entry"><b aria-hidden="true">입</b><span><strong>주출입구</strong><small>오시는 길 보기</small></span></a></li></ol>
-        <p class="note">도면을 바탕으로 만든 완성 예상 조감도입니다. 가구 배치와 마감은 실제와 다를 수 있습니다.</p>
+        <p class="note">그림 속 가구 배치는 예시이며, 모임에 맞춰 바꿀 수 있습니다.</p>
       </figcaption>
     </figure>
     <div class="actions"><a class="btn btn-outline" href="space.html#floorplan">치수가 적힌 평면도</a><a class="btn btn-ghost" href="tour.html">3D로 둘러보기 →</a></div>
@@ -278,7 +281,7 @@
     </div>
     <div class="feature-row reveal">
       <article class="feature">
-        <a class="img-wrap" href="space.html#coworking"><span class="img-tag">완성 예상 이미지</span><img src="images/space/35-cowork-sage-sm.webp" alt="코워킹 공간 완성 예상 이미지 — 벽면 1인 좌석과 가운데 공용 데스크" loading="lazy" width="800" height="500"></a>
+        <a class="img-wrap" href="space.html#coworking"><img src="images/space/35-cowork-sage-sm.webp" alt="코워킹 공간 — 벽면 1인 좌석과 가운데 공용 데스크" loading="lazy" width="800" height="500"></a>
         <div class="f-body">
           <h3>코워킹 · 스터디 공간</h3>
           <p>약 75.8㎡ · <span data-sf="rooms.coworking.seats">30석</span> · <span data-sf="hours.coworking">24시간</span>. 짧게 쓰는 시간권부터 4주 정기권까지 있습니다.</p>
@@ -287,7 +290,7 @@
         </div>
       </article>
       <article class="feature">
-        <a class="img-wrap" href="space.html#office"><span class="img-tag">완성 예상 이미지</span><img src="images/space/25-office-double-navy-sm.webp" alt="독립사무실 완성 예상 이미지" loading="lazy" width="800" height="500"></a>
+        <a class="img-wrap" href="space.html#office"><img src="images/space/25-office-double-navy-sm.webp" alt="독립사무실 A호 — 2~3인 책상과 화이트보드" loading="lazy" width="800" height="500"></a>
         <div class="f-body">
           <h3>독립사무실 A · B · C · D호</h3>
           <p>A호는 2~3인, B·C·D호는 1~2인 공간입니다. 화상회의·면접처럼 한두 시간 쓰는 시간권부터 1일·1주 이용권까지 있습니다. 사업자등록 주소는 제공하지 않습니다.</p>
@@ -303,7 +306,7 @@
 <section class="section bg" id="brand">
   <div class="container split">
     <div class="media reveal">
-      <a class="img-wrap" href="images/space/39-corridor-warm.webp" data-lightbox data-img-tag="완성 예상 이미지"><span class="img-tag">완성 예상 이미지</span><img src="images/space/39-corridor-warm.webp" srcset="images/space/39-corridor-warm-sm.webp 800w, images/space/39-corridor-warm.webp 1600w" sizes="(max-width: 900px) 100vw, 50vw" alt="소셜팩토리 건대 독립사무실 앞 복도 완성 예상 이미지 — 번호 사인과 도어락이 있는 유리문" width="1600" height="900" loading="lazy"></a>
+      <a class="img-wrap" href="images/space/39-corridor-warm.webp" data-lightbox><img src="images/space/39-corridor-warm.webp" srcset="images/space/39-corridor-warm-sm.webp 800w, images/space/39-corridor-warm.webp 1600w" sizes="(max-width: 900px) 100vw, 50vw" alt="소셜팩토리 건대 독립사무실 앞 복도 — 번호 사인과 도어락이 있는 유리문" width="1600" height="900" loading="lazy"></a>
     </div>
     <div class="reveal">
       <span class="eyebrow">Since 2015</span>

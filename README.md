@@ -6,7 +6,7 @@
 ## 폴더 구성
 
 ```
-index.html        메인 — 룸 고르기(인원·진행 방식), 4층 조감도, 배치 안내, 요금·정기대관, 코워킹·사무실, 소개, 오시는 길·FAQ
+index.html        메인 — 소개 영상, 룸 고르기(인원·진행 방식), 4층 조감도, 배치 안내, 요금·정기대관, 코워킹·사무실, 소개, 오시는 길·FAQ
 space.html        공간 안내 — 룸 1~5 비교표와 상세(사진 · 배치별 인원 · 장비 · 시간대 요금 · 입퇴실), 배치 이름, 코워킹, 독립사무실, 요금 요약, 조감도·평면도, 3D, 오시는 길
 pricing.html      이용 요금 — 시간대 지도, 룸 시간 요금, 패키지, 층 대관, 코워킹·독립사무실 이용권, 반복 모임·호스트·제휴, 기업·단체, 부가 서비스, 할인, 취소·환불, 보증금
 guide.html        이용 안내 — 예약부터 퇴실까지, 이용 원칙, 운영 시간, 요금·취소, 오시는 길, FAQ
@@ -21,8 +21,10 @@ css/style.css     디자인
 js/site-config.js ★ 운영 상태 · 연락처 · 예약 채널 · 요금 · 장비 · 정책 설정 파일 (여기만 고치면 전 페이지에 반영)
 js/main.js        메뉴 · 설정값 반영 · 룸 고르기 · 문의 폼 동작
 images/           로고(svg) · 브랜드 이미지 · OG 이미지
-images/space/     룸 · 코워킹 · 사무실 완성 예상 이미지 28장 (큰 파일 + -sm 작은 파일)
-images/aerial/    4층 완성 예상 조감도 4장 (큰 파일 + -sm 작은 파일)
+images/space/     룸 · 코워킹 · 사무실 공간 이미지 28장 (큰 파일 + -sm 작은 파일)
+images/aerial/    4층 조감도 5장 (큰 파일 + -sm 작은 파일)
+images/hero/      메인 소개 영상의 첫 장면 이미지 (영상을 불러오기 전에 보임)
+video/            메인 소개 영상 (PC용 720p · 모바일용 480p, mp4 · webm)
 images/scenes/    활용 예시 이미지 38장
 images/tour/      3D 안내의 참고 이미지 32장과 원본 도면 1장
 fonts/            영문 서체 Montserrat (한글 Pretendard는 CDN)
@@ -57,11 +59,12 @@ robots.txt, sitemap.xml   검색엔진용
 4. 이 압축을 푼 폴더 안의 **모든 파일과 폴더**를 드래그해서 올립니다
    (`css`, `js`, `images`, `fonts`, `functions` 폴더째로 올리면 됩니다. `_headers`처럼 밑줄로 시작하는 파일도 꼭 포함)
    GitHub는 한 번에 100개 파일까지만 받으므로, 전체 파일 수가 많다고 나오면 나눠 올립니다.
-   ① `images` 폴더를 뺀 나머지 전부 → Commit ② **Add file → Upload files**에서 `images/space` → Commit ③ `images/scenes` → Commit ④ `images/tour`, `images/aerial` 과 나머지 이미지 → Commit
+   ① `images` 폴더를 뺀 나머지 전부 → Commit ② **Add file → Upload files**에서 `images/space` → Commit ③ `images/scenes` → Commit ④ `images/tour`, `images/aerial`, `images/hero` 와 나머지 이미지 → Commit ⑤ `video` → Commit
 5. **Commit changes** 클릭
 
 이미 저장소가 있다면 바뀐 파일만 같은 자리에 다시 올리면 됩니다.
 - 2026-10-10 요금 반영: html 전부, `pricing.html` 추가, `css/style.css`, `js/site-config.js`, `js/main.js`, `functions/api/inquiry.js`, `admin.html`, `sitemap.xml`
+- 2026-10-10 메인 영상 반영: html 전부, `tour.html`, `css/style.css`, `js/main.js`, `_headers`, `README.md`, `video/` 폴더와 `images/hero/` 폴더 새로 추가, `images/aerial/05-topview*.webp` 새 파일
 - 2026-10-10 이미지 반영: html 전부, `css/style.css`, `js/main.js`, `images/og-image.jpg`, `images/space/27~39` 새 파일, `images/aerial/` 폴더 새로 추가. 저장소의 `images/space` 에서 01·02·04·05·06·13·16·19·20·21·22번 파일은 더 이상 쓰지 않으니 지워도 됩니다.
 
 ### Cloudflare Pages에 연결하기
@@ -95,7 +98,7 @@ GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값
 
 ### 사진 바꾸기
 `images/` 폴더의 파일을 **같은 이름**으로 덮어쓰면 페이지 수정 없이 바뀝니다. 이미지 캐시는 하루라서 늦어도 다음 날 모든 방문자에게 반영됩니다.
-현재 룸 사진은 모두 도면을 바탕으로 만든 **완성 예상 이미지**, 4층 전체 그림은 **완성 예상 조감도**이며 사진마다 표기가 붙어 있습니다. 실제 사진으로 바꾼 뒤에는 각 html에서 `완성 예상 이미지` 라벨(`<span class="img-tag">…</span>`)을 지우거나 "2026.11 촬영"처럼 바꿔 주세요.
+룸·코워킹·사무실 이미지는 소셜팩토리 건대의 현재 공간 이미지입니다. 배치 안내에 붙은 `공간 활용 예시` 라벨은 같은 방을 다른 배치로 쓴 예시라는 뜻입니다.
 
 조감도 위의 번호(1~5, 코·사·휴·입)는 html 안에 `style="left:43.5%;top:69.4%"` 처럼 그림 대비 위치로 적혀 있습니다. 같은 구도의 그림으로 바꿀 때는 그대로 두면 되고, 각도가 다른 그림으로 바꾸면 번호 위치도 함께 고쳐야 합니다.
 
@@ -106,6 +109,8 @@ GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값
 | `aerial/02-southeast` | 공간 안내 맨 위 |
 | `aerial/03-overhead` | 공간 안내 평면도 위 (번호 표시) |
 | `aerial/04-panorama` | 소개 페이지 운영 이력 옆 |
+| `aerial/05-topview` | 메인 첫 화면의 '4층 한눈에 보기' 카드 |
+| `hero/brand-poster.webp`, `-sm` | 메인 소개 영상의 첫 장면 (영상이 재생되기 전, 동작 줄이기 설정을 켠 방문자에게 보임) |
 | `scenes/01~38-*.webp` | 활용 예시 38장면 (프로그램 페이지, 메인) |
 | `tour/01~32.jpg`, `tour/33.png` | 3D 안내의 참고 이미지와 원본 도면 |
 | `signage.webp`, `welcome.webp` | 브랜드 이미지 |
@@ -113,6 +118,10 @@ GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값
 | `kakao-qr.svg` | 문의 페이지의 카카오톡 문의채널 QR (https://pf.kakao.com/_uTiFX). 채널 주소를 바꾸면 이 파일도 새 QR로 바꿔야 합니다 |
 
 `-sm.webp` 로 끝나는 파일은 모바일용 작은 버전입니다. 같은 사진을 가로 800px로 줄여 함께 올리면 가장 좋고, 없으면 큰 파일을 같은 이름으로 두 번 올려도 됩니다.
+
+### 메인 소개 영상
+`video/brand-720.mp4`(PC) · `brand-480.mp4`(모바일)과 같은 내용의 `.webm` 두 개가 있습니다. 소리 없이 반복 재생되고, 화면에 보일 때만 재생되며 오른쪽 위 버튼으로 멈출 수 있습니다. 휴대폰의 '동작 줄이기'나 데이터 절약 모드를 켠 방문자에게는 자동 재생하지 않고 첫 장면 이미지만 보여 줍니다.
+영상을 바꾸려면 네 파일을 같은 이름으로 덮어쓰고, 첫 장면 이미지(`images/hero/brand-poster.webp`, `brand-poster-sm.webp`)도 새 영상의 첫 장면으로 바꿔 주세요. GitHub 웹 업로드는 파일 하나당 25MB까지라 영상은 10MB 이하로 줄여 올리는 것이 좋습니다.
 
 ### 3D 안내
 `tour.html` 에 3D 실행 코드가, `images/tour/` 에 참고 이미지가 있습니다. 공간 페이지에서 같은 자리에 끼워 보거나 새 창으로 엽니다. 방을 고르면 그 방의 사진·이용 조건과 문의로 바로 가는 링크가 나옵니다. 새 3D 파일을 받으면 같은 방식으로 이미지를 분리해 넣어야 하므로, 교체가 필요하면 제작자에게 요청하는 편이 빠릅니다.

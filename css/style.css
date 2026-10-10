@@ -1084,3 +1084,57 @@ table.table td.strong a { min-width: 44px; }
 .qr-card p { margin-top: 4px; font-size: 13.5px; color: var(--muted); line-height: 1.55; }
 .qr-card a { display: inline-block; margin-top: 6px; padding: 6px 0; font-family: var(--font-en); font-size: 13.5px; font-weight: 700; color: var(--blue); }
 @media (max-width: 700px) { .qr-card { display: none; } }
+
+/* ===== 2026-10-10 메인 히어로: 소개 영상 + 4층 배치 ===== */
+.hero-v2 .inner { grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr); grid-template-areas: "head side" "film film" "cards cards"; column-gap: 56px; row-gap: 0; align-items: end; padding-top: 56px; padding-bottom: 72px; }
+.hv-head { grid-area: head; }
+.hv-head .meta { margin-bottom: 22px; max-width: 520px; }
+.hero-v2 h1.fn { font-size: clamp(36px, 4.6vw, 62px); line-height: 1.12; }
+.hero-v2 h1.fn .sub { margin-top: 12px; }
+.hv-side { grid-area: side; padding-bottom: 6px; }
+.hv-side .lead { max-width: 500px; }
+.hero-v2 .addr { margin-top: 16px; }
+.hero-v2 .actions { margin-top: 22px; }
+.hv-3d { padding-left: 6px; padding-right: 6px; }
+.hv-film { grid-area: film; position: relative; margin: 44px 0 0; aspect-ratio: 21 / 9; border-radius: 28px; overflow: hidden; background: #E9EDF3; box-shadow: var(--shadow-lg); }
+.hv-film .hv-poster, .hv-film .hv-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.hv-film .hv-video { opacity: 0; transition: opacity .6s ease; }
+.hv-film.is-playing .hv-video { opacity: 1; }
+.hv-toggle { position: absolute; right: 16px; top: 16px; z-index: 2; width: 42px; height: 42px; border-radius: 50%; border: 0; padding: 0; background: rgba(24, 35, 58, 0.55); color: #fff; display: grid; place-items: center; cursor: pointer; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: background .15s ease; }
+.hv-toggle[hidden] { display: none; }
+.hv-toggle:hover { background: rgba(24, 35, 58, 0.82); }
+.hv-toggle:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 6px var(--blue); }
+.hv-toggle .i-pause { width: 12px; height: 14px; border-left: 4px solid #fff; border-right: 4px solid #fff; }
+.hv-toggle .i-play { display: none; width: 0; height: 0; margin-left: 3px; border-left: 12px solid #fff; border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
+.hv-film.is-paused .hv-toggle .i-pause { display: none; }
+.hv-film.is-paused .hv-toggle .i-play { display: block; }
+.hv-cards { grid-area: cards; position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0, 340px); margin: -44px 28px 0; }
+.hero-v2 .quick { margin-top: 14px; }
+.hv-plan { display: flex; align-items: center; gap: 14px; padding: 10px 16px 10px 10px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-lg); color: var(--navy); transition: border-color .15s ease, transform .15s ease; }
+.hv-plan:hover { border-color: var(--blue); transform: translateY(-2px); color: var(--navy); }
+.hv-plan img { width: 96px; height: 68px; flex: none; object-fit: contain; border-radius: 10px; background: #FDFCF8; border: 1px solid var(--line); }
+.hv-plan-body { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.hv-plan-body small { font-family: var(--font-en); font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: var(--blue); }
+.hv-plan-body strong { font-size: 15.5px; font-weight: 700; line-height: 1.35; }
+.hv-plan-body span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.hv-arrow { flex: none; color: var(--blue); font-weight: 800; }
+@media (max-width: 1100px) {
+  .hero-v2 .inner { column-gap: 36px; }
+}
+@media (max-width: 900px) {
+  .hero-v2 .inner { grid-template-columns: 1fr; grid-template-areas: "head" "side" "film" "cards"; padding-top: 40px; padding-bottom: 56px; }
+  .hv-side { margin-top: 18px; padding-bottom: 0; }
+  .hv-film { margin-top: 32px; aspect-ratio: 16 / 9; border-radius: 22px; }
+  .hv-cards { margin: -32px 16px 0; }
+}
+@media (max-width: 600px) {
+  .hero-v2 .inner { padding-top: 28px; padding-bottom: 44px; }
+  .hv-head .meta { margin-bottom: 16px; }
+  .hv-film { margin-top: 26px; border-radius: 16px; }
+  .hv-toggle { right: 10px; top: 10px; width: 40px; height: 40px; }
+  .hv-cards { grid-template-columns: 1fr; margin: 12px 0 0; }
+  .hv-plan { box-shadow: var(--shadow); }
+  .hero-v2 .quick { gap: 6px 16px; font-size: 13.5px; }
+  .hv-3d { width: 100%; }
+}
+@media (min-width: 601px) and (max-width: 900px) { .hero-v2 h1.fn { font-size: 46px; } }
