@@ -70,11 +70,19 @@
         <div class="channel-list mt-24">
           <a class="channel" data-channel="naver" hidden><span class="ic naver">N</span><div><strong>네이버 예약</strong><span>룸 예약 · 날짜와 시간 선택 후 결제</span></div><span class="arrow">→</span></a>
           <a class="channel" data-channel="spacecloud" hidden><span class="ic sc">SC</span><div><strong>스페이스클라우드</strong><span>모임공간 플랫폼 · 예약과 결제</span></div><span class="arrow">→</span></a>
-          <a class="channel" data-channel="kakao" hidden><span class="ic kakao">TALK</span><div><strong>카카오톡 채널</strong><span>상담 · 이용 중 문의</span></div><span class="arrow">→</span></a>
+          <a class="channel" data-channel="kakao" hidden><span class="ic kakao">TALK</span><div><strong>카카오톡 문의채널</strong><span>대관 상담 · 이용 문의 · 채팅으로 남기기</span></div><span class="arrow">→</span></a>
           <a class="channel" data-channel="phone" hidden><span class="ic tel">TEL</span><div><strong>전화</strong><span data-channel-value></span></div><span class="arrow">→</span></a>
           <a class="channel" data-channel="email" hidden><span class="ic mail">@</span><div><strong>이메일</strong><span data-channel-value></span></div><span class="arrow">→</span></a>
           <a class="channel" data-channel="instagram" hidden><span class="ic insta">IG</span><div><strong>인스타그램</strong><span>프로그램 일정과 공간 소식</span></div><span class="arrow">→</span></a>
           <div class="channels-empty">예약·상담 채널은 오픈 안내와 함께 공개합니다. 그 전까지는 아래 문의 폼으로 남겨 주세요.</div>
+        </div>
+        <div class="qr-card mt-16" data-channel-qr="kakao" hidden>
+          <img src="images/kakao-qr.svg" alt="소셜팩토리 카카오톡 문의채널 QR 코드" width="112" height="112" loading="lazy">
+          <div>
+            <strong>카카오톡 문의채널 QR</strong>
+            <p>PC에서 보고 계신다면 휴대폰 카메라로 비춰 보세요. 소셜팩토리 채널로 바로 연결됩니다.</p>
+            <a data-channel="kakao" hidden>pf.kakao.com/_uTiFX</a>
+          </div>
         </div>
       </div>
       <div class="reveal">
@@ -184,7 +192,7 @@
         <p class="form-status" data-fail-status></p>
         <textarea data-fail-manual hidden readonly aria-label="문의 내용"></textarea>
         <div class="channel-list mt-16" data-fail-channels hidden>
-          <a class="channel" data-channel="kakao" hidden><span class="ic kakao">TALK</span><div><strong>카카오톡 채널</strong><span>복사한 내용을 붙여 넣어 보내 주세요</span></div><span class="arrow">→</span></a>
+          <a class="channel" data-channel="kakao" hidden><span class="ic kakao">TALK</span><div><strong>카카오톡 문의채널</strong><span>복사한 내용을 붙여 넣어 보내 주세요</span></div><span class="arrow">→</span></a>
           <a class="channel" data-channel="phone" hidden><span class="ic tel">TEL</span><div><strong>전화</strong><span data-channel-value></span></div><span class="arrow">→</span></a>
           <a class="channel" data-channel="email" hidden><span class="ic mail">@</span><div><strong>이메일</strong><span data-channel-value></span></div><span class="arrow">→</span></a>
         </div>
@@ -272,7 +280,7 @@
       <div>
         <h4>Contact</h4>
         <ul>
-          <li><a data-channel="kakao" hidden>카카오톡 채널</a></li>
+          <li><a data-channel="kakao" hidden>카카오톡 문의채널</a></li>
           <li><a data-channel="naver" hidden>네이버 예약</a></li>
           <li><a data-channel="spacecloud" hidden>스페이스클라우드</a></li>
           <li><a data-channel="instagram" hidden>인스타그램</a></li>

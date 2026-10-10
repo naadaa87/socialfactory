@@ -1023,3 +1023,64 @@ table.table td.strong a { display: inline-block; padding: 10px 0; margin: -10px 
 .rooms-2 > .card > .actions { margin-top: auto; padding-top: 24px; }
 @media (max-width: 900px) { .tb-ticks .t23 { display: none; } }
 .hero .float strong span { font-size: inherit; color: inherit; display: inline; }
+
+/* ===== 2026-10-10 조감도 · 공간 표시 ===== */
+.aerial-map { display: block; margin: 0; }
+.am-stage { position: relative; background: #FDFCF8; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.am-stage > img { display: block; width: 100%; height: auto; }
+.am-pin { position: absolute; z-index: 1; width: 32px; height: 32px; margin: -16px 0 0 -16px; border-radius: 50%; display: grid; place-items: center; background: var(--blue); color: #fff; font-family: var(--font-en); font-size: 14px; font-weight: 800; line-height: 1; box-shadow: 0 0 0 3px #fff, 0 6px 16px rgba(24, 35, 58, 0.28); transition: transform .15s ease, background .15s ease; }
+.am-pin b { font-weight: 800; }
+.am-pin.is-zone { background: var(--navy); font-family: var(--font-kr); font-size: 13px; }
+.am-pin .am-label { position: absolute; top: calc(100% + 7px); left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.96); color: var(--navy); font-family: var(--font-kr); font-size: 12.5px; font-weight: 700; box-shadow: 0 4px 12px rgba(24, 35, 58, 0.14); pointer-events: none; }
+a.am-pin:hover, a.am-pin:focus-visible, .am-pin.is-hot { transform: scale(1.12); z-index: 3; color: #fff; }
+a.am-pin.is-room:hover, .am-pin.is-room.is-hot { background: var(--blue-dark); }
+a.am-pin.is-zone:hover, .am-pin.is-zone.is-hot { background: var(--navy-80); }
+a.am-pin:focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; }
+.am-pin.is-hot .am-label, a.am-pin:hover .am-label { color: var(--blue); }
+.am-side { display: grid; gap: 14px; margin-top: 16px; }
+.am-legend { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.am-item { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; border-radius: 12px; background: #fff; border: 1px solid var(--line); color: var(--navy); transition: border-color .15s ease, background .15s ease; }
+a.am-item:hover, .am-item.is-hot { border-color: var(--blue); background: var(--blue-25); color: var(--navy); }
+.am-item b { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--blue); color: #fff; font-family: var(--font-en); font-size: 12.5px; font-weight: 800; }
+.am-item.is-zone b { background: var(--navy); font-family: var(--font-kr); font-size: 12px; }
+.am-item strong { display: block; font-size: 14.5px; font-weight: 700; line-height: 1.35; }
+.am-item small { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.am-side .note { margin: 0; }
+.section:not(.bg) .am-item { background: var(--bg); }
+.section:not(.bg) a.am-item:hover, .section:not(.bg) .am-item.is-hot { background: var(--blue-25); }
+@media (max-width: 1100px) { .am-legend { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .am-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .am-pin { width: 24px; height: 24px; margin: -12px 0 0 -12px; font-size: 12px; box-shadow: 0 0 0 2px #fff, 0 4px 10px rgba(24, 35, 58, 0.28); }
+  .am-pin.is-zone { font-size: 12px; }
+  .am-pin .am-label { display: none; }
+  .am-item { gap: 10px; padding: 8px 10px; }
+}
+
+/* 조감도 이미지는 자르지 않고 배경색을 맞춰 보여 줌 */
+.page-hero .hero-media.aerial { background: #FDFCF8; border-radius: 24px 24px 0 0; box-shadow: var(--shadow-lg); overflow: hidden; }
+.page-hero .hero-media.aerial img { aspect-ratio: 16 / 9; max-height: 620px; object-fit: contain; box-shadow: none; border-radius: 0; background: #FDFCF8; }
+.split .media img.aerial { aspect-ratio: 16 / 10; object-fit: contain; background: #FDFCF8; box-shadow: none; border: 1px solid var(--line); }
+@media (max-width: 600px) { .page-hero .hero-media.aerial { border-radius: 16px 16px 0 0; } }
+.am-zoom { position: absolute; right: 10px; top: 10px; z-index: 2; display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line); color: var(--navy); font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgba(24, 35, 58, 0.1); }
+.am-zoom:hover { color: var(--blue); border-color: var(--blue); }
+/* 작은 화면 터치 영역 보강 (표 안 룸 이름 · 히어로 보조 링크) */
+table.table td.strong a { min-width: 44px; }
+.hero .sub-links a { padding: 10px 0; }
+/* 태블릿: 룸 비교표를 가로 스크롤 없이 */
+@media (min-width: 601px) and (max-width: 900px) {
+  table.compare { min-width: 0; font-size: 14px; }
+  table.compare th, table.compare td { padding: 12px 8px; }
+  table.compare th:nth-child(5), table.compare td:nth-child(5) { display: none; }
+  .compare td:nth-child(4) { white-space: nowrap; font-size: 13.5px; }
+  .compare td.price .muted { font-size: 12.5px; }
+}
+
+/* ===== 카카오톡 문의채널 QR ===== */
+.qr-card { display: flex; align-items: center; gap: 20px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+.qr-card[hidden] { display: none; }
+.qr-card img { width: 112px; height: 112px; flex: none; border-radius: 8px; background: #fff; border: 1px solid var(--line); }
+.qr-card strong { display: block; font-size: 15px; color: var(--navy); }
+.qr-card p { margin-top: 4px; font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+.qr-card a { display: inline-block; margin-top: 6px; padding: 6px 0; font-family: var(--font-en); font-size: 13.5px; font-weight: 700; color: var(--blue); }
+@media (max-width: 700px) { .qr-card { display: none; } }

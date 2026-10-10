@@ -122,6 +122,7 @@
   });
   ["kakao", "naver", "spacecloud", "instagram", "phone", "email"].forEach(function (k) { if (text(get("contact." + k))) channelList.push(k); });
   $$(".channels-empty").forEach(function (el) { el.hidden = visibleChannels > 0; });
+  $$("[data-channel-qr]").forEach(function (el) { el.hidden = !text(get("contact." + el.getAttribute("data-channel-qr"))); });
   $$("[data-if-channels]").forEach(function (el) { el.hidden = visibleChannels === 0; });
 
   // 대표 예약 채널 버튼: <a data-booking data-space="r1">
@@ -154,13 +155,15 @@
   $$("[data-company-line]").forEach(function (el) { el.textContent = compLine; });
   $$("[data-year]").forEach(function (el) { el.textContent = new Date().getFullYear(); });
 
-  // 구조화 데이터 보강 (전화번호가 설정된 경우)
+  // 구조화 데이터 보강 (전화번호 · 이메일이 설정된 경우)
   var ld = $("#sf-ldjson");
   if (ld) {
     try {
       var data = JSON.parse(ld.textContent);
       var tel = text(get("contact.phone"));
       if (tel) data.telephone = tel;
+      var mail = text(get("contact.email"));
+      if (mail) data.email = mail;
       if (text(get("siteUrl"))) data.url = text(get("siteUrl"));
       ld.textContent = JSON.stringify(data);
     } catch (e) { /* 무시 */ }
@@ -470,9 +473,10 @@
     var show = function (i) {
       idx = (i + list.length) % list.length;
       var a = list[idx], im = a.querySelector("img");
-      lbImg.src = a.getAttribute("href"); lbImg.alt = im ? im.alt : "";
+      var alt = im ? im.alt : (a.getAttribute("data-alt") || "");
+      lbImg.src = a.getAttribute("href"); lbImg.alt = alt;
       var tag = a.getAttribute("data-img-tag") || (a.closest("[data-img-tag]") ? a.closest("[data-img-tag]").getAttribute("data-img-tag") : "");
-      lbCap.textContent = (im ? im.alt : "") + (tag ? " · " + tag : "");
+      lbCap.textContent = [alt, tag].filter(Boolean).join(" · ");
     };
     var open = function (a) {
       opener = a; list = visible(); if (!list.length) list = lbLinks;
@@ -523,4 +527,16 @@
       });
     });
   }
+
+  /* ---------- 조감도: 번호와 목록을 함께 강조 ---------- */
+  $$(".aerial-map").forEach(function (map) {
+    $$("[data-am]", map).forEach(function (el) {
+      var k = el.getAttribute("data-am");
+      function set(on) { $$('[data-am="' + k + '"]', map).forEach(function (x) { x.classList.toggle("is-hot", on); }); }
+      el.addEventListener("mouseenter", function () { set(true); });
+      el.addEventListener("mouseleave", function () { set(false); });
+      el.addEventListener("focus", function () { set(true); });
+      el.addEventListener("blur", function () { set(false); });
+    });
+  });
 })();

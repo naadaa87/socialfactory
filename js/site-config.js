@@ -42,8 +42,8 @@ window.SF_CONFIG = {
   /* 예약·상담 채널 — 주소가 비어 있으면 버튼이 숨겨집니다. */
   contact: {
     phone: "",         /* 예: "010-0000-0000" */
-    email: "",         /* 예: "hello@socialfactory.co.kr" — 문의 폼 저장이 안 될 때 메일 앱으로 보내는 데에도 쓰입니다 */
-    kakao: "",         /* 예: "https://pf.kakao.com/_xxxxx" */
+    email: "spaceblank0100@gmail.com",   /* 문의 폼 저장이 안 될 때 메일 앱으로 보내는 데에도 쓰입니다 */
+    kakao: "https://pf.kakao.com/_uTiFX", /* 카카오톡 문의채널 — 바꾸면 images/kakao-qr.svg 도 새 주소로 다시 만들어야 합니다 */
     naver: "",         /* 예: "https://booking.naver.com/booking/..." */
     spacecloud: "",    /* 예: "https://www.spacecloud.kr/space/00000" */
     instagram: ""      /* 예: "https://www.instagram.com/socialfactory.official" */
