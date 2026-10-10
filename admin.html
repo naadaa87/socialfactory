@@ -74,7 +74,7 @@
 <script>
 (function () {
   var $ = function (s) { return document.querySelector(s); };
-  var P = { rental: "공간 대관", regular: "정기대관", business: "기업·단체", coworking: "코워킹", office: "독립사무실", partner: "제휴", proposal: "공간 제안", other: "기타" };
+  var P = { rental: "공간 대관", regular: "반복 모임", business: "기업·단체", coworking: "코워킹", office: "독립사무실", partner: "제휴·협력", proposal: "공간 제안", other: "기타" };
   var S = { r1: "1번룸", r2: "2번룸", r3: "3번룸", r4: "4번룸", r5: "5번룸", coworking: "코워킹", office: "독립사무실", undecided: "미정", "": "-" };
   var ST = { new: "새 문의", in_progress: "진행 중", done: "처리 완료" };
   var key = ""; try { key = sessionStorage.getItem("sf_admin_key") || ""; } catch (e) {}

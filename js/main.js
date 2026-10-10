@@ -7,7 +7,7 @@
   var get = function (path) {
     return path.split(".").reduce(function (o, k) { return (o && o[k] !== undefined && o[k] !== null) ? o[k] : ""; }, CFG);
   };
-  var text = function (v) { return (v === undefined || v === null) ? "" : String(v).trim(); };
+  var text = function (v) { return (v === undefined || v === null || typeof v === "object") ? "" : String(v).trim(); };
 
   /* ---------- 헤더 ---------- */
   var header = $(".site-header");
@@ -262,11 +262,11 @@
         if (hint) {
           var hints = {
             rental: "예: 20명 교육, 토요일 오후 2시간, 노트북 화면 연결 필요",
-            regular: "예: 매주 화요일 19~21시, 12명 독서모임, 3개월",
+            regular: "예: 매주 화요일 19~21시, 12명 독서모임, 3개월 이상 · 레지던트 호스트 희망",
             business: "예: 신입 교육 30명, 10월 셋째 주 평일 하루, 견적서 필요",
             coworking: "예: 4주권 문의, 야간 이용 위주, 통화 가능 구역 여부",
-            office: "예: 2인, 월 단위 6개월, 입주 희망 11월, 방문 상담 희망",
-            partner: "예: 원데이 클래스 월 2회, 8~10명, 토요일 오후",
+            office: "예: 2인, 1주권, 11월 둘째 주부터, 화상회의 위주",
+            partner: "예: 원데이 클래스 월 2회, 8~10명, 토요일 오후 · 공동 기획·홍보 희망",
             proposal: "예: ○○동 2층 60평, 공실 기간, 임대 조건 협의 가능",
             other: "궁금한 내용을 적어 주세요"
           };

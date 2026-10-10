@@ -902,3 +902,124 @@ table.compare { min-width: 840px; }
 .compare td.strong, .compare .cap { white-space: nowrap; }
 @media (max-width: 600px) { table.compare.table-stack { min-width: 0; } }
 .compare td:nth-child(4) { white-space: nowrap; }
+
+/* --------------------------------------------------------------------------
+   이용 요금 (2026-10-10)
+   -------------------------------------------------------------------------- */
+.price-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; position: relative; }
+.price-tiles .pt { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 4px; }
+.price-tiles .pt .k { font-size: 12.5px; font-weight: 700; color: var(--muted); letter-spacing: 0.02em; }
+.price-tiles .pt strong { font-size: 18px; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
+.price-tiles .pt .s { font-size: 13px; color: var(--navy-80); }
+.price-tiles .pt.accent { background: var(--blue); border-color: var(--blue); }
+.price-tiles .pt.accent .k, .price-tiles .pt.accent .s { color: rgba(255,255,255,0.85); }
+.price-tiles .pt.accent strong { color: #fff; }
+
+/* 시간대 지도 */
+.timeband { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 22px 16px; }
+.tb-row, .tb-axis { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; }
+.tb-row + .tb-row { margin-top: 10px; }
+.tb-label { font-size: 13.5px; font-weight: 800; color: var(--navy); }
+.tb-track { display: grid; grid-template-columns: repeat(17, 1fr); gap: 3px; height: 64px; }
+.tb-track .seg { border-radius: 10px; display: flex; flex-direction: column; justify-content: center; padding: 0 10px; overflow: hidden; min-width: 0; }
+.tb-track .seg b { font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-track .seg i { font-style: normal; font-family: var(--font-en); font-weight: 800; font-size: 15px; letter-spacing: -0.01em; }
+.seg.early { background: #EEF2F8; color: var(--navy-80); }
+.seg.off { background: var(--blue-25); color: var(--navy); }
+.seg.std { background: #9DB5FF; color: var(--navy); }
+.seg.peak { background: var(--blue); color: #fff; }
+.tb-axis { margin-top: 8px; }
+.tb-ticks { display: grid; grid-template-columns: repeat(17, 1fr); position: relative; font-family: var(--font-en); font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.tb-ticks .end { position: absolute; right: 0; top: 0; }
+
+/* 요금 표 */
+table.price td.num { font-family: var(--font-en); font-weight: 700; color: var(--navy); white-space: nowrap; }
+table.price td.num.peak { color: var(--blue); }
+table.table th small { display: block; font-weight: 600; font-size: 11.5px; color: var(--muted); margin-top: 2px; letter-spacing: 0; }
+small.block { display: block; font-family: var(--font-kr); font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+.compare td.price { white-space: nowrap; font-weight: 700; color: var(--navy); }
+
+/* 협의 안내 */
+.nego { border: 1.5px solid var(--blue); background: linear-gradient(135deg, #F4F7FF, #fff 70%); border-radius: var(--radius); padding: 26px 28px; }
+.nego strong { display: block; font-size: clamp(18px, 2vw, 21px); font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
+.nego strong::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--blue); margin: 0 10px 2px 0; }
+.nego p { margin-top: 8px; color: var(--navy-80); font-size: 15px; }
+.nego .actions { margin-top: 16px; }
+.nego.compact { padding: 18px 20px; }
+.nego.compact strong { font-size: 16px; }
+.nego.compact p { font-size: 14px; }
+
+/* 룸 상세 요금 */
+.rd-block h4 small { font-weight: 600; color: var(--muted); font-size: 12px; letter-spacing: 0; margin-left: 4px; }
+.rate-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
+.rate-grid > div { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.rate-grid .k { font-size: 12px; font-weight: 700; color: var(--muted); }
+.rate-grid .v { font-family: var(--font-en); font-weight: 800; font-size: 17px; color: var(--navy); }
+.rate-grid .t { font-size: 11.5px; color: var(--muted); }
+.rate-grid .peak { border-color: var(--blue-50); }
+.rate-grid .peak .v { color: var(--blue); }
+.rd-link a { color: var(--blue); font-weight: 700; display: inline-block; padding: 9px 0; margin: -9px 0; }
+.rc-price strong { color: var(--navy); font-weight: 800; }
+
+@media (max-width: 1080px) { .price-tiles { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 700px) {
+  .tb-row, .tb-axis { grid-template-columns: 1fr; gap: 6px; }
+  .tb-axis .tb-label { display: none; }
+  .tb-track { height: 56px; gap: 2px; }
+  .tb-track .seg { padding: 0 6px; }
+  .tb-track .seg b { display: none; }
+  .tb-track .seg i { font-size: 12px; }
+  .tb-track .seg.early i { display: none; }
+  .timeband { padding: 16px; }
+}
+@media (max-width: 600px) {
+  .price-tiles { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .price-tiles .pt { padding: 14px; }
+  .price-tiles .pt strong { font-size: 15.5px; }
+  .rate-grid { grid-template-columns: 1fr 1fr; }
+  .nego { padding: 20px; }
+}
+.tb-legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 16px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.tb-legend li { display: grid; grid-template-columns: 14px 1fr; gap: 4px 10px; align-items: start; font-size: 13px; color: var(--muted); }
+.tb-legend li i { width: 14px; height: 14px; border-radius: 4px; margin-top: 2px; grid-row: span 2; }
+.tb-legend li b { display: block; color: var(--navy); font-size: 13.5px; font-weight: 700; }
+.tb-legend li em { grid-column: 2; font-style: normal; font-weight: 700; color: var(--blue); font-size: 13px; }
+@media (max-width: 1080px) { .tb-legend { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .tb-legend { grid-template-columns: 1fr; } }
+.page-hero .container { z-index: 1; }
+.seg.off { background: #DCE7FF; }
+.seg.early { background: #EEF1F6; }
+.tb-track .seg.narrow { align-items: center; padding: 0 2px; text-align: center; }
+.tb-track .seg.narrow b { font-size: 11.5px; }
+.tb-track .seg.narrow i { display: none; }
+.tb-legend li i.seg { border: 1px solid rgba(24,35,58,0.08); }
+@media (max-width: 700px) { .tb-track .seg.narrow b { display: block; font-size: 11.5px; } }
+@media (min-width: 901px) { table.table td.strong { white-space: nowrap; } }
+.x-hint { display: none; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+@media (max-width: 700px) {
+  .x-hint { display: block; }
+  table.no-stack { font-size: 13.5px; }
+  table.no-stack th, table.no-stack td { padding: 12px 12px; }
+  table.no-stack th:first-child, table.no-stack td:first-child { position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 1px 0 0 var(--line); }
+  table.no-stack thead th:first-child { background: var(--bg); }
+  table.no-stack.compact th, table.no-stack.compact td { padding: 10px 8px; font-size: 13px; }
+  table.no-stack.compact th small { display: none; }
+}
+@media (max-width: 600px) {
+  .table-stack td { grid-template-columns: 104px 1fr; white-space: normal; }
+  .table-stack td::before { white-space: normal; line-height: 1.4; }
+}
+.card.navy .checks li { color: rgba(255,255,255,0.85); }
+.card.navy .checks li::before { background: rgba(255,255,255,0.12); }
+.card.navy .checks li::after { border-color: #9DB5FF; }
+@media (max-width: 700px) {
+  table.no-stack td { white-space: nowrap; }
+  .tb-ticks .t23 { display: none; }
+}
+
+table.table td.strong a { display: inline-block; padding: 10px 0; margin: -10px 0; }
+.nego p a { display: inline-block; padding: 10px 0; margin: -10px 0; color: var(--blue); font-weight: 700; }
+.rooms-2 > .card { display: flex; flex-direction: column; }
+.rooms-2 > .card > .actions { margin-top: auto; padding-top: 24px; }
+@media (max-width: 900px) { .tb-ticks .t23 { display: none; } }
+.hero .float strong span { font-size: inherit; color: inherit; display: inline; }

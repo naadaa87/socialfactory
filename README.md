@@ -7,7 +7,8 @@
 
 ```
 index.html        메인 — 룸 고르기(인원·진행 방식), 배치 안내, 요금·정기대관, 코워킹·사무실, 소개, 오시는 길·FAQ
-space.html        공간 안내 — 룸 1~5 비교표와 상세(사진 · 배치별 인원 · 장비 · 요금 · 입퇴실), 배치 이름, 코워킹, 독립사무실, 요금 표, 평면도, 3D, 오시는 길
+space.html        공간 안내 — 룸 1~5 비교표와 상세(사진 · 배치별 인원 · 장비 · 시간대 요금 · 입퇴실), 배치 이름, 코워킹, 독립사무실, 요금 요약, 평면도, 3D, 오시는 길
+pricing.html      이용 요금 — 시간대 지도, 룸 시간 요금, 패키지, 층 대관, 코워킹·독립사무실 이용권, 반복 모임·호스트·제휴, 기업·단체, 부가 서비스, 할인, 취소·환불, 보증금
 guide.html        이용 안내 — 예약부터 퇴실까지, 이용 원칙, 운영 시간, 요금·취소, 오시는 길, FAQ
 contact.html      대관과 이용 문의 — 채널, 문의 폼(접수번호 발급), 제휴·공간 제안
 about.html        소셜팩토리 소개 — 운영 기준, 로고, 이력, 창업자
@@ -39,11 +40,9 @@ robots.txt, sitemap.xml   검색엔진용
 | 정식 주소(도메인) | `siteUrl` + 각 html의 canonical/OG, robots.txt, sitemap.xml (아래 5번) | 기본값 `https://socialfactory.co.kr` |
 | 운영 상태 | `status.mode` (`preparing`/`open`), `status.text` | 상단 배너에 "오픈 준비 중" |
 | 예약 채널 · 상담 채널 | `contact.*`, `booking.primary` | 채널 버튼 숨김, 예약 버튼은 '대관 문의하기'로 대체 |
-| 룸별 요금 · 추가 비용 · 취소 기준 | `pricing.*` | "확정 후 안내" 표시 |
+| 요금 (2026년 10월 가격구조도 반영 완료) | `pricing.*` + `pricing.html` | — |
 | 룸별 장비 · 배치별 인원 | `rooms.r1~r5` | "확인 중" 표시 |
-| 코워킹 좌석 수 · 이용권 · 운영시간 | `rooms.coworking`, `pricing.coworking`, `hours.coworking` | 계획 인원 최대 30명만 표시 |
-| 사무실 비용 · 포함 시설 · 주소지 정책 | `pricing.office`, `rooms.office`, `policy.address` | "입주 상담 때 안내" 문구 |
-| 입퇴실 · 가구 이동 · 음식물 정책 | `policy.*` | 일반 안내 문구 |
+| 독립사무실 4주권 판매 시작 | `pricing.html` 의 "판매 준비 중" 표기 삭제 | 시간권·1일권·1주권만 판매로 안내 |
 | 주차 · 대중교통 · 승강기 | `parking`, `directions`, `elevator` | 해당 줄 숨김 또는 "확인 후 안내" |
 | 개인정보 보유 기간 | `inquiry.retention` (실제 삭제 기준과 같게) | 기본 "문의 처리 완료 후 6개월" |
 | 문의 폼 공개 여부 | `inquiry.enabled` — D1(3번)도 메일(`contact.email`)도 없으면 `false` 권장 | 폼 대신 준비 중 안내 |
@@ -60,7 +59,7 @@ robots.txt, sitemap.xml   검색엔진용
    ① `images` 폴더를 뺀 나머지 전부 → Commit ② **Add file → Upload files**에서 `images/space` → Commit ③ `images/scenes` → Commit ④ `images/tour` 와 나머지 이미지 → Commit
 5. **Commit changes** 클릭
 
-이미 저장소가 있다면 바뀐 파일만 같은 자리에 다시 올리면 됩니다. (이번 개편에서 바뀐 것: html 전부, `guide.html`·`admin.html` 추가, `css/style.css`, `js/*`, `functions/api/inquiry.js`, `schema.sql`, `_headers`, `robots.txt`, `sitemap.xml`, `tour.html`, `images/tour/` 추가)
+이미 저장소가 있다면 바뀐 파일만 같은 자리에 다시 올리면 됩니다. (2026-10-10 요금 반영에서 바뀐 것: html 전부, `pricing.html` 추가, `css/style.css`, `js/site-config.js`, `js/main.js`, `functions/api/inquiry.js`, `admin.html`, `sitemap.xml`)
 
 ### Cloudflare Pages에 연결하기
 1. dash.cloudflare.com → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
@@ -80,7 +79,10 @@ GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값
 
 - `status` 운영 상태와 배너 문장 — 날짜는 확정된 것만 적습니다.
 - `contact` 채널 주소 — 비워 두면 버튼이 나오지 않습니다. `booking.primary` 에 `"naver"` 처럼 대표 예약 채널을 적으면 룸마다 '예약 채널에서 일정 확인' 버튼이 생깁니다.
-- `pricing`, `rooms`, `policy` — 확정된 값만 적습니다. 비어 있으면 화면에 "확정 후 안내"로 표시됩니다.
+- `pricing` — 2026년 10월 가격구조도의 요금이 들어 있습니다. 룸 시간 요금(`pricing.rooms.r1~r5`)은 메인 카드 · 공간 안내 · 이용 요금 페이지에 함께 쓰이므로 이 파일에서만 고치면 됩니다. 시간 요금을 바꾸면 같은 줄의 패키지 값(half · full · wkHalf · wkFull)도 파일 안 설명대로 함께 바꿔 주세요.
+- `pricing.html` 에만 있는 세부 표(코워킹 · 독립사무실 이용권 전체, 층 대관, 레지던트 요금 예시, 크레딧, 목적별 패키지, 부가 서비스, 할인, 취소·환불, 보증금)는 `pricing.html` 을 직접 고칩니다. 메인과 공간 안내의 코워킹·사무실 대표 요금 한 줄은 `pricing.coworking`, `pricing.office` 에 있습니다.
+- `rooms`, `policy` — 룸별 장비와 배치별 실제 인원은 현장에서 확인한 뒤 채웁니다. 비어 있으면 "확인 중"으로 표시됩니다.
+- 제휴·협력·파트너 및 반복 모임의 별도 협의 문구는 이용 요금 · 공간 안내 · 메인 · 프로그램 · 이용 안내 · 문의 페이지에 들어 있습니다.
 - `inquiry.retention` — 개인정보 안내문의 보유 기간. 실제 삭제 작업과 같은 기준으로 적습니다.
 - `company` — 채우면 푸터에 표기됩니다. 계약서·결제 안내의 사업자명과 같아야 합니다.
 

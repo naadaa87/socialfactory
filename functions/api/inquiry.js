@@ -28,8 +28,8 @@ const SPACES = ["r1", "r2", "r3", "r4", "r5", "coworking", "office", "undecided"
 const STATUSES = ["new", "in_progress", "done"];
 
 const PURPOSE_LABEL = {
-  rental: "공간 대관", regular: "정기대관", business: "기업·단체 이용", coworking: "코워킹 이용권",
-  office: "독립사무실 입주", partner: "프로그램·호스트 제휴", proposal: "공간 제안", other: "기타"
+  rental: "공간 대관", regular: "반복 모임·정기대관", business: "기업·단체 이용", coworking: "코워킹 이용권",
+  office: "독립사무실 이용권", partner: "제휴·협력·파트너", proposal: "공간 제안", other: "기타"
 };
 const SPACE_LABEL = { r1: "1번룸", r2: "2번룸", r3: "3번룸", r4: "4번룸", r5: "5번룸", coworking: "코워킹", office: "독립사무실", undecided: "아직 정하지 못함", "": "-" };
 
