@@ -42,7 +42,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 6번 참고)
 | 항목 | 설정 위치 | 비어 있을 때 화면 |
 | --- | --- | --- |
 | 정식 주소(도메인) | `siteUrl` + 각 html의 canonical/OG, robots.txt, sitemap.xml (아래 5번) | 기본값 `https://socialfactory.co.kr` |
-| 운영 상태 | `status.mode` (`preparing`/`open`), `status.text` | 상단 배너에 "오픈 준비 중" |
+| 운영 상태 | `status.mode` (`preparing`/`open`) | 화면 맨 위 운영 안내 띠는 2026-10-11에 없앴습니다 (값은 남겨 둠) |
 | 예약 채널 · 상담 채널 (카카오톡 문의채널 · 이메일은 입력 완료) | `contact.*`, `booking.primary` | 채널 버튼 숨김, 예약 버튼은 '대관 문의하기'로 대체 |
 | 요금 (2026년 10월 최종 가격구조도 반영 완료) | `pricing.*` | — |
 | 공휴일 (2026~2027년 입력 완료) | `pricing.holidays` — 2028년 공휴일은 2027년 안에 추가 | 빠진 날은 계산기에서 직접 체크 |
@@ -64,6 +64,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 6번 참고)
 5. **Commit changes** 클릭
 
 이미 저장소가 있다면 바뀐 파일만 같은 자리에 다시 올리면 됩니다.
+- 2026-10-11 메인 첫 화면 정리 · 맨 위 운영 안내 띠 삭제: html 9개(tour·admin 제외), `css/style.css`, `js/site-config.js`, `README.md`, `rss.xml`
 - 2026-10-11 최종 가격구조 · 계산기 반영: html 전부, `tour.html`, `css/style.css`, `js/site-config.js`, `js/main.js`, `js/estimate.js`(새 파일), `functions/api/inquiry.js`, `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-10 요금 반영: html 전부, `pricing.html` 추가, `css/style.css`, `js/site-config.js`, `js/main.js`, `functions/api/inquiry.js`, `admin.html`, `sitemap.xml`
 - 2026-10-10 메인 영상 반영: html 전부, `tour.html`, `css/style.css`, `js/main.js`, `_headers`, `README.md`, `video/` 폴더와 `images/hero/` 폴더 새로 추가, `images/aerial/05-topview*.webp` 새 파일
@@ -91,7 +92,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 6번 참고)
 ### 운영 정보 → `js/site-config.js`
 GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값을 채운 뒤 Commit 합니다. 각 항목 옆에 예시가 적혀 있습니다. 값은 따옴표 안에만 적고 쉼표를 지우지 않도록 주의하세요.
 
-- `status` 운영 상태와 배너 문장 — 날짜는 확정된 것만 적습니다.
+- `status` 운영 상태 — 맨 위 안내 띠는 없앴고, 값은 나중에 다시 쓸 수 있도록 남겨 두었습니다.
 - `contact` 채널 주소 — 비워 두면 버튼이 나오지 않습니다. `booking.primary` 에 `"naver"` 처럼 대표 예약 채널을 적으면 룸마다 '예약 채널에서 일정 확인' 버튼이 생깁니다.
 - `pricing` — 2026년 10월 최종 가격구조도의 요금이 들어 있습니다. 룸 시간 요금(`pricing.rooms.r1~r5`의 wdEarly · wdStd · hdEarly · hdStd)과 최대 인원(`max`), 옵션(`options`), 코워킹 이용권(`coworkingPasses`), 독립사무실 월 이용료와 장기 할인(`officeRooms`, `officeDiscounts`), 취소·환불(`refund`), 공휴일(`holidays`)이 모두 여기에 있고, 메인 · 공간 안내 · 이용 요금 표와 예상 금액 계산기 · PDF가 이 값을 그대로 씁니다.
   - 시간대: 오전 07~12시(wdEarly · hdEarly), 오후·저녁 12~24시(wdStd · hdStd), 심야 24~07시는 오전 요금. 심야는 그날과 다음 날이 모두 주말·공휴일일 때만 주말 요금입니다(가격구조도의 금·토·일 기준).
@@ -159,7 +160,7 @@ D1 을 연결하지 않으면 폼은 "접수되지 않았습니다"를 보여 �
 
 ## 4. 운영 상태 바꾸기
 
-현재 `js/site-config.js` 의 `status.mode` 는 `"open"`(운영 중)입니다. 상단 배너 문장은 `status.text` 에서 바꿀 수 있고, 잠시 운영을 멈출 때는 `"preparing"` 으로 바꿉니다. 검색엔진이 읽는 html 안의 배너 문장은 다음에 html을 새로 만들 때 함께 바뀝니다.
+현재 `js/site-config.js` 의 `status.mode` 는 `"open"`(운영 중)입니다. 화면 맨 위의 운영 안내 띠는 2026-10-11에 요청에 따라 없앴습니다. 다시 필요하면 html을 새로 만들 때 되살릴 수 있습니다.
 
 ## 5. 실제 주소로 바꿀 것 (도메인 연결 직후 한 번)
 
