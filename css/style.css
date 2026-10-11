@@ -1138,3 +1138,14 @@ table.table td.strong a { min-width: 44px; }
   .hv-3d { width: 100%; }
 }
 @media (min-width: 601px) and (max-width: 900px) { .hero-v2 h1.fn { font-size: 46px; } }
+
+/* ===== 2026-10-11 목적별로 찾기 ===== */
+.use-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.use-card { display: flex; flex-direction: column; gap: 8px; padding: 24px 24px 22px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); color: var(--navy); transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
+.use-card:hover { border-color: var(--blue); transform: translateY(-2px); box-shadow: var(--shadow); color: var(--navy); }
+.use-card .uc-tag { align-self: flex-start; padding: 4px 10px; border-radius: 999px; background: var(--blue-25); color: var(--blue); font-size: 12.5px; font-weight: 700; }
+.use-card h3 { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; margin-top: 4px; }
+.use-card p { font-size: 14.5px; color: var(--muted); line-height: 1.65; flex: 1; }
+.use-card .uc-more { margin-top: 4px; font-size: 14px; font-weight: 700; color: var(--blue); }
+@media (max-width: 1024px) { .use-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .use-grid { grid-template-columns: 1fr; gap: 12px; } .use-card { padding: 20px; } }

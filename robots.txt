@@ -1,6 +1,9 @@
+# 소셜팩토리 건대 — 검색엔진 수집 안내
+# 다음(Daum) 웹마스터도구에서 받은 인증 줄(#DaumWebMasterTool:로 시작)은 이 줄 바로 아래에 붙여 넣습니다.
+
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /admin.html
+Disallow: /admin
 
 Sitemap: https://socialfactory.co.kr/sitemap.xml

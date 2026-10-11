@@ -37,18 +37,25 @@
   }
 
   /* 현재 페이지 표시 (+ 공간 페이지 안에서는 보고 있는 구역 표시) */
-  var file = (location.pathname.split("/").pop() || "index.html");
+  // 주소는 /space 처럼 .html 없이 쓰지만, 내려받아 열었을 때(/space.html)도 같은 페이지로 본다
+  var norm = function (p) {
+    p = (p || "/").split("?")[0].replace(/\.html$/, "");
+    p = "/" + p.split("/").filter(Boolean).pop();
+    return (p === "/undefined" || p === "/index") ? "/" : p;
+  };
+  var file = norm(location.pathname);
   var navLinks = $$(".nav-links a").filter(function (a) { return !a.closest(".nav-cta"); });
+  var hrefKey = function (a) { var h = (a.getAttribute("href") || "").split("#"); return norm(h[0]) + (h[1] ? "#" + h[1] : ""); };
   var setCurrent = function (target) {
     navLinks.forEach(function (a) {
-      var href = a.getAttribute("href") || "";
-      var same = href === target || href.split("#")[0] === target;
+      var key = hrefKey(a);
+      var same = key === target || key.split("#")[0] === target;
       if (same) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
   };
-  var samePageLinks = navLinks.filter(function (a) { return (a.getAttribute("href") || "").split("#")[0] === file; });
+  var samePageLinks = navLinks.filter(function (a) { return hrefKey(a).split("#")[0] === file; });
   if (samePageLinks.length > 1 && "IntersectionObserver" in window) {
-    var ids = samePageLinks.map(function (a) { return (a.getAttribute("href") || "").split("#")[1]; }).filter(Boolean);
+    var ids = samePageLinks.map(function (a) { return hrefKey(a).split("#")[1]; }).filter(Boolean);
     var sections = ids.map(function (id) { return document.getElementById(id); }).filter(Boolean);
     var current = location.hash && ids.indexOf(location.hash.slice(1)) >= 0 ? file + location.hash : file + "#" + ids[0];
     setCurrent(current);
@@ -134,7 +141,7 @@
       a.href = bookingUrl; a.target = "_blank"; a.rel = "noopener";
       a.textContent = text(booking.label) || "예약 채널에서 일정 확인";
     } else if (a.hasAttribute("data-fallback-label")) {
-      a.href = "contact.html?purpose=rental" + (space ? "&space=" + space : "");
+      a.href = "/contact?purpose=rental" + (space ? "&space=" + space : "");
       a.textContent = a.getAttribute("data-fallback-label");
     } else {
       a.hidden = true;
@@ -160,12 +167,14 @@
   if (ld) {
     try {
       var data = JSON.parse(ld.textContent);
-      var tel = text(get("contact.phone"));
-      if (tel) data.telephone = tel;
-      var mail = text(get("contact.email"));
-      if (mail) data.email = mail;
-      if (text(get("siteUrl"))) data.url = text(get("siteUrl"));
-      ld.textContent = JSON.stringify(data);
+      var node = (data["@graph"] || [data]).filter(function (n) { return n["@type"] === "LocalBusiness"; })[0];
+      if (node) {
+        var tel = text(get("contact.phone"));
+        if (tel) node.telephone = tel;
+        var mail = text(get("contact.email"));
+        if (mail) node.email = mail;
+        ld.textContent = JSON.stringify(data);
+      }
     } catch (e) { /* 무시 */ }
   }
 

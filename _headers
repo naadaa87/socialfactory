@@ -11,6 +11,12 @@
 /video/*
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
+/sitemap.xml
+  Cache-Control: public, max-age=3600
+
+/rss.xml
+  Cache-Control: public, max-age=3600
+
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
 
@@ -21,9 +27,20 @@
 /js/*
   Cache-Control: public, max-age=300
 
+/admin
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
 /admin.html
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
+
+# 정식 주소(socialfactory.co.kr)만 검색에 나오도록 Cloudflare 기본 주소(*.pages.dev)는 수집하지 않게 합니다
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex
+
+https://:version.:project.pages.dev/*
+  X-Robots-Tag: noindex
 
 /api/*
   X-Robots-Tag: noindex

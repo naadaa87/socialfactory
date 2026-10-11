@@ -31,7 +31,7 @@ fonts/            영문 서체 Montserrat (한글 Pretendard는 CDN)
 functions/api/inquiry.js  문의 접수 API (Cloudflare Pages Functions)
 schema.sql        문의 저장용 D1 테이블
 _headers          보안 · 캐시 헤더
-robots.txt, sitemap.xml   검색엔진용
+robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 6번 참고)
 ```
 
 ## 0. 공개 전에 꼭 정할 것
@@ -155,17 +155,57 @@ D1 을 연결하지 않으면 폼은 "접수되지 않았습니다"를 보여 �
 
 ## 4. 운영 상태 바꾸기
 
-오픈하면 `js/site-config.js` 의 `status.mode` 를 `"open"` 으로, `status.text` 를 `"소셜팩토리 건대 이용 안내"` 처럼 바꿉니다. 배너 색과 문구가 바뀝니다.
+현재 `js/site-config.js` 의 `status.mode` 는 `"open"`(운영 중)입니다. 상단 배너 문장은 `status.text` 에서 바꿀 수 있고, 잠시 운영을 멈출 때는 `"preparing"` 으로 바꿉니다. 검색엔진이 읽는 html 안의 배너 문장은 다음에 html을 새로 만들 때 함께 바뀝니다.
 
 ## 5. 실제 주소로 바꿀 것 (도메인 연결 직후 한 번)
 
 기본 주소는 `https://socialfactory.co.kr` 로 적혀 있습니다. 다른 주소를 쓰게 되면 GitHub 저장소 검색창에 `socialfactory.co.kr` 를 넣어 아래 파일에서 모두 바꿉니다.
 - `js/site-config.js` 의 `siteUrl`
-- `robots.txt`, `sitemap.xml`
+- `robots.txt`, `sitemap.xml`, `rss.xml`
 - 각 html `<head>` 의 `canonical`, `og:url`, `og:image`
-- `index.html` 의 구조화 데이터(`application/ld+json`)
+- 각 html 의 구조화 데이터(`application/ld+json`)
 
 도메인 연결: Pages 프로젝트 → **Custom domains** → **Set up a custom domain** → `socialfactory.co.kr` 입력 후 안내대로 DNS 레코드를 추가합니다. 카카오톡·네이버 플레이스 등 외부 채널의 주소와 상호·전화·운영시간도 홈페이지와 같게 맞춥니다.
+
+## 6. 검색 등록 (네이버 · 구글 · 다음)
+
+### 홈페이지에 이미 들어 있는 것
+- 페이지마다 검색 결과에 보일 제목과 설명. '건대입구 세미나실 · 강의실 · 회의실 · 모임공간 대관', '건대 스터디카페 · 코워킹', '1인 사무실' 같은 말을 자연스럽게 넣었습니다.
+- 대표 주소(canonical). Cloudflare Pages는 `space.html` 을 `/space` 로 보여 주므로, 검색엔진에도 `https://socialfactory.co.kr/space` 처럼 `.html` 없는 주소를 알려 줍니다. 페이지 사이의 링크도 같은 주소를 씁니다.
+- 구조화 데이터(검색엔진이 읽는 업체 정보): 상호 '소셜팩토리 건대', 주소, 운영 시간(매일 07~24시), 요금 범위, 룸 5개의 인원과 면적, 코워킹·독립사무실, 이메일, 카카오톡 문의채널, 사이트 이름 '소셜팩토리', 페이지 경로, 자주 묻는 질문.
+- `sitemap.xml`(페이지 9개와 공간 사진 주소), `rss.xml`(네이버 제출용), `robots.txt`.
+- Cloudflare 기본 주소(`*.pages.dev`)는 검색에 나오지 않도록 `_headers` 에 막아 두었습니다. 검색에는 socialfactory.co.kr 주소만 나옵니다.
+
+### 순서
+1. **올린 뒤 확인** — 브라우저에서 아래 세 주소가 열리는지 봅니다.
+   `https://socialfactory.co.kr/sitemap.xml` · `https://socialfactory.co.kr/rss.xml` · `https://socialfactory.co.kr/robots.txt`
+2. **네이버 서치어드바이저** (searchadvisor.naver.com → 웹마스터 도구)
+   - 사이트 등록에 `https://socialfactory.co.kr` 입력
+   - 소유 확인은 'HTML 태그'를 고릅니다. 나온 `<meta name="naver-site-verification" ...>` 한 줄을 복사해 GitHub에서 `index.html` → 연필(Edit) → `<!-- 검색 등록 확인 태그 ... -->` 줄 바로 아래에 붙여 넣고 Commit 한 뒤, 1~2분 기다려 '소유확인'을 누릅니다.
+   - 요청 → 사이트맵 제출: `https://socialfactory.co.kr/sitemap.xml`
+   - 요청 → RSS 제출: `https://socialfactory.co.kr/rss.xml`
+   - 요청 → 웹 페이지 수집: `https://socialfactory.co.kr/`, `/space`, `/pricing`, `/contact`, `/guide` 를 하나씩 요청
+   - 검증 → robots.txt 에서 수집이 허용되는지 확인
+3. **구글 서치 콘솔** (search.google.com/search-console)
+   - 속성 추가 → **도메인** → `socialfactory.co.kr`. 도메인이 Cloudflare에 연결되어 있으면 안내에 따라 Cloudflare로 자동 인증하거나, 보여 주는 TXT 값을 Cloudflare DNS에 추가합니다. 파일을 고치지 않아도 되어 가장 안전합니다.
+   - Sitemaps → `sitemap.xml` 제출
+   - URL 검사 → `https://socialfactory.co.kr/` 입력 → 색인 생성 요청
+4. **다음 웹마스터도구** (webmaster.daum.net)
+   - 사이트 등록 → PIN 코드 발급 → 화면에 나온 인증 줄(`#DaumWebMasterTool:` 로 시작)을 복사해 GitHub의 `robots.txt` 둘째 줄 바로 아래에 붙여 넣고 Commit → 인증 확인
+   - 수집 요청 메뉴에서 홈 주소와 주요 페이지를 요청합니다.
+5. **지도 · 플레이스 등록** — '건대 세미나실'처럼 지역을 붙인 검색은 지도와 업체 정보가 먼저 나옵니다. 노출에 가장 큰 영향을 주는 단계입니다.
+   - 네이버 스마트플레이스(smartplace.naver.com) 업체 등록 · 구글 비즈니스 프로필(business.google.com) · 카카오맵 장소 등록(카카오 비즈니스)
+   - 세 곳 모두 상호(소셜팩토리 건대), 주소, 전화번호, 영업시간(매일 07:00~24:00), 홈페이지(https://socialfactory.co.kr)를 **같은 표기**로 적습니다.
+   - 사진은 룸 5개, 코워킹, 독립사무실, 휴게 공간, 건물 입구 순서로 올리고, 네이버 대표 키워드는 예를 들어 `건대세미나실` `건대강의실대관` `건대모임공간` `건대회의실` `건대스터디카페` 처럼 실제 찾는 말로 정합니다.
+   - 플레이스 주소를 받으면 `js/site-config.js` 의 `contact.naver` 등에 넣어 두세요. 홈페이지 구조화 데이터의 연결 채널(sameAs)에도 같이 반영됩니다.
+
+**확인 태그와 인증 줄은 제작자에게도 보내 주세요.** 다음에 html을 새로 만들어 올릴 때 직접 붙여 넣은 줄이 지워지지 않도록 처음부터 넣어서 만들어 드립니다. 구글을 도메인 방식으로 인증했다면 따로 보낼 것은 없습니다.
+
+### 등록 후
+- 검색에 반영되기까지 보통 2~4주가 걸립니다. 서치어드바이저와 서치 콘솔의 '수집 현황', '색인 생성' 화면에서 진행 상황을 볼 수 있습니다.
+- `js/site-config.js` 에 대표 전화번호(`contact.phone`)를 넣으면 검색엔진용 업체 정보에도 함께 들어갑니다. 지도에 등록한 번호와 같은 번호로 넣어 주세요.
+- 오시는 길(`directions`)은 출구 번호와 도보 시간을 확인해 '건대입구역 ○번 출구에서 도보 ○분'처럼 적으면 검색과 방문자 모두에게 도움이 됩니다. 주차(`parking`)와 승강기(`elevator`)도 확인되는 대로 채워 주세요.
+- 페이지를 새로 만들거나 크게 바꾸면 서치어드바이저·서치 콘솔에서 해당 주소의 수집을 다시 요청합니다.
 
 ## 브랜드 기준
 
