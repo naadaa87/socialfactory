@@ -7,7 +7,11 @@
   var get = function (path) {
     return path.split(".").reduce(function (o, k) { return (o && o[k] !== undefined && o[k] !== null) ? o[k] : ""; }, CFG);
   };
-  var text = function (v) { return (v === undefined || v === null || typeof v === "object") ? "" : String(v).trim(); };
+  var text = function (v) {
+    if (v === undefined || v === null || typeof v === "object" || typeof v === "boolean") return "";
+    if (typeof v === "number") return Math.round(v).toLocaleString("ko-KR");   // 요금 숫자는 쉼표를 붙여 보여 준다
+    return String(v).trim();
+  };
 
   /* ---------- 헤더 ---------- */
   var header = $(".site-header");
@@ -88,6 +92,20 @@
       var wrap = el.closest(el.getAttribute("data-sf-hide") || "li") || el;
       wrap.hidden = true;
     }
+  });
+  // 요금에서 계산하는 값: 1인당 시간 요금(data-pp="r1"), 독립사무실 장기 계약 월 요금(data-office="0:6")
+  var r10 = function (v) { return Math.round(v / 10) * 10; };
+  $$("[data-pp]").forEach(function (el) {
+    var p = get("pricing.rooms." + el.getAttribute("data-pp"));
+    if (!p || !p.max) return;
+    var lo = Math.min(+p.wdEarly || 0, +p.hdEarly || 0) / p.max, hi = Math.max(+p.wdStd || 0, +p.hdStd || 0) / p.max;
+    el.textContent = "약 " + r10(lo).toLocaleString("ko-KR") + "~" + r10(hi).toLocaleString("ko-KR") + "원";
+  });
+  $$("[data-office]").forEach(function (el) {
+    var a = el.getAttribute("data-office").split(":");
+    var o = (get("pricing.officeRooms") || [])[+a[0]];
+    var d = (get("pricing.officeDiscounts") || []).filter(function (x) { return x.months === +a[1]; })[0];
+    if (o && d) el.textContent = Math.round(o.monthly * (100 - d.rate) / 100).toLocaleString("ko-KR");
   });
   // 값이 하나도 없으면 감추는 상자: <div data-hide-if-empty> ... <span data-sf> ... </div>
   $$("[data-hide-if-empty]").forEach(function (box) {
@@ -209,8 +227,9 @@
       order.forEach(function (c) { list.appendChild(c); });
       if (result) {
         if (!p && !u) result.textContent = "인원이나 진행 방식을 고르면 맞는 룸을 앞으로 모아 보여 드립니다.";
+        else if (!matched.length && p > 40) result.textContent = "40명이 넘는 모임은 여러 룸을 함께 쓰거나 층 전체를 쓰는 방법을 상담해 드립니다. 일자 · 시간 · 인원 · 모임 유형을 문의로 남겨 주세요.";
         else if (!matched.length) result.textContent = "조건에 맞는 룸이 없습니다. 인원을 나누어 진행하거나 문의 폼에 조건을 남겨 주세요.";
-        else result.textContent = "조건에 맞는 룸 " + matched.length + "개를 앞으로 모았습니다. 표기 인원은 배치에 따라 달라지니 상세에서 배치별 인원을 확인해 주세요.";
+        else result.textContent = "조건에 맞는 룸 " + matched.length + "개를 앞으로 모았습니다. 최대 인원은 배치에 따라 달라질 수 있으니 상세에서 사진과 배치를 확인해 주세요.";
       }
     };
     [selPeople, selUse].forEach(function (s) { if (s) s.addEventListener("change", apply); });
@@ -256,6 +275,19 @@
       });
       if (params.purpose && purposeSel && $$("option", purposeSel).some(function (o) { return o.value === params.purpose; })) purposeSel.value = params.purpose;
       if (params.space && spaceSel && $$("option", spaceSel).some(function (o) { return o.value === params.space; })) spaceSel.value = params.space;
+      // 예상 금액 계산기에서 넘어온 값 (일시 · 인원 · 모임 유형 · 계산 내용)
+      var typeSel = form.elements.meetingType;
+      if (params.when && form.elements.when && !form.elements.when.value) form.elements.when.value = params.when.slice(0, 160);
+      if (params.people && form.elements.people && !form.elements.people.value) form.elements.people.value = params.people.slice(0, 40);
+      if (params.type && typeSel) {
+        if (!$$("option", typeSel).some(function (o) { return o.value === params.type; })) { var op = document.createElement("option"); op.value = op.textContent = params.type.slice(0, 40); typeSel.appendChild(op); }
+        typeSel.value = params.type.slice(0, 40);
+      }
+      if (params.msg && form.elements.message && !form.elements.message.value) {
+        form.elements.message.value = params.msg.slice(0, 2000) + "\n\n(추가로 알려 주실 내용을 적어 주세요)\n";
+        var prefillNote = $("[data-prefill-note]");
+        if (prefillNote) prefillNote.hidden = false;
+      }
 
       // 목적에 따라 보이는 항목
       var syncPurpose = function () {
@@ -335,6 +367,7 @@
           "이름: " + data.name, "연락처: " + data.phone, "이메일: " + (data.email || "-"),
           data.company ? "회사·단체: " + data.company : null,
           "희망 일시: " + (data.when || "-"), "인원: " + (data.people || "-"),
+          data.meetingType ? "모임 유형: " + data.meetingType : null,
           data.schedule ? "정기 일정: " + data.schedule : null,
           "", data.message
         ].filter(function (l) { return l !== null; }).join("\n");
@@ -403,7 +436,12 @@
         var timer = setTimeout(function () { }, 0);
         var ctrl = ("AbortController" in window) ? new AbortController() : null;
         if (ctrl) timer = setTimeout(function () { ctrl.abort(); }, 15000);
-        fetch("/api/inquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), signal: ctrl ? ctrl.signal : undefined })
+        // 모임 유형은 서버에 따로 칸이 없어 문의 내용 맨 앞에 붙여 보낸다
+        var payload = {};
+        Object.keys(data).forEach(function (k) { payload[k] = data[k]; });
+        if (payload.meetingType) payload.message = "[모임 유형] " + payload.meetingType + "\n" + payload.message;
+        delete payload.meetingType;
+        fetch("/api/inquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: ctrl ? ctrl.signal : undefined })
           .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j || {} }; }, function () { return { status: r.status, j: {} }; }); })
           .then(function (res) {
             clearTimeout(timer);
