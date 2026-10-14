@@ -28,7 +28,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="css/style.css?v=3ce6e40c">
+  <link rel="stylesheet" href="css/style.css?v=02759823">
   </head>
 <body>
 <a class="skip-link" href="#main">본문으로 바로가기</a>
@@ -39,7 +39,7 @@
       <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
     </a>
     <nav class="nav-links" id="nav-links" aria-label="주요 메뉴">
-      <a href="/space#rooms">공간 대관</a><a href="/space#coworking">코워킹</a><a href="/space#office">독립사무실</a><a href="/pricing">이용 요금</a><a href="/guide">이용 안내</a><a href="/about">소개</a>
+      <a href="/space#rooms">공간 대관</a><a href="/space#coworking">코워킹</a><a href="/space#office">독립사무실</a><a href="/pricing">이용 요금</a><a href="/shop">이용권 구매</a><a href="/guide">이용 안내</a><a href="/about">소개</a>
       <a class="nav-member" href="/login" data-member-link hidden>로그인</a>
       <span class="nav-cta"><a class="btn btn-primary btn-sm" href="/contact">대관 문의</a></span>
     </nav>
@@ -51,8 +51,8 @@
 <section class="auth-wrap">
   <div class="container">
     <div class="auth-card wide" data-member-page="signup">
-      <h1 class="auth-title" data-signup-title>회원가입</h1>
-      <p class="auth-lead" data-signup-lead>가입하면 내가 남긴 문의와 처리 상태를 마이페이지에서 한눈에 볼 수 있습니다.</p>
+      <h1 class="auth-title">회원가입</h1>
+      <p class="auth-lead">가입하면 내가 남긴 문의와 처리 상태를 마이페이지에서 한눈에 볼 수 있습니다.</p>
       <div class="auth-notice" data-auth-msg role="alert" hidden></div>
       <div class="auth-off" data-auth-off hidden>
         <strong>회원 기능을 준비하고 있습니다</strong>
@@ -60,21 +60,12 @@
         <a class="btn btn-primary btn-sm" href="/contact?purpose=rental#inquiry">문의 남기기</a>
       </div>
       <div data-auth-on>
-        <div data-email-mode>
-          <a class="kakao-btn" href="/api/auth/kakao" data-kakao-login hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2C6.6 3.2 2.3 6.6 2.3 10.8c0 2.7 1.8 5.1 4.5 6.4l-.9 3.4c-.1.3.3.6.5.4l4-2.7c.5.1 1.1.1 1.6.1 5.4 0 9.7-3.4 9.7-7.6S17.4 3.2 12 3.2z"/></svg><span>카카오로 시작하기</span></a>
-          <div class="auth-or" data-kakao-or hidden><span>또는 이메일로 가입</span></div>
-        </div>
-        <div class="auth-kakao-done" data-kakao-mode hidden>
-          <span class="kk-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.2C6.6 3.2 2.3 6.6 2.3 10.8c0 2.7 1.8 5.1 4.5 6.4l-.9 3.4c-.1.3.3.6.5.4l4-2.7c.5.1 1.1.1 1.6.1 5.4 0 9.7-3.4 9.7-7.6S17.4 3.2 12 3.2z"/></svg></span>
-          <p><strong>카카오 계정을 확인했습니다.</strong> 이름과 연락처를 적고 약관에 동의하면 가입이 끝납니다.</p>
-        </div>
         <form class="auth-form" data-signup-form novalidate>
-          <div class="af-group" data-email-fields>
+          <div class="af-group">
             <label class="af-field"><span>이메일 <em>*</em></span><input type="email" name="email" autocomplete="email" inputmode="email" required><small class="af-err" data-err="email" hidden></small></label>
             <label class="af-field"><span>비밀번호 <em>*</em></span><input type="password" name="password" autocomplete="new-password" required><small class="af-hint">8자 이상, 영문과 숫자를 함께 넣어 주세요.</small><small class="af-err" data-err="password" hidden></small></label>
             <label class="af-field"><span>비밀번호 확인 <em>*</em></span><input type="password" name="password2" autocomplete="new-password" required><small class="af-err" data-err="password2" hidden></small></label>
           </div>
-          <label class="af-field" data-kakao-email hidden><span>이메일 <small>(선택)</small></span><input type="email" name="kemail" autocomplete="email" inputmode="email"><small class="af-hint">문의 답변을 메일로 받고 싶을 때 적어 주세요.</small><small class="af-err" data-err="kemail" hidden></small></label>
           <div class="af-row">
             <label class="af-field"><span>이름 <em>*</em></span><input type="text" name="name" autocomplete="name" maxlength="40" required><small class="af-err" data-err="name" hidden></small></label>
             <label class="af-field"><span>휴대폰 번호 <em>*</em></span><input type="tel" name="phone" autocomplete="tel" inputmode="tel" placeholder="010-0000-0000" required><small class="af-err" data-err="phone" hidden></small></label>
@@ -88,7 +79,7 @@
             <details class="ag-detail">
               <summary>수집 항목과 보유 기간 보기</summary>
               <table>
-                <tr><th>수집 항목</th><td>이메일 가입: 이메일, 비밀번호(암호화해 저장), 이름, 휴대폰 번호 <br>카카오 가입: 카카오 회원번호, 닉네임, 이메일(카카오에서 동의한 경우), 이름, 휴대폰 번호</td></tr>
+                <tr><th>수집 항목</th><td>이메일, 비밀번호(암호화해 저장), 이름, 휴대폰 번호</td></tr>
                 <tr><th>이용 목적</th><td>회원 확인과 로그인, 내가 남긴 문의와 처리 상태 안내, 공간 이용 상담과 공지 전달</td></tr>
                 <tr><th>보유 기간</th><td>회원 탈퇴 시까지. 탈퇴하면 바로 삭제합니다. 부정 이용을 막기 위한 로그인 기록은 90일 동안 보관합니다.</td></tr>
                 <tr><th>거부권</th><td>동의하지 않을 수 있으며, 그 경우 회원가입은 할 수 없습니다. 대관 문의는 회원가입 없이도 남길 수 있습니다.</td></tr>
@@ -124,6 +115,7 @@
           <li><a href="/space#office">독립사무실</a></li>
           <li><a href="/pricing">이용 요금</a></li>
           <li><a href="/pricing#estimate">예상 금액 계산</a></li>
+          <li><a href="/shop">이용권 구매</a></li>
           <li><a href="/guide">이용 안내 · FAQ</a></li>
           <li><a href="/tour">3D로 공간 살펴보기</a></li>
           <li><a href="/about">소셜팩토리 소개</a></li>
@@ -158,16 +150,24 @@
         </ul>
       </div>
     </div>
+    <div class="footer-biz" aria-label="사업자 정보">
+      <span><b>상호</b> <span data-sf="company.name">주식회사 블랭크</span></span>
+      <span><b>대표자</b> <span data-sf="company.ceo">최시준</span></span>
+      <span><b>사업자등록번호</b> <span data-sf="company.regNo">161-86-03494</span></span>
+      <span data-hide-if-empty hidden><b>통신판매업 신고번호</b> <span data-sf="company.mailOrderNo">—</span></span>
+      <span><b>주소</b> <span data-sf="company.address">서울특별시 강남구 영동대로 602, 6층 제트71 (삼성동, 삼성동 미켈란 107)</span></span>
+      <span><b>연락처</b> <a data-tel-link href="tel:01023849580"><span data-sf="company.phone">010-2384-9580</span></a> · <a data-channel="email" href="mailto:spaceblank0100@gmail.com"><span data-channel-value>spaceblank0100@gmail.com</span></a></span>
+      <span><b>개인정보 보호책임자</b> <span data-sf="company.privacyOfficer">최시준</span></span>
+    </div>
     <div class="footer-bottom">
       <span>© <span data-year>2026</span> SOCIAL FACTORY. All rights reserved.</span>
-      <span class="company" data-company-line></span>
-      <span class="legal-links"><a href="/terms">이용약관</a><a href="/privacy"><strong>개인정보 처리방침</strong></a></span>
+      <span class="legal-links"><a href="/terms">이용약관</a><a href="/privacy"><strong>개인정보 처리방침</strong></a><a href="/shop#policy">이용권 환불 규정</a></span>
       <span class="en">EST. 2015 · TALK. PLAY. BOOK. STUDY.</span>
     </div>
   </div>
 </footer>
-<script src="js/site-config.js?v=5439d81e"></script>
-<script src="js/main.js?v=bdab8d2c"></script>
-<script src="js/member.js?v=0ac7b942"></script>
+<script src="js/site-config.js?v=edd31d3a"></script>
+<script src="js/main.js?v=033cd498"></script>
+<script src="js/member.js?v=36c18283"></script>
 </body>
 </html>

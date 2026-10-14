@@ -19,11 +19,6 @@
     "wrong": "이메일 또는 비밀번호가 맞지 않습니다.",
     "too-many": "시도가 많아 잠시 막혔습니다. 15분 뒤 다시 시도해 주세요.",
     "blocked": "이용이 제한된 계정입니다. 카카오톡 문의채널로 문의해 주세요.",
-    "expired": "카카오 확인 시간이 지났습니다. '카카오로 시작하기'를 다시 눌러 주세요.",
-    "kakao-off": "카카오 로그인을 준비하고 있습니다. 이메일로 이용해 주세요.",
-    "kakao-cancel": "카카오 로그인을 취소했습니다.",
-    "kakao-state": "카카오 로그인 확인이 끝나지 않았습니다. 다시 시도해 주세요.",
-    "kakao": "카카오 로그인 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.",
     "login": "로그인이 풀렸습니다. 다시 로그인해 주세요.",
     "network": "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     "default": "처리하지 못했습니다. 잠시 후 다시 시도해 주세요."
@@ -49,16 +44,13 @@
   var clearErrs = function (form) { $$("[data-err]", form).forEach(function (e) { e.hidden = true; e.textContent = ""; }); $$("[aria-invalid]", form).forEach(function (i) { i.removeAttribute("aria-invalid"); }); };
   var busy = function (btn, on, label) { if (!btn) return; if (on) { btn.dataset.label = btn.textContent; btn.textContent = label || "잠시만요…"; btn.disabled = true; } else { btn.textContent = btn.dataset.label || btn.textContent; btn.disabled = false; } };
 
-  // 서버 준비 상태 (DB · 카카오)
+  // 서버 준비 상태 (데이터베이스 연결 여부)
   var ready = api("GET", "/api/auth/config").then(function (res) {
     var cfg = res.j || {};
     var on = res.status === 200 && cfg.db;
     $$("[data-auth-off]").forEach(function (el) { el.hidden = on; });
     $$("[data-auth-on]").forEach(function (el) { el.hidden = !on; });
-    var next = safeNext(params.next || "/mypage");
-    $$("[data-kakao-login]").forEach(function (a) { a.hidden = !(on && cfg.kakao); a.href = "/api/auth/kakao?next=" + encodeURIComponent(next); });
-    $$("[data-kakao-or]").forEach(function (el) { el.hidden = !(on && cfg.kakao); });
-    return { on: on, kakao: !!cfg.kakao };
+    return { on: on };
   });
   if (params.error && MSG[params.error]) notice(MSG[params.error], "err");
 
@@ -87,7 +79,6 @@
   /* ---------------- 회원가입 ---------------- */
   if (kind === "signup") {
     var sf = $("[data-signup-form]");
-    var kakaoMode = params.kakao === "1";
     var all = $("[data-agree-all]");
     var boxes = ["agreeAge", "agreeTerms", "agreePrivacy", "marketing"].map(function (n) { return sf.elements[n]; });
     var syncAll = function () { all.checked = boxes.every(function (b) { return b.checked; }); };
@@ -99,31 +90,15 @@
       if (/^01/.test(d)) phone.value = d.length > 7 ? d.slice(0, 3) + "-" + d.slice(3, d.length - 4) + "-" + d.slice(-4) : d.length > 3 ? d.slice(0, 3) + "-" + d.slice(3) : d;
     });
 
-    if (kakaoMode) {
-      $("[data-email-mode]").hidden = true;
-      $("[data-email-fields]").hidden = true;
-      $("[data-kakao-mode]").hidden = false;
-      $("[data-kakao-email]").hidden = false;
-      $("[data-signup-title]").textContent = "카카오로 가입하기";
-      $("[data-signup-lead]").textContent = "처음 한 번만 확인하면 다음부터는 카카오 로그인으로 바로 들어올 수 있습니다.";
-      api("GET", "/api/auth/kakao/complete").then(function (res) {
-        if (!res.j.ok) { notice(MSG.expired, "err"); $("[data-signup-submit]").disabled = true; $("[data-email-mode]").hidden = false; return; }
-        if (res.j.nickname && !sf.elements.name.value) sf.elements.name.value = res.j.nickname;
-        if (res.j.email) { sf.elements.kemail.value = res.j.email; sf.elements.kemail.readOnly = true; }
-      });
-    }
-
     sf.addEventListener("submit", function (e) {
       e.preventDefault();
       clearErrs(sf); notice("");
       var el = sf.elements, bad = null;
       var mark = function (k, msg) { showErr(sf, k, msg); if (!bad && el[k]) bad = el[k]; };
-      if (!kakaoMode) {
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(el.email.value.trim())) mark("email", FIELD.email);
-        var pw = el.password.value;
-        if (pw.length < 8) mark("password", FIELD.short); else if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) mark("password", FIELD.weak);
-        if (el.password2.value !== pw) mark("password2", "비밀번호가 서로 다릅니다.");
-      } else if (el.kemail.value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(el.kemail.value.trim())) mark("kemail", FIELD.email);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(el.email.value.trim())) mark("email", FIELD.email);
+      var pw = el.password.value;
+      if (pw.length < 8) mark("password", FIELD.short); else if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) mark("password", FIELD.weak);
+      if (el.password2.value !== pw) mark("password2", "비밀번호가 서로 다릅니다.");
       if (!el.name.value.trim()) mark("name", "이름을 적어 주세요.");
       var digits = el.phone.value.replace(/[^0-9]/g, "");
       if (digits.length < 9 || digits.length > 15) mark("phone", FIELD.phone);
@@ -135,15 +110,14 @@
         website: el.website.value, next: safeNext(params.next || "/mypage")
       };
       var url = "/api/auth/signup";
-      if (kakaoMode) { url = "/api/auth/kakao/complete"; body.email = el.kemail.value.trim(); }
-      else { body.email = el.email.value.trim(); body.password = el.password.value; }
+      body.email = el.email.value.trim(); body.password = el.password.value;
       var btn = $("[data-signup-submit]"); busy(btn, true, "가입하는 중…");
       api("POST", url, body).then(function (res) {
         busy(btn, false);
         if (res.j.ok) { location.href = safeNext(res.j.next) + (safeNext(res.j.next) === "/mypage" ? "?welcome=1" : ""); return; }
         if (res.j.error === "invalid" && res.j.fields) {
           Object.keys(res.j.fields).forEach(function (k) {
-            var key = k.indexOf("agree") === 0 ? "agree" : (kakaoMode && k === "email" ? "kemail" : k);
+            var key = k.indexOf("agree") === 0 ? "agree" : k;
             showErr(sf, key, key === "agree" ? "[필수] 항목에 모두 동의해 주세요." : (FIELD[res.j.fields[k]] || FIELD.required));
           });
           notice("입력 내용을 확인해 주세요.", "err");
@@ -166,7 +140,7 @@
       me = m;
       var t = function (sel, v) { var el = $(sel); if (el) el.textContent = v; };
       t("[data-my-name]", m.name); t("[data-my-initial]", (m.name || "S").slice(0, 1));
-      t("[data-my-provider]", m.provider === "kakao" ? "카카오 계정으로 가입" : "이메일로 가입");
+      t("[data-my-provider]", "이메일로 가입");
       t("[data-my-email]", m.email || "—"); t("[data-my-phone]", m.phone || "—"); t("[data-my-created]", (m.createdAt || "").slice(0, 10).replace(/-/g, ". "));
       t("[data-my-title]", m.name + "님의 마이페이지");
       var mk = $("[data-my-marketing]"); if (mk) mk.checked = !!m.marketing;
@@ -188,6 +162,16 @@
       }).join("");
       $("[data-my-empty]").hidden = list.length > 0;
     };
+    var OSTATUS = { paid: "done", used: "done", pending: "ing", refund_requested: "ing", refunded: "", cancelled: "", failed: "" };
+    var renderOrders = function (list) {
+      var ul = $("[data-my-orders]"); if (!ul) return;
+      ul.innerHTML = list.map(function (o) {
+        var meta = [Number(o.amount).toLocaleString("ko-KR") + "원", o.payLabel, o.start_date ? "시작일 " + o.start_date : ""].filter(Boolean).join(" · ");
+        return "<li><div class=\"mi-top\"><span class=\"mi-st " + (OSTATUS[o.status] || "") + "\">" + esc(o.statusLabel) + "</span><strong>" + esc(o.product_name) + "</strong><span class=\"mi-date\">" + esc((o.paid_at || o.created_at || "").slice(0, 16)) + "</span></div>" +
+          "<p class=\"mi-meta\">" + esc(meta) + "</p><p class=\"mi-receipt\">주문번호 " + esc(o.oid) + "</p></li>";
+      }).join("");
+      var empty = $("[data-my-orders-empty]"); if (empty) empty.hidden = list.length > 0;
+    };
     var load = function () {
       api("GET", "/api/auth/me").then(function (res) {
         if (loading) loading.hidden = true;
@@ -200,6 +184,7 @@
         fill(res.j.member);
         if (params.welcome === "1") { $("[data-my-lead]").textContent = "가입을 환영합니다. 이제 로그인한 상태로 남긴 문의는 이곳에서 처리 상태를 확인할 수 있습니다."; }
         api("GET", "/api/member/inquiries").then(function (r2) { renderInquiries((r2.j && r2.j.results) || []); });
+        api("GET", "/api/member/orders").then(function (r3) { renderOrders((r3.j && r3.j.results) || []); });
         if (location.hash === "#password" && res.j.member.provider === "email") setTimeout(function () { var f = $("[data-pw-form]"); if (f) { f.scrollIntoView({ block: "center" }); f.elements.current.focus(); } }, 100);
       });
     };

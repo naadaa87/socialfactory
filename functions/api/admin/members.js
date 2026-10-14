@@ -43,7 +43,7 @@ export async function onRequestPatch({ request, env }) {
   if (!m) return json({ ok: false, error: "not-found" }, 404);
   try {
     if (action === "reset") {
-      if (m.provider !== "email") return json({ ok: false, error: "kakao" }, 400);
+      if (m.provider !== "email") return json({ ok: false, error: "provider" }, 400);
       const pw = tempPassword();
       await env.DB.batch([
         env.DB.prepare("UPDATE members SET password_hash = ?1, must_change_pw = 1 WHERE id = ?2").bind(await hashPassword(pw), id),

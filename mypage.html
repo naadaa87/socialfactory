@@ -28,7 +28,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="css/style.css?v=3ce6e40c">
+  <link rel="stylesheet" href="css/style.css?v=02759823">
   </head>
 <body>
 <a class="skip-link" href="#main">본문으로 바로가기</a>
@@ -39,7 +39,7 @@
       <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
     </a>
     <nav class="nav-links" id="nav-links" aria-label="주요 메뉴">
-      <a href="/space#rooms">공간 대관</a><a href="/space#coworking">코워킹</a><a href="/space#office">독립사무실</a><a href="/pricing">이용 요금</a><a href="/guide">이용 안내</a><a href="/about">소개</a>
+      <a href="/space#rooms">공간 대관</a><a href="/space#coworking">코워킹</a><a href="/space#office">독립사무실</a><a href="/pricing">이용 요금</a><a href="/shop">이용권 구매</a><a href="/guide">이용 안내</a><a href="/about">소개</a>
       <a class="nav-member" href="/login" data-member-link hidden>로그인</a>
       <span class="nav-cta"><a class="btn btn-primary btn-sm" href="/contact">대관 문의</a></span>
     </nav>
@@ -53,7 +53,7 @@
     <div class="crumbs"><a href="/">Home</a> / My page</div>
     <span class="eyebrow">My page</span>
     <h1 class="mt-16" data-my-title>마이페이지</h1>
-    <p class="lead" data-my-lead>내 정보와 남긴 문의의 처리 상태를 확인할 수 있습니다.</p>
+    <p class="lead" data-my-lead>내 정보와 남긴 문의의 처리 상태, 이용권 주문 내역을 확인할 수 있습니다.</p>
   </div>
 </section>
 
@@ -61,7 +61,7 @@
   <div class="container">
     <div class="my-guest" data-my-guest hidden>
       <strong>로그인이 필요합니다</strong>
-      <p>로그인하면 내 정보와 문의 처리 상태를 볼 수 있습니다.</p>
+      <p>로그인하면 내 정보와 문의 처리 상태, 이용권 주문 내역을 볼 수 있습니다.</p>
       <div class="actions"><a class="btn btn-primary" href="/login?next=/mypage">로그인</a><a class="btn btn-outline" href="/signup">회원가입</a></div>
     </div>
     <div class="my-alert" data-must-change hidden>임시 비밀번호로 로그인하셨습니다. 아래 '비밀번호 변경'에서 새 비밀번호로 바꿔 주세요.</div>
@@ -94,6 +94,14 @@
           <div class="my-empty" data-my-empty hidden>
             <p>아직 로그인한 상태로 남긴 문의가 없습니다.</p>
             <p class="note">로그인하기 전에 남긴 문의는 이곳에 보이지 않습니다. 접수번호와 함께 카카오톡 문의채널로 물어봐 주세요.</p>
+          </div>
+        </div>
+        <div class="my-card" id="orders">
+          <div class="mc-head"><h2>내 주문 내역</h2><a class="btn btn-outline btn-sm" href="/shop">이용권 구매</a></div>
+          <ul class="my-inq" data-my-orders></ul>
+          <div class="my-empty" data-my-orders-empty hidden>
+            <p>아직 로그인한 상태로 결제한 주문이 없습니다.</p>
+            <p class="note">로그인하지 않고 결제한 주문은 이곳에 보이지 않습니다. 주문 완료 화면의 주문번호와 함께 카카오톡 문의채널로 물어봐 주세요.</p>
           </div>
         </div>
         <div class="my-card" data-pw-card id="password">
@@ -142,6 +150,7 @@
           <li><a href="/space#office">독립사무실</a></li>
           <li><a href="/pricing">이용 요금</a></li>
           <li><a href="/pricing#estimate">예상 금액 계산</a></li>
+          <li><a href="/shop">이용권 구매</a></li>
           <li><a href="/guide">이용 안내 · FAQ</a></li>
           <li><a href="/tour">3D로 공간 살펴보기</a></li>
           <li><a href="/about">소셜팩토리 소개</a></li>
@@ -176,16 +185,24 @@
         </ul>
       </div>
     </div>
+    <div class="footer-biz" aria-label="사업자 정보">
+      <span><b>상호</b> <span data-sf="company.name">주식회사 블랭크</span></span>
+      <span><b>대표자</b> <span data-sf="company.ceo">최시준</span></span>
+      <span><b>사업자등록번호</b> <span data-sf="company.regNo">161-86-03494</span></span>
+      <span data-hide-if-empty hidden><b>통신판매업 신고번호</b> <span data-sf="company.mailOrderNo">—</span></span>
+      <span><b>주소</b> <span data-sf="company.address">서울특별시 강남구 영동대로 602, 6층 제트71 (삼성동, 삼성동 미켈란 107)</span></span>
+      <span><b>연락처</b> <a data-tel-link href="tel:01023849580"><span data-sf="company.phone">010-2384-9580</span></a> · <a data-channel="email" href="mailto:spaceblank0100@gmail.com"><span data-channel-value>spaceblank0100@gmail.com</span></a></span>
+      <span><b>개인정보 보호책임자</b> <span data-sf="company.privacyOfficer">최시준</span></span>
+    </div>
     <div class="footer-bottom">
       <span>© <span data-year>2026</span> SOCIAL FACTORY. All rights reserved.</span>
-      <span class="company" data-company-line></span>
-      <span class="legal-links"><a href="/terms">이용약관</a><a href="/privacy"><strong>개인정보 처리방침</strong></a></span>
+      <span class="legal-links"><a href="/terms">이용약관</a><a href="/privacy"><strong>개인정보 처리방침</strong></a><a href="/shop#policy">이용권 환불 규정</a></span>
       <span class="en">EST. 2015 · TALK. PLAY. BOOK. STUDY.</span>
     </div>
   </div>
 </footer>
-<script src="js/site-config.js?v=5439d81e"></script>
-<script src="js/main.js?v=bdab8d2c"></script>
-<script src="js/member.js?v=0ac7b942"></script>
+<script src="js/site-config.js?v=edd31d3a"></script>
+<script src="js/main.js?v=033cd498"></script>
+<script src="js/member.js?v=36c18283"></script>
 </body>
 </html>

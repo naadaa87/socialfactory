@@ -1,8 +1,8 @@
--- 소셜팩토리 문의 · 회원 저장 테이블 (Cloudflare D1)
+-- 소셜팩토리 문의 · 회원 · 주문 저장 테이블 (Cloudflare D1)
 -- 처음 설정할 때: Cloudflare 대시보드 → Storage & databases → D1 SQL database → 데이터베이스 만들기
 --   → 만든 데이터베이스의 Console 탭에 이 파일 내용 전체를 붙여 넣고 실행합니다.
 -- 그다음 Pages 프로젝트 → Settings → Bindings → Add → D1 database 에 변수 이름 "DB" 로 연결하고 다시 배포합니다.
--- ※ 문의 표(inquiries)를 이미 만들어 쓰고 있었다면 이 파일 대신 schema-upgrade-members.sql 을 실행합니다.
+-- ※ 이미 표를 만들어 쓰고 있었다면 이 파일 대신 schema-upgrade-members.sql(회원) · schema-upgrade-orders.sql(주문) 을 실행합니다.
 
 CREATE TABLE IF NOT EXISTS inquiries (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,10 +36,10 @@ CREATE INDEX IF NOT EXISTS idx_inquiries_member  ON inquiries (member_id);
 -- 회원 ----------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS members (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  provider        TEXT    NOT NULL DEFAULT 'email',                  -- email | kakao
+  provider        TEXT    NOT NULL DEFAULT 'email',                  -- email (나중에 소셜 로그인을 붙일 때 확장)
   email           TEXT,                                              -- 소문자로 저장 (카카오 회원은 없을 수 있음)
   password_hash   TEXT,                                              -- 이메일 회원만. PBKDF2 해시 (원래 비밀번호는 저장하지 않음)
-  kakao_id        TEXT    UNIQUE,                                    -- 카카오 회원번호
+  kakao_id        TEXT    UNIQUE,                                    -- (예비) 나중에 카카오 로그인을 붙일 때 쓰는 자리
   name            TEXT    NOT NULL,
   phone           TEXT    NOT NULL,
   marketing       INTEGER NOT NULL DEFAULT 0,                        -- 소식 · 혜택 수신 동의 (선택)
@@ -73,3 +73,36 @@ CREATE TABLE IF NOT EXISTS auth_events (
   ip_hash     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_auth_events ON auth_events (kind, created_at);
+
+-- 주문 · 결제 (이용권 온라인 판매, KG이니시스) ------------------------------------
+CREATE TABLE IF NOT EXISTS orders (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  oid           TEXT    NOT NULL UNIQUE,                             -- 주문번호 (결제사에도 같은 값 전달)
+  created_at    TEXT    NOT NULL DEFAULT (datetime('now', '+9 hours')),
+  status        TEXT    NOT NULL DEFAULT 'pending',                  -- pending | paid | used | refund_requested | refunded | cancelled | failed
+  product_id    TEXT    NOT NULL,                                    -- functions/_lib/products.js 의 id
+  product_name  TEXT    NOT NULL,
+  qty           INTEGER NOT NULL DEFAULT 1,
+  amount        INTEGER NOT NULL,                                    -- 결제 금액 (원, 서버에서 계산)
+  buyer_name    TEXT    NOT NULL,
+  buyer_phone   TEXT    NOT NULL,
+  buyer_email   TEXT,
+  start_date    TEXT,                                                -- 이용 시작일 · 이용일 (해당 상품만)
+  memo          TEXT,                                                -- 구매자 요청사항
+  admin_memo    TEXT,                                                -- 운영 메모 (관리 화면)
+  pay_method    TEXT,                                                -- 구매자가 고른 수단 card | bank
+  pg_method     TEXT,                                                -- 결제사가 알려 준 실제 수단
+  card_name     TEXT,
+  card_num      TEXT,                                                -- 결제사가 가린 카드번호
+  tid           TEXT,                                                -- 결제사 거래번호
+  paid_at       TEXT,
+  device        TEXT,                                                -- pc | mobile
+  member_id     INTEGER,
+  ip_hash       TEXT,
+  test_mode     INTEGER NOT NULL DEFAULT 0,                          -- 테스트 상점으로 결제한 건
+  fail_msg      TEXT,
+  pg_raw        TEXT                                                 -- 결제사 응답 원문 (문제 확인용)
+);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON orders (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_status  ON orders (status);
+CREATE INDEX IF NOT EXISTS idx_orders_member  ON orders (member_id);

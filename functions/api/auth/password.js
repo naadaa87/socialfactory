@@ -4,7 +4,7 @@ export async function onRequestPost({ request, env }) {
   if (!sameOrigin(request)) return json({ ok: false, error: "origin" }, 403);
   const m = await getMember(request, env);
   if (!m) return json({ ok: false, error: "login" }, 401);
-  if (m.provider !== "email") return json({ ok: false, error: "kakao" }, 400);
+  if (m.provider !== "email") return json({ ok: false, error: "provider" }, 400);
   let b;
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
   if (!(await verifyPassword(String(b.current || "").slice(0, 200), m.password_hash))) return json({ ok: false, error: "wrong" }, 401);

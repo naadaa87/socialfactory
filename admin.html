@@ -4,194 +4,516 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>문의 · 회원 관리 | 소셜팩토리</title>
+  <title>관리자 | 소셜팩토리</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <style>
-    :root { --blue:#2855E8; --navy:#18233A; --bg:#F7F8FA; --line:#E3E7EE; --muted:#5B6578; }
+    :root { --blue:#2855E8; --blue-25:#EEF3FF; --blue-50:#DCE7FF; --navy:#18233A; --navy-80:#2E3A55; --bg:#F7F8FA; --line:#E3E7EE; --muted:#5B6578; --green:#1D8A4E; --green-bg:#E6F6EC; --amber:#8A5A00; --amber-bg:#FFF4DB; --red:#C0392B; --red-bg:#FDECEA; }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: var(--bg); color: var(--navy); font-size: 14px; }
-    header { background:#fff; border-bottom:1px solid var(--line); padding: 14px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-    header h1 { font-size: 16px; margin:0; }
-    header .sp { flex:1; }
-    main { padding: 20px; max-width: 1400px; margin: 0 auto; }
-    .card { background:#fff; border:1px solid var(--line); border-radius: 14px; padding: 20px; }
-    input, select, button { font: inherit; }
-    input[type=password], select { border:1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 220px; }
-    button { border:0; border-radius: 10px; padding: 10px 14px; background: var(--blue); color:#fff; font-weight:700; cursor:pointer; }
-    button.ghost { background:#fff; color: var(--navy); border:1.5px solid var(--line); }
-    .msg { color: var(--muted); margin: 10px 0 0; }
-    .err { color: #C0392B; }
-    table { width:100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+    html, body { margin:0; }
+    body { font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: var(--bg); color: var(--navy); font-size: 14px; line-height: 1.5; }
+    a { color: inherit; }
+    input, select, button, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    .btn { border:0; border-radius: 10px; padding: 10px 14px; background: var(--blue); color:#fff; font-weight:700; }
+    .btn.ghost { background:#fff; color: var(--navy); border:1.5px solid var(--line); }
+    .btn.ghost:hover { border-color: var(--navy); }
+    .btn.sm { padding: 6px 10px; font-size: 12.5px; border-radius: 8px; }
+    .btn.danger { color: var(--red); border-color: #E8B4A9; }
+    .btn[hidden] { display: none; }
+    input[type=password], input[type=search], input[type=text], select, textarea { border:1.5px solid var(--line); border-radius: 10px; padding: 9px 12px; background:#fff; min-width: 0; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-25); }
+
+    /* 틀 */
+    .top { position: sticky; top: 0; z-index: 5; background:#fff; border-bottom:1px solid var(--line); padding: 0 20px; height: 58px; display:flex; align-items:center; gap:14px; }
+    .top .brand { display:flex; align-items:center; gap:10px; font-weight: 800; letter-spacing: -0.01em; text-decoration: none; }
+    .top .brand img { width: 28px; height: 28px; }
+    .top .brand small { font-weight: 600; color: var(--muted); margin-left: 4px; }
+    .top .sp { flex: 1; }
+    .top .who { font-size: 13px; color: var(--muted); }
+    .top .who b { color: var(--green); }
+    .shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: calc(100vh - 58px); }
+    .side { background:#fff; border-right:1px solid var(--line); padding: 18px 12px; }
+    .side nav { display:grid; gap: 4px; }
+    .side nav button { display:flex; align-items:center; gap: 10px; width:100%; text-align:left; border:0; background: transparent; padding: 11px 12px; border-radius: 10px; font-weight: 700; color: var(--navy-80); }
+    .side nav button .ic { width: 22px; height: 22px; border-radius: 7px; background: var(--bg); display:grid; place-items:center; font-size: 11px; font-weight: 800; color: var(--muted); }
+    .side nav button:hover { background: var(--bg); }
+    .side nav button[aria-selected="true"] { background: var(--blue-25); color: var(--blue); }
+    .side nav button[aria-selected="true"] .ic { background: var(--blue); color:#fff; }
+    .side nav button .cnt { margin-left:auto; min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--blue); color:#fff; font-size: 11.5px; text-align:center; }
+    .side nav button .cnt:empty { display:none; }
+    .side .foot { margin-top: 24px; padding: 12px; border-radius: 10px; background: var(--bg); font-size: 12.5px; color: var(--muted); }
+    main { padding: 22px 24px 48px; min-width: 0; }
+    .page { display: none; }
+    .page.on { display: block; }
+    .page-h { display:flex; align-items:flex-end; justify-content:space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+    .page-h h1 { font-size: 20px; margin: 0; letter-spacing: -0.02em; }
+    .page-h p { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+    .card + .card { margin-top: 14px; }
+    .card h2 { font-size: 15px; margin: 0 0 12px; }
+    .msg { color: var(--muted); margin: 10px 0 0; font-size: 13px; }
+    .msg.err { color: var(--red); }
+    .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .toolbar .msg { margin: 0; }
+    .toolbar .right { margin-left: auto; }
+    .wrap { overflow-x: auto; margin-top: 12px; }
+    table { width:100%; border-collapse: collapse; font-size: 13px; }
     th, td { text-align:left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid var(--line); }
-    th { background: var(--bg); font-size: 12px; color: var(--muted); position: sticky; top: 0; }
+    th { background: var(--bg); font-size: 12px; color: var(--muted); white-space: nowrap; position: sticky; top: 0; }
+    tr:hover td { background: #FBFCFE; }
     td.msgcell { max-width: 420px; white-space: pre-wrap; }
-    .tag { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: var(--bg); color: var(--navy); }
-    .tag.new { background: #DCE7FF; color: var(--blue); }
-    .tag.done { background: #E6F6EC; color: #1D8A4E; }
-    .tag.fail { background: #FDECEA; color: #C0392B; }
-    .wrap { overflow-x: auto; }
-    .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top: 14px; }
-    .tabs { display:flex; gap:6px; margin-top: 16px; }
-    .tabs button { background:#fff; color: var(--navy); border:1.5px solid var(--line); }
-    .tabs button[aria-selected="true"] { background: var(--navy); color:#fff; border-color: var(--navy); }
-    .tag.member { background:#EEF3FF; color: var(--blue); }
-    .tag.kakao { background:#FEE500; color:#191600; }
-    .tag.block { background:#FDECEA; color:#C0392B; }
+    td.nw, .nw { white-space: nowrap; }
+    #page-ord table { min-width: 1080px; }
+    #page-inq table { min-width: 900px; }
+    #page-mem table { min-width: 860px; }
+    td .memo { min-width: 150px; }
+    td.pay { min-width: 210px; max-width: 240px; overflow-wrap: anywhere; }
+    td.pay .mono { font-size: 11.5px; }
+    td.buyer { max-width: 180px; overflow-wrap: anywhere; }
+    td.prod { min-width: 150px; }
+    td a[href^='tel:'] { white-space: nowrap; }
+    td small, .small { color: var(--muted); font-size: 12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; letter-spacing: .02em; }
+    .tag { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: var(--bg); color: var(--navy); white-space: nowrap; }
+    .tag.blue { background: var(--blue-50); color: var(--blue); }
+    .tag.ok { background: var(--green-bg); color: var(--green); }
+    .tag.warn { background: var(--amber-bg); color: var(--amber); }
+    .tag.bad { background: var(--red-bg); color: var(--red); }
+    .tag.test { background: #FFF3E8; color: #B4580F; }
     .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
-    .row-actions button { padding: 6px 10px; font-size: 12.5px; }
-    .temp { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background:#FFF7E6; border:1px solid #F3D399; }
+    .temp { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--amber-bg); border:1px solid #F3D399; }
     .temp b { font-family: monospace; font-size: 16px; letter-spacing: .04em; }
-    input[type=search] { border:1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 220px; }
-    @media (max-width: 700px) { main { padding: 12px; } th, td { padding: 8px 6px; } }
+    .empty { padding: 28px; text-align:center; color: var(--muted); }
+
+    /* 로그인 */
+    .login { max-width: 560px; margin: 40px auto; }
+    .login p { margin: 0 0 14px; color: var(--navy-80); }
+    .login .toolbar input { flex: 1; min-width: 200px; }
+
+    /* 대시보드 */
+    .kpis { display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .kpi { background:#fff; border:1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+    .kpi .k { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+    .kpi .v { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin-top: 4px; }
+    .kpi .v small { font-size: 13px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+    .kpi .s { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+    .kpi.accent { background: var(--blue); border-color: var(--blue); color:#fff; }
+    .kpi.accent .k, .kpi.accent .s, .kpi.accent .v small { color: rgba(255,255,255,0.8); }
+    .period { display:inline-flex; border:1.5px solid var(--line); border-radius: 10px; overflow:hidden; background:#fff; }
+    .period button { border:0; background:#fff; padding: 8px 12px; font-weight: 700; color: var(--muted); }
+    .period button[aria-selected="true"] { background: var(--navy); color:#fff; }
+    .two { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+    .two .card { margin: 0; }
+    .todo { display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+    .todo button { text-align:left; background:#fff; border:1px solid var(--line); border-radius: 14px; padding: 14px 16px; display:flex; align-items:center; gap: 12px; }
+    .todo button:hover { border-color: var(--blue); }
+    .todo .n { font-size: 24px; font-weight: 800; color: var(--blue); min-width: 36px; }
+    .todo .t { font-weight: 700; }
+    .todo .d { display:block; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+
+    /* 설정 · 상품 */
+    .chk { display:grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .chk li { display:flex; align-items:flex-start; gap: 10px; padding: 10px 12px; border:1px solid var(--line); border-radius: 10px; }
+    .chk .st { flex:none; width: 22px; height: 22px; border-radius: 50%; display:grid; place-items:center; font-size: 12px; font-weight: 800; }
+    .chk .st.ok { background: var(--green-bg); color: var(--green); }
+    .chk .st.no { background: var(--red-bg); color: var(--red); }
+    .chk .st.opt { background: var(--amber-bg); color: var(--amber); }
+    .chk b { display:block; }
+    .chk small { color: var(--muted); }
+    .chk code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: var(--bg); padding: 1px 5px; border-radius: 5px; }
+    .prod { display:grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+    .prod .p { border:1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+    .prod .p small { display:block; color: var(--blue); font-weight: 700; font-size: 12px; }
+    .prod .p b { display:block; font-size: 15px; margin-top: 2px; }
+    .prod .p .pr { margin-top: 6px; font-weight: 800; font-size: 18px; }
+    .prod .p .so { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+    .prod .p a { display:inline-block; margin-top: 8px; font-size: 12.5px; color: var(--blue); font-weight: 700; }
+    .memo { width: 100%; min-width: 160px; min-height: 36px; resize: vertical; font-size: 12.5px; padding: 6px 8px; }
+    details.help { margin-top: 14px; font-size: 13px; color: var(--navy-80); }
+    details.help summary { cursor:pointer; font-weight: 700; color: var(--muted); }
+    details.help ol { padding-left: 20px; }
+    .note-box { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--blue-25); font-size: 13px; color: var(--navy-80); }
+
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; }
+      .side { border-right: 0; border-bottom: 1px solid var(--line); padding: 10px 12px; position: sticky; top: 58px; z-index: 4; }
+      .side nav { display:flex; gap: 4px; overflow-x: auto; }
+      .side nav button { width: auto; white-space: nowrap; padding: 9px 12px; }
+      .side nav button .ic { display:none; }
+      .side .foot { display:none; }
+      main { padding: 16px 14px 40px; }
+      .kpis, .todo { grid-template-columns: repeat(2, 1fr); }
+      .two { grid-template-columns: 1fr; }
+      th, td { padding: 8px 6px; }
+    }
+    @media (max-width: 520px) { .kpis, .todo { grid-template-columns: 1fr; } .top .who { display:none; } }
   </style>
 </head>
 <body>
-<header>
-  <h1>소셜팩토리 문의 · 회원 관리</h1>
+<header class="top">
+  <a class="brand" href="/"><img src="images/logo-mark.svg" alt=""> 소셜팩토리 <small>관리자</small></a>
   <span class="sp"></span>
-  <a href="/" style="color:var(--muted); text-decoration:none;">← 홈페이지</a>
+  <span class="who" id="who"></span>
+  <button class="btn ghost sm" id="logout" hidden>키 지우기</button>
+  <a href="/" style="color:var(--muted); text-decoration:none; font-size:13px;">홈페이지 →</a>
 </header>
-<main>
-  <section class="card" id="login">
-    <p>Cloudflare Pages 설정의 <b>ADMIN_KEY</b> 값을 입력하면 최근 문의와 회원 목록을 볼 수 있습니다. 키는 이 브라우저 탭에만 보관되며 주소창에 남지 않습니다.</p>
-    <div class="toolbar">
-      <input id="key" type="password" placeholder="관리자 키" autocomplete="current-password">
-      <button id="go">불러오기</button>
-      <button class="ghost" id="logout" hidden>키 지우기</button>
-    </div>
-    <p class="msg" id="login-msg"></p>
-  </section>
 
-  <div class="tabs" id="tabs" hidden><button type="button" data-tab="list" aria-selected="true">문의</button><button type="button" data-tab="members" aria-selected="false">회원</button></div>
+<section class="card login" id="login">
+  <h2>관리자 로그인</h2>
+  <p>Cloudflare Pages 설정에 넣어 둔 <b>ADMIN_KEY</b> 값을 입력해 주세요. 키는 이 브라우저 탭에만 보관되며 주소창에 남지 않습니다.</p>
+  <div class="toolbar">
+    <input id="key" type="password" placeholder="관리자 키" autocomplete="current-password">
+    <button class="btn" id="go">들어가기</button>
+  </div>
+  <p class="msg" id="login-msg"></p>
+</section>
 
-  <section class="card" id="list" hidden style="margin-top:16px;">
-    <div class="toolbar">
-      <select id="filter">
-        <option value="">전체 상태</option>
-        <option value="new">새 문의</option>
-        <option value="in_progress">진행 중</option>
-        <option value="done">처리 완료</option>
-      </select>
-      <button class="ghost" id="reload">새로고침</button>
-      <button class="ghost" id="csv">CSV 내려받기</button>
-      <span class="msg" id="count"></span>
-    </div>
-    <div class="wrap">
-      <table>
-        <thead><tr><th>접수번호</th><th>접수 시각</th><th>상태</th><th>목적 · 공간</th><th>이름 · 연락처</th><th>일정 · 인원</th><th>내용</th><th>알림</th></tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-  </section>
+<div class="shell" id="shell" hidden>
+  <aside class="side">
+    <nav aria-label="관리 메뉴">
+      <button type="button" data-tab="dash" aria-selected="true"><span class="ic">D</span>대시보드</button>
+      <button type="button" data-tab="inq" aria-selected="false"><span class="ic">Q</span>문의<span class="cnt" id="cnt-inq"></span></button>
+      <button type="button" data-tab="ord" aria-selected="false"><span class="ic">₩</span>주문 · 결제<span class="cnt" id="cnt-ord"></span></button>
+      <button type="button" data-tab="mem" aria-selected="false"><span class="ic">M</span>회원</button>
+      <button type="button" data-tab="prod" aria-selected="false"><span class="ic">P</span>상품</button>
+      <button type="button" data-tab="set" aria-selected="false"><span class="ic">S</span>설정 상태</button>
+    </nav>
+    <div class="foot">문의 · 회원 · 주문 데이터는 Cloudflare D1 에 저장됩니다. 결제 취소(환불)는 KG이니시스 가맹점관리자에서 처리하고 여기에는 결과를 기록합니다.</div>
+  </aside>
 
-  <section class="card" id="members" hidden style="margin-top:16px;">
-    <div class="toolbar">
-      <input id="mq" type="search" placeholder="이름 · 이메일 · 전화번호 검색">
-      <label style="display:inline-flex;gap:6px;align-items:center;"><input type="checkbox" id="mk"> 소식 수신 동의만</label>
-      <button class="ghost" id="mreload">검색 · 새로고침</button>
-      <button class="ghost" id="mcsv">CSV 내려받기</button>
-      <span class="msg" id="mcount"></span>
-    </div>
-    <div class="temp" id="temp" hidden></div>
-    <div class="wrap">
-      <table>
-        <thead><tr><th>번호</th><th>가입</th><th>이름 · 연락처</th><th>가입 방식</th><th>소식 수신</th><th>상태</th><th>문의</th><th>최근 로그인</th><th>관리</th></tr></thead>
-        <tbody id="mrows"></tbody>
-      </table>
-    </div>
-    <p class="msg">비밀번호를 잊은 회원이 카카오톡으로 요청하면, 이메일과 이름이 맞는지 확인한 뒤 '임시 비밀번호'를 눌러 나온 값을 알려 주세요. 회원은 로그인 후 새 비밀번호로 바꾸게 됩니다.</p>
-  </section>
-</main>
+  <main>
+    <!-- 대시보드 -->
+    <section class="page on" id="page-dash">
+      <div class="page-h">
+        <div><h1>대시보드</h1><p>문의 · 결제 · 회원 흐름을 한 화면에서 봅니다. 테스트 결제는 매출에 넣지 않습니다.</p></div>
+        <div class="toolbar"><div class="period" id="period"><button type="button" data-p="today" aria-selected="true">오늘</button><button type="button" data-p="week" aria-selected="false">7일</button><button type="button" data-p="month" aria-selected="false">30일</button><button type="button" data-p="all" aria-selected="false">전체</button></div><button class="btn ghost" id="dash-reload">새로고침</button></div>
+      </div>
+      <div class="kpis" id="kpis"></div>
+      <div class="todo" id="todo"></div>
+      <div class="two">
+        <div class="card"><h2>최근 문의</h2><div class="wrap" style="margin-top:0"><table><thead><tr><th>접수</th><th>상태</th><th>목적</th><th>이름</th></tr></thead><tbody id="recent-inq"></tbody></table></div></div>
+        <div class="card"><h2>최근 결제</h2><div class="wrap" style="margin-top:0"><table><thead><tr><th>주문</th><th>상태</th><th>상품</th><th>금액</th></tr></thead><tbody id="recent-ord"></tbody></table></div></div>
+      </div>
+      <p class="msg" id="dash-msg"></p>
+    </section>
+
+    <!-- 문의 -->
+    <section class="page" id="page-inq">
+      <div class="page-h"><div><h1>문의</h1><p>홈페이지 문의 폼으로 들어온 내용입니다. 상태를 바꾸면 회원은 마이페이지에서 바로 볼 수 있습니다.</p></div></div>
+      <div class="card">
+        <div class="toolbar">
+          <select id="filter"><option value="">전체 상태</option><option value="new">새 문의</option><option value="in_progress">진행 중</option><option value="done">처리 완료</option></select>
+          <button class="btn ghost" id="reload">새로고침</button>
+          <button class="btn ghost" id="csv">CSV 내려받기</button>
+          <span class="msg" id="count"></span>
+        </div>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>접수번호</th><th>접수 시각</th><th>상태</th><th>목적 · 공간</th><th>이름 · 연락처</th><th>일정 · 인원</th><th>내용</th><th>알림</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 주문 · 결제 -->
+    <section class="page" id="page-ord">
+      <div class="page-h"><div><h1>주문 · 결제</h1><p>이용권 온라인 결제 내역입니다. 입실 처리는 '이용 완료', 환불은 가맹점관리자에서 취소한 뒤 '환불 완료'로 바꿔 주세요.</p></div></div>
+      <div class="card">
+        <div class="toolbar">
+          <select id="ofilter"><option value="">전체 상태</option><option value="paid">결제 완료</option><option value="used">이용 완료</option><option value="refund_requested">환불 요청</option><option value="refunded">환불 완료</option><option value="cancelled">취소</option><option value="failed">결제 실패</option><option value="pending">결제 대기</option></select>
+          <input id="oq" type="search" placeholder="주문번호 · 이름 · 전화 · 상품 검색">
+          <label style="display:inline-flex;gap:6px;align-items:center;"><input type="checkbox" id="otest"> 테스트 결제 포함</label>
+          <button class="btn ghost" id="oreload">검색 · 새로고침</button>
+          <button class="btn ghost" id="ocsv">CSV 내려받기</button>
+          <span class="msg" id="ocount"></span>
+        </div>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>주문번호 · 시각</th><th>상태</th><th>상품</th><th>금액</th><th>구매자</th><th>결제</th><th>이용 시작일 · 요청</th><th>운영 메모</th></tr></thead>
+            <tbody id="orows"></tbody>
+          </table>
+        </div>
+        <details class="help">
+          <summary>환불은 어떻게 처리하나요?</summary>
+          <ol>
+            <li>고객이 카카오톡 · 이메일 · 문의 폼으로 주문번호와 함께 환불을 요청하면, 이 표에서 상태를 <b>환불 요청</b>으로 바꿔 둡니다.</li>
+            <li>KG이니시스 <b>가맹점관리자(iniweb.inicis.com)</b> → 거래내역 조회에서 같은 주문번호(TID)를 찾아 전체 취소 또는 부분 취소합니다. 규정(7일 안 전액, 이후 90%, 정기권 일할 차감)에 맞는 금액으로 취소해 주세요.</li>
+            <li>취소가 끝나면 상태를 <b>환불 완료</b>로 바꾸고 운영 메모에 취소 금액을 적어 둡니다. 회원 주문이면 마이페이지에도 같은 상태가 보입니다.</li>
+          </ol>
+        </details>
+      </div>
+    </section>
+
+    <!-- 회원 -->
+    <section class="page" id="page-mem">
+      <div class="page-h"><div><h1>회원</h1><p>이메일로 가입한 회원 목록입니다. 비밀번호를 잊은 회원은 본인 확인 후 임시 비밀번호를 발급해 전달해 주세요.</p></div></div>
+      <div class="card">
+        <div class="toolbar">
+          <input id="mq" type="search" placeholder="이름 · 이메일 · 전화번호 검색">
+          <label style="display:inline-flex;gap:6px;align-items:center;"><input type="checkbox" id="mk"> 소식 수신 동의만</label>
+          <button class="btn ghost" id="mreload">검색 · 새로고침</button>
+          <button class="btn ghost" id="mcsv">CSV 내려받기</button>
+          <span class="msg" id="mcount"></span>
+        </div>
+        <div class="temp" id="temp" hidden></div>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>번호</th><th>가입</th><th>이름 · 연락처</th><th>소식 수신</th><th>상태</th><th>문의</th><th>최근 로그인</th><th>관리</th></tr></thead>
+            <tbody id="mrows"></tbody>
+          </table>
+        </div>
+        <p class="msg">임시 비밀번호는 발급 직후 한 번만 보입니다. 회원은 로그인 뒤 마이페이지에서 새 비밀번호로 바꾸게 됩니다.</p>
+      </div>
+    </section>
+
+    <!-- 상품 -->
+    <section class="page" id="page-prod">
+      <div class="page-h"><div><h1>상품</h1><p>홈페이지에서 판매 중인 이용권과 누적 판매량입니다.</p></div></div>
+      <div class="card">
+        <div class="prod" id="prod"></div>
+        <div class="note-box">상품 이름 · 가격 · 설명을 바꾸려면 GitHub 저장소의 <code>functions/_lib/products.js</code> 파일을 수정하고 Commit 하면 됩니다. 홈페이지 상품 페이지와 결제 금액 검증이 모두 이 파일 하나를 쓰기 때문에, 바꾼 뒤에는 상품 페이지(<code>/product/상품id</code>)가 새 값으로 보이는지 한 번 확인해 주세요. 가격을 0원이나 빈값으로 두면 결제 심사 조건에 어긋납니다.</div>
+      </div>
+    </section>
+
+    <!-- 설정 상태 -->
+    <section class="page" id="page-set">
+      <div class="page-h"><div><h1>설정 상태</h1><p>Cloudflare Pages 설정값과 데이터베이스 표가 준비되었는지 확인합니다. 값 자체는 보이지 않고 있는지 없는지만 봅니다.</p></div></div>
+      <div class="card"><h2>필수</h2><ul class="chk" id="set-req"></ul></div>
+      <div class="card"><h2>결제 (KG이니시스)</h2><ul class="chk" id="set-pay"></ul></div>
+      <div class="card"><h2>선택</h2><ul class="chk" id="set-opt"></ul></div>
+      <p class="msg">자세한 설정 방법은 저장소의 README.md 3번(문의 · 회원) 과 4번(결제) 항목에 있습니다.</p>
+    </section>
+  </main>
+</div>
+
 <script>
 (function () {
   var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  var won = function (n) { return Number(n || 0).toLocaleString("ko-KR"); };
   var P = { rental: "공간 대관", regular: "정기대관", business: "기업·단체·학교", coworking: "코워킹", office: "독립사무실", partner: "호스트·제휴·협업", proposal: "공간 활용 상담", other: "기타" };
   var S = { r1: "1번룸", r2: "2번룸", r3: "3번룸", r4: "4번룸", r5: "5번룸", coworking: "코워킹", office: "독립사무실", undecided: "미정", "": "-" };
-  var ST = { new: "새 문의", in_progress: "진행 중", done: "처리 완료" };
+  var ST = { new: ["새 문의", "blue"], in_progress: ["진행 중", "warn"], done: ["처리 완료", "ok"] };
+  var OST = { pending: ["결제 대기", ""], paid: ["결제 완료", "ok"], used: ["이용 완료", "blue"], cancelled: ["취소", ""], refund_requested: ["환불 요청", "warn"], refunded: ["환불 완료", ""], failed: ["결제 실패", "bad"] };
+  var PM = { Card: "카드", DirectBank: "계좌이체", VBank: "가상계좌", HPP: "휴대폰", Kakaopay: "카카오페이", NaverPay: "네이버페이", Samsungpay: "삼성페이", Payco: "페이코", "0": "카드", "1": "계좌이체", "2": "가상계좌", "3": "휴대폰" };
   var key = ""; try { key = sessionStorage.getItem("sf_admin_key") || ""; } catch (e) {}
-  var rows = [];
-  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
-  var api = function (method, body, q) {
-    return fetch("/api/inquiry" + (q || ""), { method: method, headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined })
-      .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); });
+  var call = function (path, method, body) {
+    return fetch(path, { method: method || "GET", headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j || {} }; }, function () { return { status: r.status, j: {} }; }); })
+      .catch(function () { return { status: 0, j: { error: "network" } }; });
   };
+  var csv = function (name, head, list) {
+    var lines = [head.join(",")].concat(list.map(function (r) { return head.map(function (k) { return '"' + String(r[k] == null ? "" : r[k]).replace(/"/g, '""') + '"'; }).join(","); }));
+    var blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  };
+  var tag = function (pair) { return '<span class="tag ' + (pair[1] || "") + '">' + esc(pair[0]) + '</span>'; };
+
+  /* ---------- 로그인 ---------- */
+  var enter = function () {
+    $("#login-msg").textContent = "확인하는 중…"; $("#login-msg").className = "msg";
+    call("/api/admin/stats").then(function (res) {
+      if (res.status === 401) { $("#login-msg").textContent = "키가 맞지 않거나 ADMIN_KEY 가 설정되지 않았습니다."; $("#login-msg").className = "msg err"; return; }
+      if (!(res.j && res.j.ok)) { $("#login-msg").textContent = res.status === 0 ? "서버에 연결하지 못했습니다. 배포된 주소(socialfactory.co.kr/admin)에서 열어 주세요." : "불러오지 못했습니다."; $("#login-msg").className = "msg err"; return; }
+      try { sessionStorage.setItem("sf_admin_key", key); } catch (e) {}
+      $("#login").hidden = true; $("#shell").hidden = false; $("#logout").hidden = false; $("#who").innerHTML = "<b>●</b> 로그인됨";
+      stats = res.j; renderDash(); renderProducts(); renderSetup();
+      showTab(location.hash.replace("#", "") || "dash");
+    });
+  };
+  $("#go").addEventListener("click", function () { key = $("#key").value.trim(); if (!key) { $("#login-msg").textContent = "키를 입력해 주세요."; return; } enter(); });
+  $("#key").addEventListener("keydown", function (e) { if (e.key === "Enter") $("#go").click(); });
+  $("#logout").addEventListener("click", function () { key = ""; try { sessionStorage.removeItem("sf_admin_key"); } catch (e) {} location.hash = ""; location.reload(); });
+
+  /* ---------- 탭 ---------- */
+  var loaded = {};
+  var showTab = function (t) {
+    if (!$("#page-" + t)) t = "dash";
+    $$("[data-tab]").forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-tab") === t ? "true" : "false"); });
+    $$(".page").forEach(function (p) { p.classList.toggle("on", p.id === "page-" + t); });
+    if (t === "inq" && !loaded.inq) load();
+    if (t === "ord" && !loaded.ord) oload();
+    if (t === "mem" && !loaded.mem) mload();
+    if (history.replaceState) history.replaceState(null, "", "#" + t);
+  };
+  $$("[data-tab]").forEach(function (b) { b.addEventListener("click", function () { showTab(b.getAttribute("data-tab")); }); });
+  window.addEventListener("hashchange", function () { if (!$("#shell").hidden) showTab(location.hash.replace("#", "") || "dash"); });
+
+  /* ---------- 대시보드 ---------- */
+  var stats = null, period = "today";
+  var PL = { today: "오늘", week: "최근 7일", month: "최근 30일", all: "전체" };
+  var renderDash = function () {
+    if (!stats) return;
+    var p = (stats.periods && stats.periods[period]) || {};
+    var n = function (v) { return v == null ? "—" : won(v); };
+    $("#kpis").innerHTML =
+      '<div class="kpi accent"><div class="k">매출 (' + PL[period] + ')</div><div class="v">' + n(p.sales) + '<small>원</small></div><div class="s">결제 완료 ' + n(p.orders) + '건' + (p.testOrders ? ' · 테스트 ' + p.testOrders + '건 제외' : '') + '</div></div>' +
+      '<div class="kpi"><div class="k">문의 (' + PL[period] + ')</div><div class="v">' + n(p.inquiries) + '<small>건</small></div><div class="s">아직 답하지 않은 새 문의 ' + n(p.newInquiries) + '건</div></div>' +
+      '<div class="kpi"><div class="k">신규 회원 (' + PL[period] + ')</div><div class="v">' + n(p.members) + '<small>명</small></div><div class="s">소식 수신 동의 전체 ' + n(stats.pending && stats.pending.marketing) + '명</div></div>' +
+      '<div class="kpi"><div class="k">결제 상태</div><div class="v">' + (stats.setup.inicis ? (stats.setup.inicisTest ? '테스트' : '운영 중') : '준비 중') + '</div><div class="s">' + (stats.setup.inicis ? 'MID ' + esc(stats.setup.inicisMid) + (stats.setup.inicisMobile ? ' · 모바일 결제 켬' : ' · 모바일은 PC 결제창 사용') : 'INICIS_MID · INICIS_SIGN_KEY 를 넣으면 결제가 열립니다') + '</div></div>';
+    var pd = stats.pending || {};
+    $("#todo").innerHTML =
+      '<button type="button" data-go="inq"><span class="n">' + n(pd.inquiries) + '</span><span><span class="t">답할 문의</span><span class="d">상태가 \'새 문의\'인 건</span></span></button>' +
+      '<button type="button" data-go="ord"><span class="n">' + n(pd.refunds) + '</span><span><span class="t">환불 요청</span><span class="d">가맹점관리자에서 취소 후 \'환불 완료\'로</span></span></button>' +
+      '<button type="button" data-go="set"><span class="n">' + (stats.setup.db && stats.setup.tables && stats.setup.tables.orders ? '✓' : '!') + '</span><span><span class="t">설정 상태</span><span class="d">' + (stats.setup.db ? (stats.setup.tables && stats.setup.tables.orders ? '데이터베이스 · 표 준비됨' : '주문 표(orders)가 없습니다') : '데이터베이스가 연결되지 않았습니다') + '</span></span></button>';
+    $$("#todo [data-go]").forEach(function (b) { b.addEventListener("click", function () { showTab(b.getAttribute("data-go")); }); });
+    $("#cnt-inq").textContent = pd.inquiries ? pd.inquiries : ""; $("#cnt-ord").textContent = pd.refunds ? pd.refunds : "";
+    var ri = (stats.recent && stats.recent.inquiries) || [], ro = (stats.recent && stats.recent.orders) || [];
+    $("#recent-inq").innerHTML = ri.length ? ri.map(function (r) { return '<tr><td><b>' + esc(r.receipt) + '</b><br><small>' + esc((r.created_at || "").slice(5, 16)) + '</small></td><td>' + tag(ST[r.status] || [r.status, ""]) + '</td><td>' + esc(P[r.purpose] || r.purpose) + '<br><small>' + esc(S[r.space] || "-") + '</small></td><td>' + esc(r.name) + '</td></tr>'; }).join("") : '<tr><td colspan="4" class="empty">아직 문의가 없습니다.</td></tr>';
+    $("#recent-ord").innerHTML = ro.length ? ro.map(function (o) { return '<tr><td><span class="mono">' + esc(o.oid) + '</span><br><small>' + esc((o.created_at || "").slice(5, 16)) + '</small></td><td>' + tag(OST[o.status] || [o.status, ""]) + (o.test_mode ? ' <span class="tag test">테스트</span>' : '') + '</td><td>' + esc(o.product_name) + '<br><small>' + esc(o.buyer_name) + '</small></td><td class="nw">' + won(o.amount) + '원</td></tr>'; }).join("") : '<tr><td colspan="4" class="empty">아직 결제가 없습니다.</td></tr>';
+    $("#dash-msg").textContent = stats.setup.db ? "" : "D1 데이터베이스가 연결되지 않아 숫자를 셀 수 없습니다. README 3번을 확인해 주세요.";
+  };
+  $$("#period button").forEach(function (b) { b.addEventListener("click", function () { period = b.getAttribute("data-p"); $$("#period button").forEach(function (x) { x.setAttribute("aria-selected", x === b ? "true" : "false"); }); renderDash(); }); });
+  var dashReload = function () { $("#dash-msg").textContent = "불러오는 중…"; call("/api/admin/stats").then(function (res) { if (res.j && res.j.ok) { stats = res.j; renderDash(); renderProducts(); renderSetup(); } else $("#dash-msg").textContent = "불러오지 못했습니다."; }); };
+  $("#dash-reload").addEventListener("click", dashReload);
+
+  /* ---------- 상품 ---------- */
+  var renderProducts = function () {
+    var list = (stats && stats.products) || [];
+    $("#prod").innerHTML = list.map(function (p) {
+      return '<div class="p"><small>' + esc(p.category) + '</small><b>' + esc(p.name) + '</b><div class="pr">' + won(p.price) + '원</div><div class="so">누적 판매 ' + won(p.sold) + ' · ' + won(p.sales) + '원</div><a href="/product/' + esc(p.id) + '" target="_blank" rel="noopener">상품 페이지 보기 →</a></div>';
+    }).join("") || '<p class="empty">상품이 없습니다.</p>';
+  };
+
+  /* ---------- 설정 상태 ---------- */
+  var renderSetup = function () {
+    var s = (stats && stats.setup) || {}, t = s.tables || {};
+    var li = function (ok, title, desc, opt) { return '<li><span class="st ' + (ok ? "ok" : (opt ? "opt" : "no")) + '">' + (ok ? "✓" : (opt ? "–" : "!")) + '</span><div><b>' + title + '</b><small>' + desc + '</small></div></li>'; };
+    $("#set-req").innerHTML =
+      li(s.db, "D1 데이터베이스 연결 (<code>DB</code>)", s.db ? "연결되어 있습니다." : "Pages → Settings → Bindings 에서 D1 을 DB 이름으로 연결해 주세요. README 3-1.") +
+      li(s.adminKey, "관리자 키 (<code>ADMIN_KEY</code>)", "이 화면에 들어올 때 쓰는 키입니다.") +
+      li(s.sessionSecret, "세션 비밀값 (<code>SESSION_SECRET</code>)", s.sessionSecret ? "설정되어 있습니다." : "회원 로그인 쿠키 서명에 씁니다. 긴 무작위 문자열을 넣어 주세요. README 3-3.") +
+      li(t.inquiries, "문의 표 (inquiries)", t.inquiries ? "준비되어 있습니다." : "schema.sql 을 D1 콘솔에서 실행해 주세요.") +
+      li(t.members && t.sessions, "회원 표 (members · sessions)", t.members ? "준비되어 있습니다." : "schema.sql 또는 schema-upgrade-members.sql 을 실행해 주세요.") +
+      li(t.orders, "주문 표 (orders)", t.orders ? "준비되어 있습니다." : "schema-upgrade-orders.sql 을 D1 콘솔에서 실행해 주세요. README 4-1.");
+    $("#set-pay").innerHTML =
+      li(s.inicis, "상점 아이디 · Sign Key (<code>INICIS_MID</code> · <code>INICIS_SIGN_KEY</code>)", s.inicis ? "설정되어 있습니다 (MID " + esc(s.inicisMid) + "). " + (s.inicisTest ? "지금은 테스트 결제 상태입니다 — 실제 돈이 오가지 않습니다." : "운영 결제 상태입니다.") : "없으면 상품은 보이되 '결제 준비 중'으로 표시됩니다. README 4-2.") +
+      li(s.inicisMobile, "모바일 Hash Key (<code>INICIS_MOBILE_HASH_KEY</code>)", s.inicisMobile ? "휴대폰에서는 이니시스 모바일 결제 페이지를 씁니다." : "없으면 휴대폰에서도 PC 결제창을 씁니다 (동작에는 문제 없음).", true) +
+      li(!s.inicisTest || !s.inicis, "운영 전환 (<code>INICIS_TEST</code> 지우기)", s.inicis && s.inicisTest ? "심사가 끝나고 실제 MID 를 받으면 INICIS_MID · INICIS_SIGN_KEY 를 실제 값으로 바꾸고 INICIS_TEST 를 지워 주세요." : "테스트 표시가 꺼져 있습니다.", true);
+    $("#set-opt").innerHTML =
+      li(s.ipSalt, "IP 해시 소금값 (<code>IP_SALT</code>)", "접속 IP 를 그대로 저장하지 않기 위한 값입니다. 없어도 동작합니다.", true) +
+      li(s.webhook, "알림 웹훅 (<code>NOTIFY_WEBHOOK</code>)", s.webhook ? "새 문의 · 결제 완료가 웹훅으로 전달됩니다." : "슬랙 · 디스코드 웹훅 주소를 넣으면 새 문의와 결제 완료를 바로 받을 수 있습니다.", true);
+  };
+
+  /* ---------- 문의 ---------- */
+  var rows = [];
   var render = function () {
-    var tb = $("#rows"); tb.innerHTML = "";
+    var tb = $("#rows");
+    tb.innerHTML = rows.length ? "" : '<tr><td colspan="8" class="empty">문의가 없습니다.</td></tr>';
     rows.forEach(function (r) {
       var tr = document.createElement("tr");
       var notify = r.notify_status || "-";
-      var ncls = /^sent/.test(notify) ? "done" : (/^failed/.test(notify) ? "fail" : "");
-      tr.innerHTML = '<td><b>' + esc(r.receipt) + '</b>' + (r.member_id ? '<br><span class="tag member">회원 #' + esc(r.member_id) + '</span>' : '') + '</td><td>' + esc(r.created_at) + '</td>' +
+      var ncls = /^sent/.test(notify) ? "ok" : (/^failed/.test(notify) ? "bad" : "");
+      tr.innerHTML = '<td><b>' + esc(r.receipt) + '</b>' + (r.member_id ? '<br><span class="tag blue">회원 #' + esc(r.member_id) + '</span>' : '') + '</td><td>' + esc(r.created_at) + '</td>' +
         '<td><select data-id="' + r.id + '"><option value="new"' + (r.status === "new" ? " selected" : "") + '>새 문의</option><option value="in_progress"' + (r.status === "in_progress" ? " selected" : "") + '>진행 중</option><option value="done"' + (r.status === "done" ? " selected" : "") + '>처리 완료</option></select></td>' +
         '<td>' + esc(P[r.purpose] || r.purpose) + '<br><span class="tag">' + esc(S[r.space] || r.space || "-") + '</span></td>' +
         '<td>' + esc(r.name) + (r.company ? '<br>' + esc(r.company) : '') + '<br><a href="tel:' + esc(String(r.phone).replace(/[^0-9+]/g, "")) + '">' + esc(r.phone) + '</a>' + (r.email ? '<br><a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : '') + '</td>' +
         '<td>' + esc(r.when_text || "-") + '<br>' + esc(r.people || "-") + (r.schedule ? '<br>' + esc(r.schedule) : '') + '</td>' +
         '<td class="msgcell">' + esc(r.message) + '</td>' +
-        '<td><span class="tag ' + ncls + '">' + esc(notify) + '</span>' + (r.consent ? '' : '<br><span class="tag fail">동의 없음</span>') + '</td>';
+        '<td><span class="tag ' + ncls + '">' + esc(notify) + '</span>' + (r.consent ? '' : '<br><span class="tag bad">동의 없음</span>') + '</td>';
       tb.appendChild(tr);
     });
     $("#count").textContent = rows.length + "건";
-    Array.prototype.forEach.call(tb.querySelectorAll("select[data-id]"), function (sel) {
+    $$("#rows select[data-id]").forEach(function (sel) {
       sel.addEventListener("change", function () {
-        api("PATCH", { id: parseInt(sel.getAttribute("data-id"), 10), status: sel.value }).then(function (res) {
-          if (!(res.j && res.j.ok)) alert("상태를 바꾸지 못했습니다. 다시 시도해 주세요.");
+        call("/api/inquiry", "PATCH", { id: parseInt(sel.getAttribute("data-id"), 10), status: sel.value }).then(function (res) {
+          if (!(res.j && res.j.ok)) alert("상태를 바꾸지 못했습니다. 다시 시도해 주세요."); else dashReload();
         });
       });
     });
   };
   var load = function () {
     var f = $("#filter").value;
-    $("#login-msg").textContent = "불러오는 중…"; $("#login-msg").className = "msg";
-    api("GET", null, "?limit=300" + (f ? "&status=" + f : "")).then(function (res) {
-      if (res.status === 401) { $("#login-msg").textContent = "키가 맞지 않거나 ADMIN_KEY가 설정되지 않았습니다."; $("#login-msg").className = "msg err"; $("#list").hidden = true; return; }
-      if (res.status === 503) { $("#login-msg").textContent = "D1 데이터베이스(DB)가 연결되지 않았습니다. README 3번을 확인해 주세요."; $("#login-msg").className = "msg err"; return; }
-      if (!(res.j && res.j.ok)) { $("#login-msg").textContent = "불러오지 못했습니다."; $("#login-msg").className = "msg err"; return; }
-      rows = res.j.results || []; render();
-      $("#login-msg").textContent = "불러왔습니다."; $("#tabs").hidden = false; showTab(current); $("#logout").hidden = false;
-      try { sessionStorage.setItem("sf_admin_key", key); } catch (e) {}
-    }).catch(function () { $("#login-msg").textContent = "서버에 연결하지 못했습니다. 배포된 주소에서 열어 주세요."; $("#login-msg").className = "msg err"; });
+    $("#count").textContent = "불러오는 중…";
+    call("/api/inquiry?limit=300" + (f ? "&status=" + f : "")).then(function (res) {
+      if (res.status === 503) { $("#count").textContent = "D1 데이터베이스가 연결되지 않았습니다."; return; }
+      if (!(res.j && res.j.ok)) { $("#count").textContent = "불러오지 못했습니다."; return; }
+      rows = res.j.results || []; loaded.inq = true; render();
+    });
   };
-  $("#go").addEventListener("click", function () { key = $("#key").value.trim(); if (!key) { $("#login-msg").textContent = "키를 입력해 주세요."; return; } load(); });
-  $("#key").addEventListener("keydown", function (e) { if (e.key === "Enter") $("#go").click(); });
   $("#reload").addEventListener("click", load);
   $("#filter").addEventListener("change", load);
-  $("#logout").addEventListener("click", function () { key = ""; try { sessionStorage.removeItem("sf_admin_key"); } catch (e) {} $("#key").value = ""; $("#list").hidden = true; $("#members").hidden = true; $("#tabs").hidden = true; $("#logout").hidden = true; $("#login-msg").textContent = "키를 지웠습니다."; });
+  $("#csv").addEventListener("click", function () { csv("socialfactory-inquiries.csv", ["receipt", "created_at", "status", "purpose", "space", "name", "phone", "email", "company", "when_text", "people", "schedule", "message", "consent", "notice_version", "notify_status"], rows); });
+
+  /* ---------- 주문 · 결제 ---------- */
+  var orders = [];
+  var orender = function () {
+    var tb = $("#orows");
+    var list = orders.filter(function (o) { return $("#otest").checked || !o.test_mode; });
+    tb.innerHTML = list.length ? "" : '<tr><td colspan="8" class="empty">주문이 없습니다.</td></tr>';
+    list.forEach(function (o) {
+      var tr = document.createElement("tr");
+      var opts = ["paid", "used", "refund_requested", "refunded", "cancelled"];
+      var sel = (o.status === "pending" || o.status === "failed")
+        ? tag(OST[o.status]) + (o.fail_msg ? '<br><small>' + esc(o.fail_msg) + '</small>' : '')
+        : '<select data-oid="' + o.id + '">' + opts.map(function (k) { return '<option value="' + k + '"' + (o.status === k ? " selected" : "") + '>' + OST[k][0] + '</option>'; }).join("") + '</select>';
+      tr.innerHTML = '<td><span class="mono"><b>' + esc(o.oid) + '</b></span><br><small>' + esc(o.created_at) + '</small>' + (o.test_mode ? '<br><span class="tag test">테스트</span>' : '') + (o.member_id ? '<br><span class="tag blue">회원 #' + esc(o.member_id) + '</span>' : '') + '</td>' +
+        '<td>' + sel + '</td>' +
+        '<td class="prod">' + esc(o.product_name) + '<br><small>' + esc(o.product_id) + ' · ' + esc(o.qty) + '개</small></td>' +
+        '<td class="nw"><b>' + won(o.amount) + '원</b></td>' +
+        '<td class="buyer">' + esc(o.buyer_name) + '<br><a href="tel:' + esc(String(o.buyer_phone).replace(/[^0-9+]/g, "")) + '">' + esc(o.buyer_phone) + '</a>' + (o.buyer_email ? '<br><a href="mailto:' + esc(o.buyer_email) + '">' + esc(o.buyer_email) + '</a>' : '') + '</td>' +
+        '<td class="pay">' + esc(PM[o.pg_method] || (o.pay_method === "bank" ? "계좌이체" : "카드")) + (o.card_name ? ' · ' + esc(o.card_name) : '') + (o.card_num ? '<br><small>' + esc(o.card_num) + '</small>' : '') + (o.paid_at ? '<br><small>' + esc(o.paid_at) + '</small>' : '') + (o.tid ? '<br><small class="mono">TID ' + esc(o.tid) + '</small>' : '') + '<br><small>' + (o.device === "mobile" ? "모바일" : "PC") + '</small></td>' +
+        '<td>' + (o.start_date ? '<b>' + esc(o.start_date) + '</b>' : '-') + (o.memo ? '<br><small>' + esc(o.memo) + '</small>' : '') + '</td>' +
+        '<td><textarea class="memo" data-memo="' + o.id + '" placeholder="메모 (예: 11/8 입실, 환불 4,000원 취소 완료)">' + esc(o.admin_memo || "") + '</textarea></td>';
+      tb.appendChild(tr);
+    });
+    $$("#orows select[data-oid]").forEach(function (sel) {
+      sel.addEventListener("change", function () {
+        var id = parseInt(sel.getAttribute("data-oid"), 10);
+        if (sel.value === "refunded" && !confirm("KG이니시스 가맹점관리자에서 결제 취소를 마쳤나요? 여기서는 상태만 기록됩니다.")) { oload(); return; }
+        call("/api/admin/orders", "PATCH", { id: id, status: sel.value }).then(function (res) { if (!(res.j && res.j.ok)) alert("상태를 바꾸지 못했습니다."); else dashReload(); });
+      });
+    });
+    var shown = $("#ocount").textContent.replace(/^표시 \d+건/, "표시 " + list.length + "건"); if (/^표시/.test($("#ocount").textContent)) $("#ocount").textContent = shown;
+    $$("#orows textarea[data-memo]").forEach(function (ta) {
+      ta.addEventListener("change", function () {
+        call("/api/admin/orders", "PATCH", { id: parseInt(ta.getAttribute("data-memo"), 10), memo: ta.value }).then(function (res) { if (!(res.j && res.j.ok)) alert("메모를 저장하지 못했습니다."); else { ta.style.borderColor = "#1D8A4E"; setTimeout(function () { ta.style.borderColor = ""; }, 1200); } });
+      });
+    });
+  };
+  var oload = function () {
+    $("#ocount").textContent = "불러오는 중…";
+    var f = $("#ofilter").value, q = $("#oq").value.trim();
+    call("/api/admin/orders?status=" + encodeURIComponent(f) + "&q=" + encodeURIComponent(q)).then(function (res) {
+      if (res.status === 503) { $("#ocount").textContent = "D1 데이터베이스가 연결되지 않았습니다."; return; }
+      if (!(res.j && res.j.ok)) { $("#ocount").textContent = res.j && res.j.error === "no-table" ? "주문 표(orders)가 아직 없습니다. schema-upgrade-orders.sql 을 실행해 주세요 (README 4-1)." : "불러오지 못했습니다."; return; }
+      orders = res.j.results || []; loaded.ord = true; orender();
+      $("#ocount").textContent = "표시 " + orders.filter(function (o) { return $("#otest").checked || !o.test_mode; }).length + "건 · 전체 주문 " + won(res.j.total) + "건 · 누적 매출 " + won(res.j.sales) + "원";
+    });
+  };
+  $("#oreload").addEventListener("click", oload);
+  $("#ofilter").addEventListener("change", oload);
+  $("#otest").addEventListener("change", orender);
+  $("#oq").addEventListener("keydown", function (e) { if (e.key === "Enter") oload(); });
+  $("#ocsv").addEventListener("click", function () { csv("socialfactory-orders.csv", ["oid", "created_at", "status", "product_id", "product_name", "qty", "amount", "buyer_name", "buyer_phone", "buyer_email", "start_date", "memo", "admin_memo", "pay_method", "pg_method", "card_name", "card_num", "tid", "paid_at", "device", "member_id", "test_mode"], orders); });
 
   /* ---------- 회원 ---------- */
-  var current = "list", members = [];
-  var mapi = function (method, body, q) {
-    return fetch("/api/admin/members" + (q || ""), { method: method, headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined })
-      .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }, function () { return { status: r.status, j: {} }; }); });
-  };
-  var showTab = function (t) {
-    current = t;
-    Array.prototype.forEach.call(document.querySelectorAll("[data-tab]"), function (b) { b.setAttribute("aria-selected", b.getAttribute("data-tab") === t ? "true" : "false"); });
-    $("#list").hidden = t !== "list"; $("#members").hidden = t !== "members";
-    if (t === "members" && !members.length) mload();
-  };
-  Array.prototype.forEach.call(document.querySelectorAll("[data-tab]"), function (b) { b.addEventListener("click", function () { showTab(b.getAttribute("data-tab")); }); });
+  var members = [];
   var mrender = function () {
-    var tb = $("#mrows"); tb.innerHTML = "";
+    var tb = $("#mrows");
+    tb.innerHTML = members.length ? "" : '<tr><td colspan="8" class="empty">회원이 없습니다.</td></tr>';
     members.forEach(function (m) {
       var tr = document.createElement("tr");
       tr.innerHTML = '<td>' + esc(m.id) + '</td><td>' + esc(m.created_at) + '</td>' +
-        '<td><b>' + esc(m.name) + '</b><br>' + esc(m.phone) + (m.email ? '<br>' + esc(m.email) : '') + '</td>' +
-        '<td>' + (m.provider === "kakao" ? '<span class="tag kakao">카카오</span>' : '<span class="tag">이메일</span>') + (m.must_change_pw ? '<br><span class="tag">임시 비밀번호</span>' : '') + '</td>' +
-        '<td>' + (m.marketing ? '<span class="tag done">동의</span><br><small>' + esc(m.marketing_at || "") + '</small>' : '<span class="tag">-</span>') + '</td>' +
-        '<td>' + (m.status === "active" ? '<span class="tag done">정상</span>' : '<span class="tag block">정지</span>') + '</td>' +
+        '<td><b>' + esc(m.name) + '</b><br>' + esc(m.phone) + (m.email ? '<br>' + esc(m.email) : '') + (m.must_change_pw ? '<br><span class="tag warn">임시 비밀번호</span>' : '') + '</td>' +
+        '<td>' + (m.marketing ? '<span class="tag ok">동의</span><br><small>' + esc(m.marketing_at || "") + '</small>' : '<span class="tag">-</span>') + '</td>' +
+        '<td>' + (m.status === "active" ? '<span class="tag ok">정상</span>' : '<span class="tag bad">정지</span>') + '</td>' +
         '<td>' + esc(m.inquiries == null ? "-" : m.inquiries) + '</td><td>' + esc(m.last_login_at || "-") + '</td>' +
-        '<td><div class="row-actions">' + (m.provider === "email" ? '<button class="ghost" data-act="reset" data-id="' + m.id + '">임시 비밀번호</button>' : '') +
-        '<button class="ghost" data-act="' + (m.status === "active" ? "block" : "unblock") + '" data-id="' + m.id + '">' + (m.status === "active" ? "이용 정지" : "정지 해제") + '</button>' +
-        '<button class="ghost" data-act="delete" data-id="' + m.id + '">삭제</button></div></td>';
+        '<td><div class="row-actions"><button class="btn ghost sm" data-act="reset" data-id="' + m.id + '">임시 비밀번호</button>' +
+        '<button class="btn ghost sm" data-act="' + (m.status === "active" ? "block" : "unblock") + '" data-id="' + m.id + '">' + (m.status === "active" ? "이용 정지" : "정지 해제") + '</button>' +
+        '<button class="btn ghost sm danger" data-act="delete" data-id="' + m.id + '">삭제</button></div></td>';
       tb.appendChild(tr);
     });
-    Array.prototype.forEach.call(tb.querySelectorAll("button[data-act]"), function (b) {
+    $$("#mrows button[data-act]").forEach(function (b) {
       b.addEventListener("click", function () {
         var id = parseInt(b.getAttribute("data-id"), 10), act = b.getAttribute("data-act");
         var m = members.filter(function (x) { return x.id === id; })[0] || {};
         var ask = { reset: m.name + "님에게 임시 비밀번호를 새로 발급할까요? 지금 로그인된 기기는 모두 로그아웃됩니다.", block: m.name + "님의 이용을 정지할까요?", unblock: m.name + "님의 이용 정지를 풀까요?", "delete": m.name + "님의 회원 정보를 삭제할까요? 되돌릴 수 없습니다." }[act];
         if (!confirm(ask)) return;
-        mapi(act === "delete" ? "DELETE" : "PATCH", act === "delete" ? { id: id } : { id: id, action: act }).then(function (res) {
+        call("/api/admin/members", act === "delete" ? "DELETE" : "PATCH", act === "delete" ? { id: id } : { id: id, action: act }).then(function (res) {
           if (!(res.j && res.j.ok)) { alert("처리하지 못했습니다."); return; }
           if (act === "reset") { var t = $("#temp"); t.hidden = false; t.innerHTML = esc(m.name) + "님 임시 비밀번호: <b>" + esc(res.j.tempPassword) + "</b> — 이 화면을 닫으면 다시 볼 수 없으니 회원에게 바로 전달해 주세요."; }
           mload();
@@ -202,29 +524,19 @@
   var mload = function () {
     var q = $("#mq").value.trim();
     $("#mcount").textContent = "불러오는 중…";
-    mapi("GET", null, "?q=" + encodeURIComponent(q) + ($("#mk").checked ? "&marketing=1" : "")).then(function (res) {
-      if (res.status === 503) { $("#mcount").textContent = "D1 데이터베이스(DB)가 연결되지 않았습니다."; return; }
+    call("/api/admin/members?q=" + encodeURIComponent(q) + ($("#mk").checked ? "&marketing=1" : "")).then(function (res) {
+      if (res.status === 503) { $("#mcount").textContent = "D1 데이터베이스가 연결되지 않았습니다."; return; }
       if (!(res.j && res.j.ok)) { $("#mcount").textContent = "회원 표가 아직 없거나 불러오지 못했습니다. README 3번의 SQL 실행을 확인해 주세요."; return; }
-      members = res.j.results || []; mrender();
+      members = res.j.results || []; loaded.mem = true; mrender();
       $("#mcount").textContent = "전체 " + res.j.total + "명 · 소식 수신 동의 " + res.j.marketing + "명 · 표시 " + members.length + "명";
     });
   };
   $("#mreload").addEventListener("click", mload);
   $("#mq").addEventListener("keydown", function (e) { if (e.key === "Enter") mload(); });
   $("#mk").addEventListener("change", mload);
-  $("#mcsv").addEventListener("click", function () {
-    var head = ["id", "created_at", "provider", "name", "phone", "email", "marketing", "marketing_at", "status", "last_login_at"];
-    var lines = [head.join(",")].concat(members.map(function (r) { return head.map(function (k) { return '"' + String(r[k] == null ? "" : r[k]).replace(/"/g, '""') + '"'; }).join(","); }));
-    var blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "socialfactory-members.csv"; a.click();
-  });
-  $("#csv").addEventListener("click", function () {
-    var head = ["receipt", "created_at", "status", "purpose", "space", "name", "phone", "email", "company", "when_text", "people", "schedule", "message", "consent", "notice_version", "notify_status"];
-    var lines = [head.join(",")].concat(rows.map(function (r) { return head.map(function (k) { return '"' + String(r[k] == null ? "" : r[k]).replace(/"/g, '""') + '"'; }).join(","); }));
-    var blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "socialfactory-inquiries.csv"; a.click();
-  });
-  if (key) { $("#key").value = key; load(); }
+  $("#mcsv").addEventListener("click", function () { csv("socialfactory-members.csv", ["id", "created_at", "name", "phone", "email", "marketing", "marketing_at", "status", "last_login_at"], members); });
+
+  if (key) { $("#key").value = key; enter(); }
 })();
 </script>
 </body>

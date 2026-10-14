@@ -107,6 +107,11 @@
     var d = (get("pricing.officeDiscounts") || []).filter(function (x) { return x.months === +a[1]; })[0];
     if (o && d) el.textContent = Math.round(o.monthly * (100 - d.rate) / 100).toLocaleString("ko-KR");
   });
+  // 사업자 연락처 전화 링크: <a data-tel-link><span data-sf="company.phone"> — 번호가 없으면 링크를 뗀다
+  $$("[data-tel-link]").forEach(function (a) {
+    var v = text(get("company.phone"));
+    if (v) a.href = "tel:" + v.replace(/[^0-9+]/g, ""); else a.removeAttribute("href");
+  });
   // 값이 하나도 없으면 감추는 상자: <div data-hide-if-empty> ... <span data-sf> ... </div>
   $$("[data-hide-if-empty]").forEach(function (box) {
     var any = $$("[data-sf]", box).some(function (el) { return text(get(el.getAttribute("data-sf"))); });

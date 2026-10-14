@@ -15,12 +15,13 @@ about.html        소셜팩토리 소개 — 운영 기준, 로고, 이력, 창�
 program.html      프로그램·호스트 모집 — 함께하는 방법, 제휴·협업, 현재 모집, 소셜아카데미, 소셜패밀리, 기업·단체, 활용 예시, 홍대 시절 기록
 history.html      지난 기록 2015–2021
 tour.html         3D 공간 안내 (three.js 포함, 약 0.8MB · 참고 이미지는 images/tour/ 에서 필요할 때 불러옴)
-admin.html        문의 · 회원 관리 화면 (관리자 키 입력 · 검색엔진 제외)
+admin.html        관리자 화면 — 대시보드 · 문의 · 주문 · 결제 · 회원 · 상품 · 설정 상태 (관리자 키 입력 · 검색엔진 제외)
 404.html          없는 주소 안내
 css/style.css     디자인
 js/site-config.js ★ 운영 상태 · 연락처 · 예약 채널 · 요금 · 장비 · 정책 설정 파일 (여기만 고치면 전 페이지에 반영)
 js/main.js        메뉴 · 설정값 반영 · 룸 고르기 · 문의 폼 동작
 js/estimate.js    예상 금액 계산기 (이용 요금 페이지 전용)
+js/shop.js        이용권 구매 화면 동작 (상품 · 주문서 · 결제창 열기 · 주문 완료)
 images/           로고(svg) · 브랜드 이미지 · OG 이미지
 images/space/     룸 · 코워킹 · 사무실 공간 이미지 28장 (큰 파일 + -sm 작은 파일)
 images/aerial/    4층 조감도 5장 (큰 파일 + -sm 작은 파일)
@@ -29,18 +30,25 @@ video/            메인 소개 영상 (PC용 720p · 모바일용 480p, mp4 · 
 images/scenes/    활용 예시 이미지 38장
 images/tour/      3D 안내의 참고 이미지 32장과 원본 도면 1장
 fonts/            영문 서체 Montserrat (한글 Pretendard는 CDN)
-login.html · signup.html · mypage.html   로그인 · 회원가입(이메일 · 카카오) · 마이페이지(내 정보 · 문의 처리 상태 · 비밀번호 · 탈퇴)
+login.html · signup.html · mypage.html   로그인 · 회원가입(이메일) · 마이페이지(내 정보 · 문의 처리 상태 · 주문 내역 · 비밀번호 · 탈퇴)
+shop.html · product/*.html · order.html · order-complete.html   이용권 구매 — 상품 목록 · 상품 상세(5종) · 주문서 · 주문 완료 (4번)
 terms.html · privacy.html                이용약관 · 개인정보 처리방침
 js/member.js      회원 화면 동작
 functions/api/inquiry.js  문의 접수 API (Cloudflare Pages Functions)
-functions/api/auth/*      회원가입 · 로그인 · 로그아웃 · 내 정보 · 비밀번호 · 카카오 로그인 API
-functions/api/member/inquiries.js  마이페이지 문의 목록 API
-functions/api/admin/members.js     관리 화면 회원 API
+functions/api/auth/*      회원가입 · 로그인 · 로그아웃 · 내 정보 · 비밀번호 API
+functions/api/member/*    마이페이지 문의 목록 · 주문 내역 API
+functions/api/admin/*     관리자 화면 API (회원 · 주문 · 대시보드 숫자)
+functions/api/shop/products.js     상품 목록 · 결제 준비 상태 API
+functions/api/orders/*    주문 만들기 · 주문 결과 조회 API
+functions/api/pay/inicis/*  KG이니시스 결제 결과 받기(PC · 모바일) · 승인 요청
+functions/_lib/products.js ★ 판매 상품(이름 · 가격 · 설명 · 유효기간) 과 발급 · 교환 · 환불 안내 — 상품을 바꿀 때 이 파일만 고칩니다
+functions/_lib/shop.js    결제 공통 코드 (서명 · 주문번호 · 금액 검증)
 functions/_lib/auth.js    회원 기능 공통 코드 (주소로 열리지 않음)
-schema.sql        문의 · 회원 저장용 D1 테이블 (처음 설정할 때)
+schema.sql        문의 · 회원 · 주문 저장용 D1 테이블 (처음 설정할 때)
 schema-upgrade-members.sql  문의 표를 이미 쓰고 있을 때 회원 표만 추가
+schema-upgrade-orders.sql   문의 · 회원 표를 이미 쓰고 있을 때 주문 표만 추가
 _headers          보안 · 캐시 헤더
-robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 6번 참고)
+robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 7번 참고)
 ```
 
 ## 0. 공개 전에 꼭 정할 것
@@ -49,7 +57,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 6번 참고)
 
 | 항목 | 설정 위치 | 비어 있을 때 화면 |
 | --- | --- | --- |
-| 정식 주소(도메인) | `siteUrl` + 각 html의 canonical/OG, robots.txt, sitemap.xml (아래 5번) | 기본값 `https://socialfactory.co.kr` |
+| 정식 주소(도메인) | `siteUrl` + 각 html의 canonical/OG, robots.txt, sitemap.xml (아래 6번) | 기본값 `https://socialfactory.co.kr` |
 | 운영 상태 | `status.mode` (`preparing`/`open`) | 화면 맨 위 운영 안내 띠는 2026-10-11에 없앴습니다 (값은 남겨 둠) |
 | 예약 채널 · 상담 채널 (카카오톡 문의채널 · 이메일은 입력 완료) | `contact.*`, `booking.primary` | 채널 버튼 숨김, 예약 버튼은 '대관 문의하기'로 대체 |
 | 요금 (2026년 10월 최종 가격구조도 반영 완료) | `pricing.*` | — |
@@ -59,6 +67,8 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 6번 참고)
 | 개인정보 보유 기간 | `inquiry.retention` (실제 삭제 기준과 같게) | 기본 "문의 처리 완료 후 6개월" |
 | 문의 폼 공개 여부 | `inquiry.enabled` — D1(3번)도 메일(`contact.email`)도 없으면 `false` 권장 | 폼 대신 준비 중 안내 |
 | 회원 기능 | `members.enabled` — D1 연결(3번)을 마친 뒤 `true` | 메뉴의 '로그인'이 숨겨짐 |
+| 사업자 정보 (사업자등록증 기준 입력 완료) | `company.*` — 통신판매업 신고번호(`mailOrderNo`)는 신고 후 추가 | 신고번호 줄만 숨겨짐 |
+| 온라인 결제 | `INICIS_MID` · `INICIS_SIGN_KEY` (Cloudflare 비밀 값, 4번) | 상품은 보이고 결제 버튼 대신 '결제 준비 중' |
 
 ## 1. 배포하기 (브라우저만으로 가능)
 
@@ -73,6 +83,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 6번 참고)
 5. **Commit changes** 클릭
 
 이미 저장소가 있다면 바뀐 파일만 같은 자리에 다시 올리면 됩니다.
+- 2026-10-14 이용권 온라인 결제(KG이니시스) · 관리자 화면 개편 · 카카오 로그인 제거: html 전부, `shop.html` · `order.html` · `order-complete.html` · `product/` 폴더(새 파일), `admin.html`, `css/style.css`, `js/main.js` · `js/member.js` · `js/site-config.js`, `js/shop.js`(새 파일), `functions/` 폴더 전체(`functions/api/auth/kakao/` 는 삭제), `schema.sql`, `schema-upgrade-orders.sql`(새 파일), `schema-upgrade-members.sql`, `images/scenes/10-ai-class-sm.webp`(새 파일), `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-11 회원 기능 추가: html 전부, `admin.html`, `css/style.css`, `js/main.js`, `js/site-config.js`, `js/member.js`(새 파일), `functions/` 폴더 전체, `schema.sql`, `schema-upgrade-members.sql`(새 파일), `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-11 메인 첫 화면 정리 · 맨 위 운영 안내 띠 삭제: html 9개(tour·admin 제외), `css/style.css`, `js/site-config.js`, `README.md`, `rss.xml`
 - 2026-10-11 최종 가격구조 · 계산기 반영: html 전부, `tour.html`, `css/style.css`, `js/site-config.js`, `js/main.js`, `js/estimate.js`(새 파일), `functions/api/inquiry.js`, `README.md`, `sitemap.xml`, `rss.xml`
@@ -93,7 +104,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 6번 참고)
    - Project name: **`socialfactory-kondae`** 처럼 비어 있는 이름 (`socialfactory.pages.dev` 는 다른 서비스가 이미 쓰고 있어 소셜팩토리 주소로 쓸 수 없습니다)
    - Framework preset: **None** / Build command: 비워 둠 / Build output directory: `/`
 4. **Save and Deploy** → 1~2분 뒤 `https://socialfactory-kondae.pages.dev` 같은 주소가 열립니다
-5. 바로 **Custom domains** 에서 `socialfactory.co.kr` 를 연결합니다 (아래 5번). 도메인을 연결하기 전까지는 Pages 주소를 `siteUrl` 등에 임시로 넣어 둡니다.
+5. 바로 **Custom domains** 에서 `socialfactory.co.kr` 를 연결합니다 (아래 6번). 도메인을 연결하기 전까지는 Pages 주소를 `siteUrl` 등에 임시로 넣어 둡니다.
 
 이후에는 GitHub에서 파일을 고치고 Commit 할 때마다 자동으로 다시 배포됩니다.
 
@@ -152,12 +163,12 @@ GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값
 
 ## 3. 문의 접수 · 회원 기능 켜기
 
-문의 폼과 회원 기능(이메일 가입 · 카카오 로그인 · 마이페이지)은 Cloudflare의 무료 데이터베이스 **D1** 에 저장됩니다. 모든 설정은 브라우저(Cloudflare 대시보드)에서 할 수 있습니다.
+문의 폼과 회원 기능(이메일 가입 · 마이페이지)은 Cloudflare의 무료 데이터베이스 **D1** 에 저장됩니다. 카카오 로그인은 나중에 붙이기로 하고 지금은 넣지 않았습니다. 모든 설정은 브라우저(Cloudflare 대시보드)에서 할 수 있습니다.
 
 ### 3-1. 데이터베이스 만들기 (처음 한 번)
 1. dash.cloudflare.com → 왼쪽 메뉴 **Storage & databases** → **D1 SQL database** → **Create Database** → 이름 `socialfactory-db` → **Create**
 2. 만든 데이터베이스 → **Console** 탭 → 저장소의 `schema.sql` 파일 내용 전체를 복사해 붙여 넣고 **Execute**
-   - 예전에 문의 표(inquiries)를 이미 만들어 쓰고 있었다면 `schema.sql` 대신 `schema-upgrade-members.sql` 을 실행합니다 (기존 문의는 그대로 남습니다).
+   - 예전에 문의 표(inquiries)를 이미 만들어 쓰고 있었다면 `schema.sql` 대신 `schema-upgrade-members.sql` 을 실행합니다 (기존 문의는 그대로 남습니다). 회원 표까지 이미 있다면 `schema-upgrade-orders.sql` 만 실행합니다 (4-1).
 3. **Workers & Pages** → 소셜팩토리 Pages 프로젝트 → **Settings** → **Bindings** → **Add** → **D1 database** → Variable name `DB`, D1 database 는 위에서 만든 `socialfactory-db` → **Save**
 
 ### 3-2. 비밀 값 넣기
@@ -166,41 +177,32 @@ GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값
 | 이름 | 값 | 용도 |
 | --- | --- | --- |
 | `ADMIN_KEY` | 영문 · 숫자를 섞은 30자 이상 아무 문자열 | 관리 화면(`/admin`) 열쇠. 남에게 알려 주지 않습니다 |
-| `SESSION_SECRET` | 영문 · 숫자를 섞은 40자 이상 아무 문자열 (ADMIN_KEY 와 다르게) | 카카오 로그인 가입 확인용 서명 |
+| `SESSION_SECRET` | 영문 · 숫자를 섞은 40자 이상 아무 문자열 (ADMIN_KEY 와 다르게) | 로그인 쿠키 · 주문 조회 링크 서명 |
 | `IP_SALT` | 아무 문자열 | 스팸 방지용 IP 변환에 섞는 값 |
-| `KAKAO_REST_KEY` | 카카오 앱의 REST API 키 (3-5) | 카카오 로그인 |
-| `KAKAO_CLIENT_SECRET` | 카카오 앱의 클라이언트 시크릿 코드 (3-5) | 카카오 로그인 |
-| `NOTIFY_WEBHOOK` | (선택) Discord · Slack 웹후크 주소 (3-4) | 새 문의 알림 |
+| `NOTIFY_WEBHOOK` | (선택) Discord · Slack 웹후크 주소 (3-4) | 새 문의 · 결제 완료 알림 |
+
+결제(KG이니시스) 관련 값은 4-2 에 따로 있습니다.
 
 ### 3-3. 다시 배포하고 확인
 1. **Deployments** → 가장 위 배포 오른쪽 **⋯** → **Retry deployment** (바인딩과 비밀 값은 새 배포부터 적용됩니다)
 2. 홈페이지 문의 폼으로 시험 문의를 1건 보내 접수번호(SF-…)가 나오는지 확인합니다.
-3. `https://socialfactory.co.kr/admin` 에서 ADMIN_KEY 를 넣고 **불러오기** → 문의 탭에 방금 문의가 보이면 끝입니다. 상태(새 문의 · 진행 중 · 처리 완료)를 바꾸면 회원의 마이페이지에도 '접수 · 상담 중 · 완료'로 바로 보입니다.
+3. `https://socialfactory.co.kr/admin` 에서 ADMIN_KEY 를 넣고 **들어가기** → 왼쪽 **문의** 메뉴에 방금 문의가 보이면 끝입니다. **설정 상태** 메뉴에서 빠진 설정이 있는지도 한눈에 볼 수 있습니다. 상태(새 문의 · 진행 중 · 처리 완료)를 바꾸면 회원의 마이페이지에도 '접수 · 상담 중 · 완료'로 바로 보입니다.
 
 ### 3-4. (선택) 새 문의를 휴대폰으로 알림 받기 — Discord 예시
 1. Discord 앱에서 내 서버를 하나 만들고, 알림 받을 채널 옆 톱니바퀴(채널 편집) → **연동** → **웹후크** → **새 웹후크** → **웹후크 URL 복사**
 2. 3-2 의 `NOTIFY_WEBHOOK` 에 붙여 넣고 다시 배포합니다. Slack 의 Incoming Webhook 주소도 그대로 쓸 수 있습니다.
-3. 알림 전송 결과는 관리 화면 문의 탭의 '알림' 칸에 sent / failed 로 남습니다.
+3. 알림 전송 결과는 관리 화면 문의 메뉴의 '알림' 칸에 sent / failed 로 남습니다. 결제가 완료될 때도 같은 주소로 알림이 갑니다.
 
-### 3-5. 카카오 로그인 연결
-1. developers.kakao.com 로그인 → **내 애플리케이션** → **애플리케이션 추가하기** → 앱 이름 `소셜팩토리`, 회사명, 카테고리 입력 → 저장
-2. **앱** → **플랫폼 키** → **REST API 키** 를 복사해 `KAKAO_REST_KEY` 로 넣습니다.
-3. 같은 화면의 **클라이언트 시크릿** 코드를 복사해 `KAKAO_CLIENT_SECRET` 로 넣습니다 (새 앱은 기본으로 켜져 있습니다).
-4. 같은 화면의 **리다이렉트 URI** 에 `https://socialfactory.co.kr/api/auth/kakao/callback` 을 등록합니다. (Pages 기본 주소로도 시험하려면 `https://프로젝트이름.pages.dev/api/auth/kakao/callback` 도 함께)
-5. **카카오 로그인** → **사용 설정** → 상태 **ON**
-6. **카카오 로그인** → **동의항목** → '닉네임'을 **필수 동의**로 설정합니다. '카카오계정(이메일)'은 선택 동의로 켤 수 있으면 켭니다 (비즈 앱 전환이 필요하다고 나오면 건너뛰어도 됩니다. 가입 화면에서 이메일을 직접 받습니다).
-7. Cloudflare 에서 다시 배포하면 로그인 · 회원가입 화면에 '카카오 로그인' 버튼이 자동으로 나타납니다. 키가 비어 있으면 버튼은 숨겨집니다.
+### 3-5. 메뉴에 '로그인' 보이게 하기
+`js/site-config.js` 의 `members: { enabled: false }` 를 `true` 로 바꾸고 Commit 합니다. 데이터베이스 연결(3-1~3-3)을 마친 뒤에 켜 주세요. 켜면 메뉴 · 푸터 · 주문서 · 주문 완료 화면에 로그인 · 마이페이지 링크가 보입니다. 켜기 전에도 `/login`, `/signup` 주소는 열리지만 "회원 기능을 준비하고 있습니다"라고 안내합니다.
 
-### 3-6. 메뉴에 '로그인' 보이게 하기
-`js/site-config.js` 의 `members: { enabled: false }` 를 `true` 로 바꾸고 Commit 합니다. 데이터베이스 연결(3-1~3-3)을 마친 뒤에 켜 주세요. 켜기 전에도 `/login`, `/signup` 주소는 열리지만 "회원 기능을 준비하고 있습니다"라고 안내합니다.
-
-### 3-7. 운영할 때
-- **비밀번호를 잊은 회원**: 카카오톡 문의채널로 가입 이메일과 이름을 받아 확인한 뒤, 관리 화면 **회원** 탭 → **임시 비밀번호** → 나온 값을 회원에게 알려 줍니다. 회원은 로그인하면 새 비밀번호로 바꾸라는 안내를 받습니다.
-- **소식 · 혜택 수신 명단**: 회원 탭 → '소식 수신 동의만' 체크 → **CSV 내려받기**. 광고성 정보는 동의한 회원에게만 보내고, 「정보통신망법」에 따라 동의한 날부터 2년마다 수신 동의 여부를 다시 알려야 합니다.
-- **이용 정지 · 삭제**: 회원 탭의 버튼으로 처리합니다. 회원이 직접 탈퇴하면 회원 정보는 바로 지워지고, 남긴 문의는 보관 기간까지 회원과 분리해 남습니다.
+### 3-6. 운영할 때
+- **비밀번호를 잊은 회원**: 카카오톡 문의채널로 가입 이메일과 이름을 받아 확인한 뒤, 관리 화면 **회원** 메뉴 → **임시 비밀번호** → 나온 값을 회원에게 알려 줍니다. 회원은 로그인하면 새 비밀번호로 바꾸라는 안내를 받습니다.
+- **소식 · 혜택 수신 명단**: 회원 메뉴 → '소식 수신 동의만' 체크 → **CSV 내려받기**. 광고성 정보는 동의한 회원에게만 보내고, 「정보통신망법」에 따라 동의한 날부터 2년마다 수신 동의 여부를 다시 알려야 합니다.
+- **이용 정지 · 삭제**: 회원 메뉴의 버튼으로 처리합니다. 회원이 직접 탈퇴하면 회원 정보는 바로 지워지고, 남긴 문의는 보관 기간까지 회원과 분리해 남습니다.
 - **보관 기간이 지난 문의 정리**: 관리 화면에서 CSV 로 내려받아 둘 것을 정리한 뒤 D1 Console 에서 `DELETE FROM inquiries WHERE created_at < '2026-04-01';` 처럼 삭제합니다.
 
-### 3-8. 개인정보 처리방침 · 이용약관
+### 3-7. 개인정보 처리방침 · 이용약관
 - `privacy.html`(개인정보 처리방침), `terms.html`(이용약관)이 푸터에 연결되어 있습니다. 운영 법인명은 `site-config.js` 의 `company.name` 을 채우면 두 문서에 자동으로 들어갑니다(비어 있으면 '소셜팩토리').
 - 개인정보 보호책임자는 '최시준 (대표)', 연락처는 `contact.email` · 카카오톡 문의채널로 적혀 있습니다. 담당자가 바뀌면 `privacy.html` 7번을 고쳐 주세요.
 - 새 문의 알림(Discord · Slack 등)을 쓰면 처리방침 3번 '운영자 알림 메신저' 칸에 실제 서비스 이름을 적어 두는 것이 좋습니다.
@@ -209,11 +211,53 @@ D1 을 연결하지 않으면 문의 폼은 "접수되지 않았습니다"를 �
 
 저장 방식: 비밀번호는 PBKDF2 로 되돌릴 수 없게 바꿔 저장하고, 로그인 유지 토큰도 해시만 저장합니다. 원본 IP와 브라우저 정보(User-Agent)는 저장하지 않습니다. 다른 사이트에서 대신 보내는 요청은 서버에서 거부하고, 로그인 실패가 반복되면 15분 동안 막습니다.
 
-## 4. 운영 상태 바꾸기
+## 4. 이용권 온라인 결제 (KG이니시스)
+
+코워킹 이용권 · 사물함 · 노트북 대여를 홈페이지에서 바로 결제하는 기능입니다. 결제는 KG이니시스 표준결제(PC 결제창 · 모바일 결제)로 처리하고, 주문은 D1 의 `orders` 표에 저장됩니다. 카드 번호는 저희 서버를 거치지 않습니다.
+
+### 4-0. KG이니시스가 요구한 5가지 — 홈페이지에 들어 있는 위치
+| 요구 항목 | 홈페이지 반영 |
+| --- | --- |
+| ① 실제 판매 가능 상품 3~5개 | `/shop` 에 5개: 코워킹 2시간권 · 데이패스 · 월간 정기권 · 개인 사물함(1개월) · 노트북 대여(1일). 상품 내용은 `functions/_lib/products.js` |
+| ② 상품 가격 등록 (품절 · 0원 · 임의 가격 불가) | 4,000 / 6,000 / 99,000 / 10,000 / 10,000원 — 이용 요금 페이지의 코워킹 요금과 같은 값 |
+| ③ 상세페이지에 배송 기간 · 교환 · 환불 정책 | 상품 상세(`/product/상품id`) 아래 '발급 · 교환 · 환불 안내', `/shop#policy`, 주문서 동의 항목, 이용약관 7조 |
+| ④ 메인 하단에 사업자등록증과 같은 정보 | 모든 페이지 푸터 '사업자 정보' — 상호 · 대표자 · 사업자등록번호 · 주소 · 연락처 (`js/site-config.js` 의 `company`) |
+| ⑤ 회원만 구매 가능하면 테스트 ID/PW 제공 | 비회원도 구매할 수 있게 만들어 테스트 계정이 필수는 아닙니다. 심사 담당자가 원하면 `/signup` 에서 계정을 하나 만들어 알려 주면 됩니다 |
+
+심사 신청서에는 상품 페이지 주소 `https://socialfactory.co.kr/shop`, 상품 상세 예시 `https://socialfactory.co.kr/product/cowork-day` 를 적으면 됩니다.
+
+### 4-1. 주문 표 만들기 (처음 한 번)
+D1 → `socialfactory-db` → **Console** 에서 `schema-upgrade-orders.sql` 내용을 실행합니다. (3-1 에서 `schema.sql` 전체를 새로 실행했다면 이미 들어 있습니다.) 관리자 화면 **설정 상태** 메뉴에서 '주문 표 (orders)' 가 ✓ 로 바뀌면 됩니다.
+
+### 4-2. 결제 키 넣기
+KG이니시스 가입이 끝나면 **가맹점관리자(iniweb.inicis.com)** → 상점정보 → 결제수단 관리 · 웹결제 Sign Key 에서 값을 확인할 수 있습니다. 심사 기간에는 KG이니시스 담당자가 준 **테스트 상점 아이디** 를 넣어 두고, 심사가 끝나면 실제 값으로 바꿉니다.
+
+| 이름 | 값 | 비고 |
+| --- | --- | --- |
+| `INICIS_MID` | 상점 아이디 (예: `INIpayTest` — 공개 테스트 MID) | 없으면 상품은 보이고 결제 버튼 대신 '결제 준비 중' 안내 |
+| `INICIS_SIGN_KEY` | 웹결제 Sign Key (테스트 MID 는 `SU5JTElURV9UUklQTEVERVNfS0VZU1RS`) | PC 결제창 서명 |
+| `INICIS_MOBILE_HASH_KEY` | 모바일 결제 Hash Key (테스트 MID 는 `3CB8183A4BE283555ACC8363C0360223`) | 없으면 휴대폰에서도 PC 결제창을 씁니다 (동작에는 문제 없음) |
+| `INICIS_TEST` | `1` | 화면에 '테스트 결제' 표시. 실제 MID 로 바꿀 때 이 값을 **삭제** |
+
+테스트 값은 KG이니시스가 공개한 샘플 값이라 담당자에게 한 번 확인해 주세요. 값을 넣거나 바꾼 뒤에는 **Deployments → Retry deployment** 로 다시 배포해야 적용됩니다.
+
+### 4-3. 결제 확인
+1. `/shop` → 상품 하나 → **구매하기** → 주문서에서 이름 · 휴대폰 번호 적고 동의 체크 → **결제하기** → KG이니시스 결제창이 뜨면 연결이 된 것입니다.
+2. 테스트 MID 로 결제하면 실제로 돈이 나가지 않고, 주문 완료 화면과 관리자 화면 **주문 · 결제** 메뉴에 '테스트' 표시가 붙습니다. 테스트 결제는 대시보드 매출에서 빠집니다.
+3. 심사 통과 후 실제 MID · Sign Key 로 바꾸고 `INICIS_TEST` 를 지운 뒤, 1,000원 상품으로 한 번 실제 결제 → 가맹점관리자에서 취소까지 해 보면 끝입니다.
+
+### 4-4. 운영할 때
+- **입실 안내**: 결제가 들어오면 알림(3-4) 또는 관리자 화면 **주문 · 결제** 메뉴에서 보고, 구매자 번호로 1영업일 안에 출입 방법을 문자로 보냅니다. 처리한 주문은 상태를 **이용 완료** 로 바꾸고 운영 메모에 적어 둡니다.
+- **환불**: 고객 요청이 오면 상태를 **환불 요청** 으로 → 가맹점관리자 → 거래내역에서 같은 주문번호(TID)를 찾아 규정 금액대로 전체 · 부분 취소 → 상태를 **환불 완료** 로. 홈페이지에 적힌 규정은 `functions/_lib/products.js` 의 `POLICY` 에 있습니다 (7일 안 미사용 전액, 이후 90%, 정기권 · 사물함은 시작 전 전액 · 시작 후 일할 차감 후 10% 공제, 2시간권 · 데이패스는 사용 후 불가, 노트북은 전날까지 전액).
+- **상품 · 가격 바꾸기**: GitHub 에서 `functions/_lib/products.js` 만 고치고 Commit. 상품 페이지 · 주문서 · 결제 금액 검증이 모두 이 파일을 봅니다. 가격은 0원이나 빈값으로 두지 마세요.
+- **통신판매업 신고**: 온라인 판매를 계속하려면 관할 구청(또는 정부24)에 통신판매업 신고를 하고, 받은 신고번호를 `js/site-config.js` 의 `company.mailOrderNo` 에 넣습니다. 넣으면 푸터와 판매자 정보에 자동으로 표시됩니다 (비어 있으면 그 줄은 숨겨집니다).
+- **주문 기록 보관**: 전자상거래법에 따라 결제 · 공급 기록은 5년 보관합니다. 관리자 화면에서 CSV 로 내려받아 둘 수 있습니다.
+
+## 5. 운영 상태 바꾸기
 
 현재 `js/site-config.js` 의 `status.mode` 는 `"open"`(운영 중)입니다. 화면 맨 위의 운영 안내 띠는 2026-10-11에 요청에 따라 없앴습니다. 다시 필요하면 html을 새로 만들 때 되살릴 수 있습니다.
 
-## 5. 실제 주소로 바꿀 것 (도메인 연결 직후 한 번)
+## 6. 실제 주소로 바꿀 것 (도메인 연결 직후 한 번)
 
 기본 주소는 `https://socialfactory.co.kr` 로 적혀 있습니다. 다른 주소를 쓰게 되면 GitHub 저장소 검색창에 `socialfactory.co.kr` 를 넣어 아래 파일에서 모두 바꿉니다.
 - `js/site-config.js` 의 `siteUrl`
@@ -223,7 +267,7 @@ D1 을 연결하지 않으면 문의 폼은 "접수되지 않았습니다"를 �
 
 도메인 연결: Pages 프로젝트 → **Custom domains** → **Set up a custom domain** → `socialfactory.co.kr` 입력 후 안내대로 DNS 레코드를 추가합니다. 카카오톡·네이버 플레이스 등 외부 채널의 주소와 상호·전화·운영시간도 홈페이지와 같게 맞춥니다.
 
-## 6. 검색 등록 (네이버 · 구글 · 다음)
+## 7. 검색 등록 (네이버 · 구글 · 다음)
 
 ### 홈페이지에 이미 들어 있는 것
 - 페이지마다 검색 결과에 보일 제목과 설명. '건대입구 세미나실 · 강의실 · 회의실 · 모임공간 대관', '건대 스터디카페 · 코워킹', '1인 사무실' 같은 말을 자연스럽게 넣었습니다.

@@ -1,4 +1,4 @@
--- 소셜팩토리 회원 기능 추가 (문의 표 inquiries 를 이미 만들어 쓰고 있는 경우에만 실행)
+-- 소셜팩토리 회원 표 추가 (문의 표 inquiries 를 이미 만들어 쓰고 있는 경우에만 실행 · 주문 표는 schema-upgrade-orders.sql)
 -- D1 데이터베이스의 Console 탭에 이 파일 내용 전체를 붙여 넣고 실행합니다. 기존 문의는 그대로 남습니다.
 -- "duplicate column name: member_id" 오류가 나오면 이미 추가된 것이니 무시하고, 첫 줄을 지운 뒤 나머지만 다시 실행하면 됩니다.
 
@@ -8,10 +8,10 @@ CREATE INDEX IF NOT EXISTS idx_inquiries_member ON inquiries (member_id);
 -- 회원 ----------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS members (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  provider        TEXT    NOT NULL DEFAULT 'email',                  -- email | kakao
+  provider        TEXT    NOT NULL DEFAULT 'email',                  -- email (나중에 소셜 로그인을 붙일 때 확장)
   email           TEXT,                                              -- 소문자로 저장 (카카오 회원은 없을 수 있음)
   password_hash   TEXT,                                              -- 이메일 회원만. PBKDF2 해시 (원래 비밀번호는 저장하지 않음)
-  kakao_id        TEXT    UNIQUE,                                    -- 카카오 회원번호
+  kakao_id        TEXT    UNIQUE,                                    -- (예비) 나중에 카카오 로그인을 붙일 때 쓰는 자리
   name            TEXT    NOT NULL,
   phone           TEXT    NOT NULL,
   marketing       INTEGER NOT NULL DEFAULT 0,                        -- 소식 · 혜택 수신 동의 (선택)
@@ -45,13 +45,3 @@ CREATE TABLE IF NOT EXISTS auth_events (
   ip_hash     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_auth_events ON auth_events (kind, created_at);
-
--- --------------------------------------------------------------------------
--- 이전 버전(2026-10-06 이전)의 inquiries 테이블을 이미 만들어 둔 경우에만 아래를 실행합니다.
--- (새로 만드는 경우에는 위 CREATE TABLE 만 실행하면 됩니다.)
--- --------------------------------------------------------------------------
--- ALTER TABLE inquiries RENAME TO inquiries_old;
--- (그다음 위 CREATE TABLE 과 CREATE INDEX 를 실행)
--- INSERT INTO inquiries (receipt, submission_id, created_at, purpose, space, name, phone, email, when_text, people, message, page, consent)
---   SELECT 'OLD-' || id, 'old-' || id, created_at, COALESCE(type, 'other'), NULL, name, phone, email, when_text, people, message, page, 0 FROM inquiries_old;
--- DROP TABLE inquiries_old;
