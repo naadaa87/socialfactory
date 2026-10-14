@@ -11,9 +11,12 @@
  *  - NOTIFY_WEBHOOK      : 새 문의를 JSON 으로 전송할 웹훅 주소 (선택, Slack · Discord · Make 등)
  *  - IP_SALT             : IP 해시에 섞는 임의 문자열 (선택, 권장)
  *
+ * 로그인한 회원이 보낸 문의는 member_id 로 회원과 연결해 마이페이지에서 처리 상태를 볼 수 있게 합니다.
  * 저장에 성공했을 때만 { ok: true, receipt } 를 돌려줍니다. 알림 실패는 접수와 별개로 기록합니다.
  * 오류 응답에는 내부 상세(DB 메시지 등)를 담지 않습니다.
  */
+
+import { getMember, isAdmin } from "../_lib/auth.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -46,14 +49,6 @@ function makeReceipt() {
   let code = "";
   for (const b of bytes) code += alphabet[b % alphabet.length];
   return `SF-${ymd}-${code}`;
-}
-
-function isAdmin(request, env) {
-  if (!env.ADMIN_KEY) return false;
-  const auth = request.headers.get("authorization") || "";
-  const bearer = auth.replace(/^Bearer\s+/i, "").trim();
-  const headerKey = request.headers.get("x-admin-key") || "";
-  return bearer === env.ADMIN_KEY || headerKey === env.ADMIN_KEY;
 }
 
 export async function onRequestPost({ request, env }) {
@@ -119,19 +114,30 @@ export async function onRequestPost({ request, env }) {
     } catch (e) { console.error("rate-check", e && e.message); }
   }
 
+  const member = await getMember(request, env);
   let receipt = "";
   let inserted = false;
+  let withMember = !!member;
   for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
     receipt = makeReceipt();
     try {
-      await env.DB.prepare(
-        `INSERT INTO inquiries (receipt, submission_id, purpose, space, name, phone, email, company, when_text, people, schedule, message, consent, notice_version, page, ip_hash)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)`
-      ).bind(receipt, row.submission_id, row.purpose, row.space, row.name, row.phone, row.email, row.company, row.when_text,
-        row.people, row.schedule, row.message, row.consent, row.notice_version, row.page, ipHash).run();
+      if (withMember) {
+        await env.DB.prepare(
+          `INSERT INTO inquiries (receipt, submission_id, purpose, space, name, phone, email, company, when_text, people, schedule, message, consent, notice_version, page, ip_hash, member_id)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)`
+        ).bind(receipt, row.submission_id, row.purpose, row.space, row.name, row.phone, row.email, row.company, row.when_text,
+          row.people, row.schedule, row.message, row.consent, row.notice_version, row.page, ipHash, member.id).run();
+      } else {
+        await env.DB.prepare(
+          `INSERT INTO inquiries (receipt, submission_id, purpose, space, name, phone, email, company, when_text, people, schedule, message, consent, notice_version, page, ip_hash)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)`
+        ).bind(receipt, row.submission_id, row.purpose, row.space, row.name, row.phone, row.email, row.company, row.when_text,
+          row.people, row.schedule, row.message, row.consent, row.notice_version, row.page, ipHash).run();
+      }
       inserted = true;
     } catch (e) {
       const msg = String(e && e.message || e);
+      if (withMember && /member_id/i.test(msg)) { withMember = false; attempt--; continue; } // 예전 표: 회원 칸 없이 다시 저장
       if (/UNIQUE/i.test(msg) && /submission_id/i.test(msg)) {
         const dup = await env.DB.prepare("SELECT receipt FROM inquiries WHERE submission_id = ?1").bind(row.submission_id).first().catch(() => null);
         if (dup && dup.receipt) return json({ ok: true, receipt: dup.receipt, duplicate: true });
@@ -149,6 +155,7 @@ export async function onRequestPost({ request, env }) {
     const text = [
       `[소셜팩토리 문의 ${receipt}] ${PURPOSE_LABEL[row.purpose] || row.purpose} · ${SPACE_LABEL[row.space] || "-"}`,
       `이름: ${row.name}`, `연락처: ${row.phone}`, `이메일: ${row.email || "-"}`,
+      member ? `회원: ${member.email || "카카오 회원"} (회원번호 ${member.id})` : null,
       row.company ? `회사·단체: ${row.company}` : null,
       `희망 일시: ${row.when_text || "-"}`, `인원: ${row.people || "-"}`,
       row.schedule ? `정기 일정: ${row.schedule}` : null,
@@ -180,10 +187,12 @@ export async function onRequestGet({ request, env }) {
   const status = url.searchParams.get("status") || "";
   const limit = Math.min(500, Math.max(1, parseInt(url.searchParams.get("limit") || "200", 10) || 200));
   try {
-    const stmt = STATUSES.includes(status)
-      ? env.DB.prepare("SELECT id, receipt, created_at, status, purpose, space, name, phone, email, company, when_text, people, schedule, message, consent, notice_version, page, notify_status FROM inquiries WHERE status = ?1 ORDER BY id DESC LIMIT ?2").bind(status, limit)
-      : env.DB.prepare("SELECT id, receipt, created_at, status, purpose, space, name, phone, email, company, when_text, people, schedule, message, consent, notice_version, page, notify_status FROM inquiries ORDER BY id DESC LIMIT ?1").bind(limit);
-    const { results } = await stmt.all();
+    const cols = "id, receipt, created_at, status, purpose, space, name, phone, email, company, when_text, people, schedule, message, consent, notice_version, page, notify_status";
+    const run = (c) => (STATUSES.includes(status)
+      ? env.DB.prepare(`SELECT ${c} FROM inquiries WHERE status = ?1 ORDER BY id DESC LIMIT ?2`).bind(status, limit)
+      : env.DB.prepare(`SELECT ${c} FROM inquiries ORDER BY id DESC LIMIT ?1`).bind(limit)).all();
+    let results;
+    try { results = (await run(cols + ", member_id")).results; } catch { results = (await run(cols)).results; }
     return json({ ok: true, count: results.length, results });
   } catch (e) {
     console.error("list", e && e.message);

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>문의 관리 | 소셜팩토리</title>
+  <title>문의 · 회원 관리 | 소셜팩토리</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <style>
     :root { --blue:#2855E8; --navy:#18233A; --bg:#F7F8FA; --line:#E3E7EE; --muted:#5B6578; }
@@ -31,18 +31,29 @@
     .tag.fail { background: #FDECEA; color: #C0392B; }
     .wrap { overflow-x: auto; }
     .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top: 14px; }
+    .tabs { display:flex; gap:6px; margin-top: 16px; }
+    .tabs button { background:#fff; color: var(--navy); border:1.5px solid var(--line); }
+    .tabs button[aria-selected="true"] { background: var(--navy); color:#fff; border-color: var(--navy); }
+    .tag.member { background:#EEF3FF; color: var(--blue); }
+    .tag.kakao { background:#FEE500; color:#191600; }
+    .tag.block { background:#FDECEA; color:#C0392B; }
+    .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
+    .row-actions button { padding: 6px 10px; font-size: 12.5px; }
+    .temp { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background:#FFF7E6; border:1px solid #F3D399; }
+    .temp b { font-family: monospace; font-size: 16px; letter-spacing: .04em; }
+    input[type=search] { border:1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 220px; }
     @media (max-width: 700px) { main { padding: 12px; } th, td { padding: 8px 6px; } }
   </style>
 </head>
 <body>
 <header>
-  <h1>소셜팩토리 문의 관리</h1>
+  <h1>소셜팩토리 문의 · 회원 관리</h1>
   <span class="sp"></span>
   <a href="/" style="color:var(--muted); text-decoration:none;">← 홈페이지</a>
 </header>
 <main>
   <section class="card" id="login">
-    <p>Cloudflare Pages 설정의 <b>ADMIN_KEY</b> 값을 입력하면 최근 문의를 볼 수 있습니다. 키는 이 브라우저 탭에만 보관되며 주소창에 남지 않습니다.</p>
+    <p>Cloudflare Pages 설정의 <b>ADMIN_KEY</b> 값을 입력하면 최근 문의와 회원 목록을 볼 수 있습니다. 키는 이 브라우저 탭에만 보관되며 주소창에 남지 않습니다.</p>
     <div class="toolbar">
       <input id="key" type="password" placeholder="관리자 키" autocomplete="current-password">
       <button id="go">불러오기</button>
@@ -50,6 +61,8 @@
     </div>
     <p class="msg" id="login-msg"></p>
   </section>
+
+  <div class="tabs" id="tabs" hidden><button type="button" data-tab="list" aria-selected="true">문의</button><button type="button" data-tab="members" aria-selected="false">회원</button></div>
 
   <section class="card" id="list" hidden style="margin-top:16px;">
     <div class="toolbar">
@@ -70,11 +83,29 @@
       </table>
     </div>
   </section>
+
+  <section class="card" id="members" hidden style="margin-top:16px;">
+    <div class="toolbar">
+      <input id="mq" type="search" placeholder="이름 · 이메일 · 전화번호 검색">
+      <label style="display:inline-flex;gap:6px;align-items:center;"><input type="checkbox" id="mk"> 소식 수신 동의만</label>
+      <button class="ghost" id="mreload">검색 · 새로고침</button>
+      <button class="ghost" id="mcsv">CSV 내려받기</button>
+      <span class="msg" id="mcount"></span>
+    </div>
+    <div class="temp" id="temp" hidden></div>
+    <div class="wrap">
+      <table>
+        <thead><tr><th>번호</th><th>가입</th><th>이름 · 연락처</th><th>가입 방식</th><th>소식 수신</th><th>상태</th><th>문의</th><th>최근 로그인</th><th>관리</th></tr></thead>
+        <tbody id="mrows"></tbody>
+      </table>
+    </div>
+    <p class="msg">비밀번호를 잊은 회원이 카카오톡으로 요청하면, 이메일과 이름이 맞는지 확인한 뒤 '임시 비밀번호'를 눌러 나온 값을 알려 주세요. 회원은 로그인 후 새 비밀번호로 바꾸게 됩니다.</p>
+  </section>
 </main>
 <script>
 (function () {
   var $ = function (s) { return document.querySelector(s); };
-  var P = { rental: "공간 대관", regular: "반복 모임", business: "기업·단체", coworking: "코워킹", office: "독립사무실", partner: "제휴·협력", proposal: "공간 제안", other: "기타" };
+  var P = { rental: "공간 대관", regular: "정기대관", business: "기업·단체·학교", coworking: "코워킹", office: "독립사무실", partner: "호스트·제휴·협업", proposal: "공간 활용 상담", other: "기타" };
   var S = { r1: "1번룸", r2: "2번룸", r3: "3번룸", r4: "4번룸", r5: "5번룸", coworking: "코워킹", office: "독립사무실", undecided: "미정", "": "-" };
   var ST = { new: "새 문의", in_progress: "진행 중", done: "처리 완료" };
   var key = ""; try { key = sessionStorage.getItem("sf_admin_key") || ""; } catch (e) {}
@@ -90,7 +121,7 @@
       var tr = document.createElement("tr");
       var notify = r.notify_status || "-";
       var ncls = /^sent/.test(notify) ? "done" : (/^failed/.test(notify) ? "fail" : "");
-      tr.innerHTML = '<td><b>' + esc(r.receipt) + '</b></td><td>' + esc(r.created_at) + '</td>' +
+      tr.innerHTML = '<td><b>' + esc(r.receipt) + '</b>' + (r.member_id ? '<br><span class="tag member">회원 #' + esc(r.member_id) + '</span>' : '') + '</td><td>' + esc(r.created_at) + '</td>' +
         '<td><select data-id="' + r.id + '"><option value="new"' + (r.status === "new" ? " selected" : "") + '>새 문의</option><option value="in_progress"' + (r.status === "in_progress" ? " selected" : "") + '>진행 중</option><option value="done"' + (r.status === "done" ? " selected" : "") + '>처리 완료</option></select></td>' +
         '<td>' + esc(P[r.purpose] || r.purpose) + '<br><span class="tag">' + esc(S[r.space] || r.space || "-") + '</span></td>' +
         '<td>' + esc(r.name) + (r.company ? '<br>' + esc(r.company) : '') + '<br><a href="tel:' + esc(String(r.phone).replace(/[^0-9+]/g, "")) + '">' + esc(r.phone) + '</a>' + (r.email ? '<br><a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : '') + '</td>' +
@@ -116,7 +147,7 @@
       if (res.status === 503) { $("#login-msg").textContent = "D1 데이터베이스(DB)가 연결되지 않았습니다. README 3번을 확인해 주세요."; $("#login-msg").className = "msg err"; return; }
       if (!(res.j && res.j.ok)) { $("#login-msg").textContent = "불러오지 못했습니다."; $("#login-msg").className = "msg err"; return; }
       rows = res.j.results || []; render();
-      $("#login-msg").textContent = "불러왔습니다."; $("#list").hidden = false; $("#logout").hidden = false;
+      $("#login-msg").textContent = "불러왔습니다."; $("#tabs").hidden = false; showTab(current); $("#logout").hidden = false;
       try { sessionStorage.setItem("sf_admin_key", key); } catch (e) {}
     }).catch(function () { $("#login-msg").textContent = "서버에 연결하지 못했습니다. 배포된 주소에서 열어 주세요."; $("#login-msg").className = "msg err"; });
   };
@@ -124,7 +155,69 @@
   $("#key").addEventListener("keydown", function (e) { if (e.key === "Enter") $("#go").click(); });
   $("#reload").addEventListener("click", load);
   $("#filter").addEventListener("change", load);
-  $("#logout").addEventListener("click", function () { key = ""; try { sessionStorage.removeItem("sf_admin_key"); } catch (e) {} $("#key").value = ""; $("#list").hidden = true; $("#logout").hidden = true; $("#login-msg").textContent = "키를 지웠습니다."; });
+  $("#logout").addEventListener("click", function () { key = ""; try { sessionStorage.removeItem("sf_admin_key"); } catch (e) {} $("#key").value = ""; $("#list").hidden = true; $("#members").hidden = true; $("#tabs").hidden = true; $("#logout").hidden = true; $("#login-msg").textContent = "키를 지웠습니다."; });
+
+  /* ---------- 회원 ---------- */
+  var current = "list", members = [];
+  var mapi = function (method, body, q) {
+    return fetch("/api/admin/members" + (q || ""), { method: method, headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }, function () { return { status: r.status, j: {} }; }); });
+  };
+  var showTab = function (t) {
+    current = t;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-tab]"), function (b) { b.setAttribute("aria-selected", b.getAttribute("data-tab") === t ? "true" : "false"); });
+    $("#list").hidden = t !== "list"; $("#members").hidden = t !== "members";
+    if (t === "members" && !members.length) mload();
+  };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tab]"), function (b) { b.addEventListener("click", function () { showTab(b.getAttribute("data-tab")); }); });
+  var mrender = function () {
+    var tb = $("#mrows"); tb.innerHTML = "";
+    members.forEach(function (m) {
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td>' + esc(m.id) + '</td><td>' + esc(m.created_at) + '</td>' +
+        '<td><b>' + esc(m.name) + '</b><br>' + esc(m.phone) + (m.email ? '<br>' + esc(m.email) : '') + '</td>' +
+        '<td>' + (m.provider === "kakao" ? '<span class="tag kakao">카카오</span>' : '<span class="tag">이메일</span>') + (m.must_change_pw ? '<br><span class="tag">임시 비밀번호</span>' : '') + '</td>' +
+        '<td>' + (m.marketing ? '<span class="tag done">동의</span><br><small>' + esc(m.marketing_at || "") + '</small>' : '<span class="tag">-</span>') + '</td>' +
+        '<td>' + (m.status === "active" ? '<span class="tag done">정상</span>' : '<span class="tag block">정지</span>') + '</td>' +
+        '<td>' + esc(m.inquiries == null ? "-" : m.inquiries) + '</td><td>' + esc(m.last_login_at || "-") + '</td>' +
+        '<td><div class="row-actions">' + (m.provider === "email" ? '<button class="ghost" data-act="reset" data-id="' + m.id + '">임시 비밀번호</button>' : '') +
+        '<button class="ghost" data-act="' + (m.status === "active" ? "block" : "unblock") + '" data-id="' + m.id + '">' + (m.status === "active" ? "이용 정지" : "정지 해제") + '</button>' +
+        '<button class="ghost" data-act="delete" data-id="' + m.id + '">삭제</button></div></td>';
+      tb.appendChild(tr);
+    });
+    Array.prototype.forEach.call(tb.querySelectorAll("button[data-act]"), function (b) {
+      b.addEventListener("click", function () {
+        var id = parseInt(b.getAttribute("data-id"), 10), act = b.getAttribute("data-act");
+        var m = members.filter(function (x) { return x.id === id; })[0] || {};
+        var ask = { reset: m.name + "님에게 임시 비밀번호를 새로 발급할까요? 지금 로그인된 기기는 모두 로그아웃됩니다.", block: m.name + "님의 이용을 정지할까요?", unblock: m.name + "님의 이용 정지를 풀까요?", "delete": m.name + "님의 회원 정보를 삭제할까요? 되돌릴 수 없습니다." }[act];
+        if (!confirm(ask)) return;
+        mapi(act === "delete" ? "DELETE" : "PATCH", act === "delete" ? { id: id } : { id: id, action: act }).then(function (res) {
+          if (!(res.j && res.j.ok)) { alert("처리하지 못했습니다."); return; }
+          if (act === "reset") { var t = $("#temp"); t.hidden = false; t.innerHTML = esc(m.name) + "님 임시 비밀번호: <b>" + esc(res.j.tempPassword) + "</b> — 이 화면을 닫으면 다시 볼 수 없으니 회원에게 바로 전달해 주세요."; }
+          mload();
+        });
+      });
+    });
+  };
+  var mload = function () {
+    var q = $("#mq").value.trim();
+    $("#mcount").textContent = "불러오는 중…";
+    mapi("GET", null, "?q=" + encodeURIComponent(q) + ($("#mk").checked ? "&marketing=1" : "")).then(function (res) {
+      if (res.status === 503) { $("#mcount").textContent = "D1 데이터베이스(DB)가 연결되지 않았습니다."; return; }
+      if (!(res.j && res.j.ok)) { $("#mcount").textContent = "회원 표가 아직 없거나 불러오지 못했습니다. README 3번의 SQL 실행을 확인해 주세요."; return; }
+      members = res.j.results || []; mrender();
+      $("#mcount").textContent = "전체 " + res.j.total + "명 · 소식 수신 동의 " + res.j.marketing + "명 · 표시 " + members.length + "명";
+    });
+  };
+  $("#mreload").addEventListener("click", mload);
+  $("#mq").addEventListener("keydown", function (e) { if (e.key === "Enter") mload(); });
+  $("#mk").addEventListener("change", mload);
+  $("#mcsv").addEventListener("click", function () {
+    var head = ["id", "created_at", "provider", "name", "phone", "email", "marketing", "marketing_at", "status", "last_login_at"];
+    var lines = [head.join(",")].concat(members.map(function (r) { return head.map(function (k) { return '"' + String(r[k] == null ? "" : r[k]).replace(/"/g, '""') + '"'; }).join(","); }));
+    var blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "socialfactory-members.csv"; a.click();
+  });
   $("#csv").addEventListener("click", function () {
     var head = ["receipt", "created_at", "status", "purpose", "space", "name", "phone", "email", "company", "when_text", "people", "schedule", "message", "consent", "notice_version", "notify_status"];
     var lines = [head.join(",")].concat(rows.map(function (r) { return head.map(function (k) { return '"' + String(r[k] == null ? "" : r[k]).replace(/"/g, '""') + '"'; }).join(","); }));

@@ -150,6 +150,21 @@
   $$("[data-channel-qr]").forEach(function (el) { el.hidden = !text(get("contact." + el.getAttribute("data-channel-qr"))); });
   $$("[data-if-channels]").forEach(function (el) { el.hidden = visibleChannels === 0; });
 
+  // 회원 메뉴 — site-config.js 의 members.enabled 가 true 일 때만 보인다 (sf_m 쿠키는 로그인 여부 표시용)
+  var memberCfg = CFG.members || {};
+  var loggedIn = /(?:^|;\s*)sf_m=1/.test(document.cookie);
+  $$("[data-member-link]").forEach(function (a) {
+    a.hidden = !memberCfg.enabled;
+    if (memberCfg.enabled && loggedIn) { a.textContent = "마이페이지"; a.href = "/mypage"; }
+  });
+  $$("[data-member-note]").forEach(function (el) {
+    el.hidden = !memberCfg.enabled;
+    if (!memberCfg.enabled) return;
+    el.innerHTML = loggedIn
+      ? "로그인한 상태입니다. 이 문의의 처리 상태는 <a href=\"/mypage\">마이페이지</a>에서 확인할 수 있습니다."
+      : "<a href=\"/login?next=%2Fcontact%23inquiry\">로그인</a>하고 문의하면 마이페이지에서 처리 상태를 확인할 수 있습니다. 회원가입 없이도 문의할 수 있습니다.";
+  });
+
   // 대표 예약 채널 버튼: <a data-booking data-space="r1">
   var booking = CFG.booking || {};
   var bookingUrl = booking.primary ? text(get("contact." + booking.primary)) : "";

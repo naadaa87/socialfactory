@@ -29,7 +29,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="css/style.css?v=150d336b">
+  <link rel="stylesheet" href="css/style.css?v=3ce6e40c">
   <script type="application/ld+json" id="sf-ldjson">{"@context": "https://schema.org", "@graph": [{"@type": "WebPage", "@id": "https://socialfactory.co.kr/contact#webpage", "url": "https://socialfactory.co.kr/contact", "name": "대관 문의 · 예약 상담 | 소셜팩토리 건대", "description": "일자·시간·인원·모임 유형을 알려 주시면 빠르고 친절하게 안내해 드립니다. 건대 세미나실·강의실 대관, 정기대관, 기업 교육, 코워킹, 독립사무실, 호스트 제휴 문의를 카카오톡 문의채널·이메일·문의 폼으로 받습니다.", "inLanguage": "ko-KR", "isPartOf": {"@id": "https://socialfactory.co.kr/#website"}, "about": {"@id": "https://socialfactory.co.kr/#place"}}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "홈", "item": "https://socialfactory.co.kr/"}, {"@type": "ListItem", "position": 2, "name": "대관 문의", "item": "https://socialfactory.co.kr/contact"}]}, {"@type": "FAQPage", "@id": "https://socialfactory.co.kr/contact#faq", "mainEntity": [{"@type": "Question", "name": "예약은 언제 확정되나요?", "acceptedAnswer": {"@type": "Answer", "text": "선택한 예약 채널의 절차에 따라 확정됩니다. 문의 폼을 보낸 것만으로 예약이 확정되지는 않습니다. 상담으로 진행하는 예약은 이용 조건과 확정 절차를 따로 안내해 드립니다."}}, {"@type": "Question", "name": "문의할 때 무엇을 알려 드리면 되나요?", "acceptedAnswer": {"@type": "Answer", "text": "일자, 시간, 인원, 모임 유형 네 가지면 충분합니다. 이 네 가지를 보고 맞는 룸과 예상 금액, 예약할 수 있는 시간을 빠르게 안내해 드립니다. 필요한 장비나 옵션(노트북 대여, 스피커, 전신거울, 음료 · 다과)이 있으면 함께 적어 주세요."}}, {"@type": "Question", "name": "예상 금액을 미리 알 수 있나요?", "acceptedAnswer": {"@type": "Answer", "text": "이용 요금 페이지의 예상 금액 계산기에서 룸과 날짜, 시간, 옵션을 고르면 바로 계산됩니다. 계산한 내용은 PDF로 저장하거나 인쇄할 수 있고, '이 내용으로 문의하기'를 누르면 문의 폼에 그대로 옮겨집니다."}}, {"@type": "Question", "name": "정기대관이나 제휴는 따로 문의해야 하나요?", "acceptedAnswer": {"@type": "Answer", "text": "네. 정기대관과 호스트 · 기업 · 단체 · 동호회 · 학교 · 소셜링 제휴는 별도로 문의해 주세요. 요일과 시간, 이용 기간, 인원을 알려 주시면 이용 주기와 규모에 맞춰 조건을 안내해 드립니다. 제휴 · 협업 미팅도 가능합니다."}}, {"@type": "Question", "name": "최대 인원까지 책상을 놓고 앉을 수 있나요?", "acceptedAnswer": {"@type": "Answer", "text": "최대 인원은 배치에 따라 달라집니다. 책상을 쓰는 수업이나 조별 활동이라면 필요한 책상 수와 통로까지 함께 확인해야 합니다. 룸별 사진과 배치를 확인하시고, 인원과 진행 방식을 문의에 적어 주세요."}}, {"@type": "Question", "name": "40명이 넘는 행사도 할 수 있나요?", "acceptedAnswer": {"@type": "Answer", "text": "한 룸은 최대 40명(4번룸)까지입니다. 더 큰 행사는 여러 룸을 나눠 쓰거나 4층 전체(약 250평)를 함께 쓰는 방법이 있습니다. 전체 인원과 진행 방식을 알려 주시면 룸 구성과 장비, 동선을 함께 확인해 드립니다."}}, {"@type": "Question", "name": "독립사무실에 사업자등록 주소지를 둘 수 있나요?", "acceptedAnswer": {"@type": "Answer", "text": "독립사무실은 임대차가 아닌 공간 이용권이며, 사업자등록 주소와 우편 수령은 제공하지 않습니다."}}]}]}</script>
   </head>
 <body>
@@ -42,6 +42,7 @@
     </a>
     <nav class="nav-links" id="nav-links" aria-label="주요 메뉴">
       <a href="/space#rooms">공간 대관</a><a href="/space#coworking">코워킹</a><a href="/space#office">독립사무실</a><a href="/pricing">이용 요금</a><a href="/guide">이용 안내</a><a href="/about">소개</a>
+      <a class="nav-member" href="/login" data-member-link hidden>로그인</a>
       <span class="nav-cta"><a class="btn btn-primary btn-sm" href="/contact">대관 문의</a></span>
     </nav>
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="메뉴 열기"><span></span></button>
@@ -135,6 +136,7 @@
       <p class="lead">대관, 정기대관, 기업 · 단체 이용, 코워킹, 독립사무실, 호스트 · 제휴, 공간 활용 상담을 받습니다. 문의 목적을 고르면 필요한 항목만 보입니다. 요금은 <a href="/pricing">이용 요금</a>에서 미리 확인할 수 있습니다.</p>
       <div class="nego compact mt-24"><strong>정기대관과 호스트 · 기업 · 단체 · 동호회 · 학교 · 소셜링 제휴는 별도로 문의해 주세요</strong><p>이용 주기와 규모에 맞춰 조건을 따로 안내해 드립니다. 문의 목적에서 '정기대관' 또는 '호스트 · 제휴 · 협업 미팅'을 골라 주세요.</p></div>
     </div>
+    <p class="member-note" data-member-note hidden></p>
     <p class="prefill-note" data-prefill-note hidden>예상 금액 계산 내용을 문의 내용에 넣어 두었습니다. 이름과 연락처를 적고 보내 주세요.</p>
     <div class="form-disabled reveal" data-form-disabled hidden>문의 폼을 잠시 쉬고 있습니다. 카카오톡 문의채널이나 이메일로 연락해 주세요.</div>
     <div class="form-done reveal" data-form-done hidden role="status" aria-live="polite">
@@ -200,7 +202,7 @@
             <tr><th>보유 기간</th><td><span data-retention>문의 처리 완료 후 6개월</span> 뒤 삭제합니다. 계약이나 결제로 이어진 경우 그 기록은 관련 법령에 따라 따로 보관합니다.</td></tr>
             <tr><th>처리 방법</th><td>문의는 홈페이지 서버(Cloudflare)에 저장되고, 운영자에게 알림으로 전달됩니다.</td></tr>
             <tr><th>거부권</th><td>동의하지 않을 수 있으며, 그 경우 문의 폼 접수는 되지 않습니다. 열려 있는 상담 채널로 연락하실 수 있습니다.</td></tr>
-            <tr><th>안내문 버전</th><td><span data-notice-version>2026-10-09</span></td></tr>
+            <tr><th>안내문 버전</th><td><span data-notice-version>2026-10-09</span> · 자세한 내용은 <a href="/privacy" target="_blank" rel="noopener">개인정보 처리방침</a>을 확인해 주세요.</td></tr>
           </table>
         </details>
       </div>
@@ -301,6 +303,7 @@
           <li><a href="/program">프로그램 · 호스트 모집</a></li>
           <li><a href="/history">지난 기록 2015–2021</a></li>
           <li><a href="/contact">대관과 이용 문의</a></li>
+          <li><a href="/login" data-member-link hidden>로그인 · 회원가입</a></li>
         </ul>
       </div>
       <div>
@@ -331,11 +334,12 @@
     <div class="footer-bottom">
       <span>© <span data-year>2026</span> SOCIAL FACTORY. All rights reserved.</span>
       <span class="company" data-company-line></span>
+      <span class="legal-links"><a href="/terms">이용약관</a><a href="/privacy"><strong>개인정보 처리방침</strong></a></span>
       <span class="en">EST. 2015 · TALK. PLAY. BOOK. STUDY.</span>
     </div>
   </div>
 </footer>
-<script src="js/site-config.js?v=dbdaaf74"></script>
-<script src="js/main.js?v=17de19cf"></script>
+<script src="js/site-config.js?v=5439d81e"></script>
+<script src="js/main.js?v=bdab8d2c"></script>
 </body>
 </html>

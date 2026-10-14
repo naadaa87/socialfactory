@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>document.documentElement.className=document.documentElement.className.replace("no-js","js");</script>
+  <title>로그인 | 소셜팩토리 건대</title>
+  <meta name="description" content="소셜팩토리 회원 로그인. 로그인한 상태로 남긴 문의는 마이페이지에서 처리 상태를 확인할 수 있습니다.">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#2855E8">
+  
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="소셜팩토리">
+  <meta property="og:title" content="로그인 | 소셜팩토리 건대">
+  <meta property="og:description" content="소셜팩토리 회원 로그인. 로그인한 상태로 남긴 문의는 마이페이지에서 처리 상태를 확인할 수 있습니다.">
+  <meta property="og:url" content="https://socialfactory.co.kr/login">
+  <meta property="og:image" content="https://socialfactory.co.kr/images/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="소셜팩토리 건대 — 모이면 만들어진다">
+  <meta property="og:locale" content="ko_KR">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="로그인 | 소셜팩토리 건대">
+  <meta name="twitter:description" content="소셜팩토리 회원 로그인. 로그인한 상태로 남긴 문의는 마이페이지에서 처리 상태를 확인할 수 있습니다.">
+  <meta name="twitter:image" content="https://socialfactory.co.kr/images/og-image.jpg">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="css/style.css?v=3ce6e40c">
+  </head>
+<body>
+<a class="skip-link" href="#main">본문으로 바로가기</a>
+<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="/" aria-label="소셜팩토리 홈">
+      <img class="mark" src="images/logo-mark.svg" alt="" width="36" height="36">
+      <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
+    </a>
+    <nav class="nav-links" id="nav-links" aria-label="주요 메뉴">
+      <a href="/space#rooms">공간 대관</a><a href="/space#coworking">코워킹</a><a href="/space#office">독립사무실</a><a href="/pricing">이용 요금</a><a href="/guide">이용 안내</a><a href="/about">소개</a>
+      <a class="nav-member" href="/login" data-member-link hidden>로그인</a>
+      <span class="nav-cta"><a class="btn btn-primary btn-sm" href="/contact">대관 문의</a></span>
+    </nav>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="메뉴 열기"><span></span></button>
+  </div>
+</header>
+<main id="main">
+<!-- ===== 로그인 ===== -->
+<section class="auth-wrap">
+  <div class="container">
+    <div class="auth-card" data-member-page="login">
+      <h1 class="auth-title">로그인</h1>
+      <p class="auth-lead">로그인한 상태로 문의를 남기면 마이페이지에서 처리 상태를 확인할 수 있습니다.</p>
+      <div class="auth-notice" data-auth-msg role="alert" hidden></div>
+      <div class="auth-off" data-auth-off hidden>
+        <strong>회원 기능을 준비하고 있습니다</strong>
+        <p>대관 문의는 회원가입 없이도 남길 수 있습니다.</p>
+        <a class="btn btn-primary btn-sm" href="/contact?purpose=rental#inquiry">문의 남기기</a>
+      </div>
+      <div data-auth-on>
+        <a class="kakao-btn" href="/api/auth/kakao" data-kakao-login hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2C6.6 3.2 2.3 6.6 2.3 10.8c0 2.7 1.8 5.1 4.5 6.4l-.9 3.4c-.1.3.3.6.5.4l4-2.7c.5.1 1.1.1 1.6.1 5.4 0 9.7-3.4 9.7-7.6S17.4 3.2 12 3.2z"/></svg><span>카카오 로그인</span></a>
+        <div class="auth-or" data-kakao-or hidden><span>또는 이메일로 로그인</span></div>
+        <form class="auth-form" data-login-form novalidate>
+          <label class="af-field"><span>이메일</span><input type="email" name="email" autocomplete="email" inputmode="email" required></label>
+          <label class="af-field"><span>비밀번호</span><input type="password" name="password" autocomplete="current-password" required></label>
+          <button class="btn btn-primary btn-lg af-submit" type="submit">로그인</button>
+        </form>
+        <div class="auth-links"><a href="/signup">회원가입</a><span aria-hidden="true">·</span><button type="button" data-forgot>비밀번호를 잊으셨나요?</button></div>
+        <div class="auth-forgot" data-forgot-box hidden>
+          <p>가입한 이메일과 이름을 카카오톡 문의채널로 보내 주세요. 본인 확인 후 임시 비밀번호를 안내해 드립니다. 카카오로 가입하셨다면 위의 '카카오 로그인'을 눌러 주세요.</p>
+          <a class="btn btn-outline btn-sm" data-channel="kakao" href="https://pf.kakao.com/_uTiFX" target="_blank" rel="noopener">카카오톡 문의채널 열기</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="/" aria-label="소셜팩토리 홈">
+          <img class="mark" src="images/logo-mark.svg" alt="" width="40" height="40">
+          <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
+        </a>
+        <p class="tagline">모이면 만들어진다. 2015년 홍대에서 시작한 모임공간 소셜팩토리의 건대 공간입니다. 룸 5개, 코워킹, 독립사무실을 안내합니다.</p>
+      </div>
+      <div>
+        <h4>Menu</h4>
+        <ul>
+          <li><a href="/space#rooms">공간 대관 (룸 1~5)</a></li>
+          <li><a href="/space#coworking">코워킹</a></li>
+          <li><a href="/space#office">독립사무실</a></li>
+          <li><a href="/pricing">이용 요금</a></li>
+          <li><a href="/pricing#estimate">예상 금액 계산</a></li>
+          <li><a href="/guide">이용 안내 · FAQ</a></li>
+          <li><a href="/tour">3D로 공간 살펴보기</a></li>
+          <li><a href="/about">소셜팩토리 소개</a></li>
+          <li><a href="/program">프로그램 · 호스트 모집</a></li>
+          <li><a href="/history">지난 기록 2015–2021</a></li>
+          <li><a href="/contact">대관과 이용 문의</a></li>
+          <li><a href="/login" data-member-link hidden>로그인 · 회원가입</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Space</h4>
+        <ul>
+          <li><strong>소셜팩토리 건대</strong></li>
+          <li data-sf="address">서울 광진구 화양동 10-1 한아름건물 4층</li>
+          <li>룸 5개 · 코워킹 · 독립사무실 4실</li>
+          <li>룸 <span data-sf="hours.rooms">24시간 · 예약제</span></li>
+          <li>코워킹 <span data-sf="hours.coworking">24시간</span></li>
+          <li>룸 시간당 <span data-sf="pricing.from">10,000</span>원부터 · 부가세 포함</li>
+          <li>4층 전체 약 250평 · 코워킹 50석</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contact</h4>
+        <ul>
+          <li><a data-channel="kakao" href="https://pf.kakao.com/_uTiFX" target="_blank" rel="noopener">카카오톡 문의채널</a></li>
+          <li><a data-channel="naver" hidden>네이버 예약</a></li>
+          <li><a data-channel="spacecloud" hidden>스페이스클라우드</a></li>
+          <li><a data-channel="instagram" hidden>인스타그램</a></li>
+          <li><a data-channel="phone" hidden><span data-channel-value>전화</span></a></li>
+          <li><a data-channel="email" href="mailto:spaceblank0100@gmail.com"><span data-channel-value>spaceblank0100@gmail.com</span></a></li>
+          <li class="channels-empty" hidden>상담 채널을 준비하고 있습니다. 그 전까지는 <a href="/contact">문의 폼</a>으로 남겨 주세요.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© <span data-year>2026</span> SOCIAL FACTORY. All rights reserved.</span>
+      <span class="company" data-company-line></span>
+      <span class="legal-links"><a href="/terms">이용약관</a><a href="/privacy"><strong>개인정보 처리방침</strong></a></span>
+      <span class="en">EST. 2015 · TALK. PLAY. BOOK. STUDY.</span>
+    </div>
+  </div>
+</footer>
+<script src="js/site-config.js?v=5439d81e"></script>
+<script src="js/main.js?v=bdab8d2c"></script>
+<script src="js/member.js?v=0ac7b942"></script>
+</body>
+</html>
