@@ -130,9 +130,13 @@
   $$("[data-if-preparing]").forEach(function (el) { el.hidden = status.mode === "open"; });
 
   // 채널 버튼: <a data-channel="kakao">
+  // 카카오톡 채널 주소(pf.kakao.com/_xxxx)는 1:1 채팅방 바로 열기 주소로 바꿔 연결한다
+  var kakaoChat = function (v) { v = String(v || "").trim(); return /^https?:\/\/pf\.kakao\.com\/_[A-Za-z0-9]+\/?$/.test(v) ? v.replace(/\/?$/, "/chat") : v; };
+  window.SF_KAKAO_CHAT = kakaoChat;
   var channelHref = {
     phone: function (v) { return "tel:" + v.replace(/[^0-9+]/g, ""); },
-    email: function (v) { return "mailto:" + v; }
+    email: function (v) { return "mailto:" + v; },
+    kakao: kakaoChat
   };
   var visibleChannels = 0;
   var channelList = [];
@@ -154,6 +158,20 @@
   $$(".channels-empty").forEach(function (el) { el.hidden = visibleChannels > 0; });
   $$("[data-channel-qr]").forEach(function (el) { el.hidden = !text(get("contact." + el.getAttribute("data-channel-qr"))); });
   $$("[data-if-channels]").forEach(function (el) { el.hidden = visibleChannels === 0; });
+  var hasKakao = !!text(get("contact.kakao"));
+  $$("[data-if-kakao]").forEach(function (el) { el.hidden = !hasKakao; });
+
+  // 화면 오른쪽 아래 카카오톡 문의 버튼 — 첫 화면을 조금 내려간 뒤에 나타난다
+  var fab = $(".kakao-fab");
+  if (fab && hasKakao) {
+    var fabTick = false;
+    var fabSync = function () {
+      fabTick = false;
+      fab.classList.toggle("is-on", (window.scrollY || window.pageYOffset) > Math.min(480, window.innerHeight * 0.5));
+    };
+    window.addEventListener("scroll", function () { if (!fabTick) { fabTick = true; requestAnimationFrame(fabSync); } }, { passive: true });
+    fabSync();
+  }
 
   // 회원 메뉴 — site-config.js 의 members.enabled 가 true 일 때만 보인다 (sf_m 쿠키는 로그인 여부 표시용)
   var memberCfg = CFG.members || {};
@@ -173,6 +191,7 @@
   // 대표 예약 채널 버튼: <a data-booking data-space="r1">
   var booking = CFG.booking || {};
   var bookingUrl = booking.primary ? text(get("contact." + booking.primary)) : "";
+  if (booking.primary === "kakao") bookingUrl = kakaoChat(bookingUrl);
   $$("[data-booking]").forEach(function (a) {
     var space = a.getAttribute("data-space") || "";
     if (bookingUrl) {

@@ -236,17 +236,17 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, fail); else fail();
   };
   // 카카오톡: 링크는 새 창으로 열리고, 누르는 순간 예상 금액 내용을 복사해 둔다
-  var kakaoBtn = $("[data-es-kakao]");
   var kakaoUrl = ((CFG.contact || {}).kakao) || "";
-  if (kakaoBtn) {
+  if (kakaoUrl && window.SF_KAKAO_CHAT) kakaoUrl = window.SF_KAKAO_CHAT(kakaoUrl);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-es-kakao]"), function (kakaoBtn) {
     kakaoBtn.hidden = !kakaoUrl;
     if (kakaoUrl) kakaoBtn.href = kakaoUrl;
     kakaoBtn.addEventListener("click", function () {
       copy(summaryText(last), function (ok) {
-        toast(ok ? "예상 금액 내용을 복사했습니다. 카카오톡 채팅창에 붙여 넣어 보내 주세요." : "카카오톡 채널이 열립니다. 날짜·시간·인원·모임 유형을 적어 보내 주세요.");
+        toast(ok ? "예상 금액 내용을 복사했습니다. 카카오톡 채팅창에 붙여 넣어 보내 주세요." : "카카오톡 채팅창이 열립니다. 날짜·시간·인원·모임 유형을 적어 보내 주세요.");
       });
     });
-  }
+  });
   var copyBtn = $("[data-es-copy]");
   if (copyBtn) copyBtn.addEventListener("click", function () {
     copy(summaryText(last), function (ok) { toast(ok ? "예상 금액 내용을 복사했습니다." : "복사하지 못했습니다. 화면의 내용을 직접 적어 주세요."); });
@@ -341,7 +341,7 @@
   var bar = $("[data-es-bar]"), sum = document.getElementById("est-summary");
   if (bar && "IntersectionObserver" in window) {
     var formVisible = false, sumVisible = false;
-    var sync = function () { bar.classList.toggle("is-on", formVisible && !sumVisible); };
+    var sync = function () { var on = formVisible && !sumVisible; bar.classList.toggle("is-on", on); document.body.classList.toggle("est-bar-on", on); };
     new IntersectionObserver(function (es) { es.forEach(function (e) { formVisible = e.isIntersecting; }); sync(); }, { threshold: 0 }).observe(form);
     new IntersectionObserver(function (es) { es.forEach(function (e) { sumVisible = e.isIntersecting; }); sync(); }, { threshold: 0.15 }).observe(sum);
   }

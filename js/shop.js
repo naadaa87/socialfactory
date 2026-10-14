@@ -51,7 +51,7 @@
     var btn = $("[data-buy-btn]", buy);
     var upd = function (q) { $("[data-total]", buy).textContent = won(unit * q); btn.href = "/order?p=" + encodeURIComponent(pid) + "&qty=" + q; };
     stepper($("[data-stepper]", buy), upd);
-    payState.then(function (st) { if (!st.ready) { btn.hidden = true; $(".pd-qty", buy).hidden = true; $(".pd-total", buy).hidden = true; } });
+    payState.then(function (st) { if (!st.ready) { btn.hidden = true; $(".pd-qty", buy).hidden = true; $(".pd-total", buy).hidden = true; var ask = $(".pd-ask", buy); if (ask) ask.hidden = true; } });
   }
 
   /* ---------------- 주문서 ---------------- */

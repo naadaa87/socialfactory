@@ -1975,3 +1975,121 @@ table.table td.strong a.rt-calc::after { content: ""; position: absolute; inset:
   .footer-biz { display: grid; grid-template-columns: 1fr; gap: 4px; }
   .footer-biz + .footer-bottom { margin-top: 20px; }
 }
+
+/* ==========================================================================
+   카카오톡 문의 (2026-10-14): 노란 버튼 · 헤더 · 화면 오른쪽 아래 버튼 · 문의 페이지 안내
+   ========================================================================== */
+:root { --kakao: #FEE500; --kakao-hover: #F4D900; --kakao-ink: #191919; }
+.kk { width: 18px; height: 18px; flex: none; fill: currentColor; }
+.btn-kakao { background: var(--kakao); color: var(--kakao-ink); border-color: var(--kakao); box-shadow: 0 6px 16px rgba(25, 25, 25, 0.08); }
+.btn-kakao:hover { background: var(--kakao-hover); border-color: var(--kakao-hover); color: var(--kakao-ink); }
+.btn-kakao .kk { width: 18px; height: 18px; }
+.btn-sm.btn-kakao .kk { width: 16px; height: 16px; }
+.btn-lg.btn-kakao .kk { width: 20px; height: 20px; }
+.card.navy .btn-kakao, .cta-band .btn-kakao { box-shadow: none; }
+.cta-band .actions .btn-kakao { color: var(--kakao-ink); }
+.channel .ic.kakao .kk { width: 24px; height: 24px; }
+.cs-btn.kakao .ic { background: transparent; min-width: 0; padding: 0; }
+.cs-btn.kakao .ic .kk { width: 19px; height: 19px; }
+.cs-btn.kakao:hover { border-color: var(--kakao-hover); background: var(--kakao-hover); color: var(--kakao-ink); }
+.ch-card .ic.kakao .kk { width: 24px; height: 24px; }
+.ch-card.is-main { border-color: #F3D600; background: #FFFDF0; }
+
+/* 헤더: [대관 문의] [카카오톡 문의] */
+.nav-cta { display: inline-flex; align-items: center; gap: 8px; }
+.nav-links .nav-cta a.btn { padding: 9px 18px; font-size: 14.5px; }
+.nav-links .nav-cta a.btn-outline { color: var(--navy); background: #fff; }
+.nav-links .nav-cta a.btn-outline:hover { color: var(--navy); background: #fff; border-color: var(--navy); }
+.nav-links .nav-cta a.btn-kakao { color: var(--kakao-ink); background: var(--kakao); border-color: var(--kakao); }
+.nav-links .nav-cta a.btn-kakao:hover { color: var(--kakao-ink); background: var(--kakao-hover); border-color: var(--kakao-hover); }
+.nav-kakao { display: none; }
+@media (max-width: 1240px) and (min-width: 1081px) {
+  .nav { gap: 16px; }
+  .nav-links a { padding: 10px 10px; font-size: 14.5px; }
+  .nav-cta { margin-left: 4px; }
+  .nav-links .nav-cta a.btn { padding: 9px 14px; font-size: 14px; }
+}
+@media (max-width: 1080px) {
+  .nav { gap: 8px; }
+  .brand { margin-right: auto; }
+  .nav-toggle { display: inline-flex; }
+  .nav-links { position: fixed; inset: var(--nav-h) 0 auto 0; background: #fff; flex-direction: column; align-items: stretch; padding: 12px 16px 20px; border-bottom: 1px solid var(--line); box-shadow: 0 20px 40px rgba(24,35,58,0.1); display: none; max-height: calc(100vh - var(--nav-h)); overflow-y: auto; }
+  .nav-links.is-open { display: flex; }
+  .nav-links a { padding: 14px 12px; font-size: 16px; border-radius: 12px; }
+  .nav-cta { flex-direction: column-reverse; align-items: stretch; gap: 8px; margin: 10px 0 0; }
+  .nav-links .nav-cta a.btn { width: 100%; padding: 14px 18px; font-size: 15.5px; }
+  .nav-kakao { display: inline-flex; align-items: center; gap: 5px; height: 40px; padding: 0 14px 0 12px; border-radius: 999px; background: var(--kakao); color: var(--kakao-ink); font-size: 14px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; }
+  .nav-kakao:hover { background: var(--kakao-hover); color: var(--kakao-ink); }
+  .nav-kakao .kk { width: 18px; height: 18px; }
+  .nav-kakao .nk-s { display: none; }
+}
+@media (max-width: 380px) {
+  .nav-kakao { padding: 0 11px 0 10px; font-size: 13.5px; }
+  .nav-kakao .nk-l { display: none; }
+  .nav-kakao .nk-s { display: inline; }
+}
+
+/* 화면 오른쪽 아래 카카오톡 문의 버튼 */
+.kakao-fab { position: fixed; right: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 95; display: inline-flex; align-items: center; gap: 8px; height: 54px; padding: 0 22px 0 18px; border-radius: 999px; background: var(--kakao); color: var(--kakao-ink); font-size: 15px; font-weight: 800; letter-spacing: -0.01em; box-shadow: 0 12px 30px rgba(24, 35, 58, 0.22); opacity: 0; transform: translateY(14px); pointer-events: none; transition: opacity .2s ease, transform .2s ease, background .15s ease, bottom .2s ease; }
+.kakao-fab.is-on { opacity: 1; transform: none; pointer-events: auto; }
+.kakao-fab:hover { background: var(--kakao-hover); color: var(--kakao-ink); }
+.kakao-fab .kk { width: 22px; height: 22px; }
+.kakao-fab:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 999px; }
+@media (max-width: 600px) {
+  .kakao-fab { right: 14px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; padding: 0; flex-direction: column; justify-content: center; gap: 1px; font-size: 10.5px; }
+  .kakao-fab .kk { width: 24px; height: 24px; }
+  .kakao-fab .kf-t { font-size: 0; line-height: 1; }
+  .kakao-fab .kf-t::after { content: "문의"; font-size: 10.5px; font-weight: 800; }
+  .site-footer { padding-bottom: 96px; }
+}
+body.est-bar-on .kakao-fab { opacity: 0; pointer-events: none; transform: translateY(14px); }   /* 계산기 하단 막대에 카카오톡 보내기 버튼이 따로 있다 */
+@media (prefers-reduced-motion: reduce) { .kakao-fab { transition: none; } }
+@media print { .kakao-fab, .nav-kakao { display: none !important; } }
+
+/* 푸터 */
+.foot-kk { margin: 2px 0 10px; }
+.foot-kk-note { margin: 0 0 16px; max-width: 240px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+
+/* 메인 첫 화면 안내 한 줄 */
+.kk-line { margin-top: 14px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+.kk-line a { color: var(--blue); font-weight: 700; display: inline-block; padding: 8px 0; margin: -8px 0; }
+
+/* 문의 페이지: 카카오톡 안내 상자 */
+.kk-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 36px; align-items: center; padding: 30px 32px; border-radius: 24px; background: #FFFDF0; border: 1.5px solid #F6E27A; }
+.kk-panel[hidden] { display: none; }
+.kp-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: var(--kakao); color: var(--kakao-ink); font-size: 12.5px; font-weight: 800; }
+.kp-title { margin-top: 12px; font-size: clamp(22px, 2.6vw, 28px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; color: var(--navy); }
+.kk-panel p { margin-top: 8px; font-size: 15px; color: var(--navy-80); line-height: 1.7; }
+.kp-keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.kp-keys li { padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid #F1E3A1; font-size: 13.5px; font-weight: 700; color: var(--navy); }
+.kk-panel .actions { margin-top: 20px; align-items: center; }
+.kp-qr { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.kp-qr img { width: 128px; height: 128px; border-radius: 12px; background: #fff; border: 1px solid #F1E3A1; padding: 6px; }
+.kp-qr span { font-size: 12.5px; color: var(--muted); max-width: 150px; line-height: 1.5; }
+@media (max-width: 760px) {
+  .kk-panel { grid-template-columns: 1fr; padding: 22px 20px; border-radius: 20px; }
+  .kp-qr { display: none; }
+  .kk-panel .actions .btn-kakao { width: 100%; }
+}
+
+/* 문의 · 상담 버튼 줄에서 카카오톡을 먼저 */
+.rd-ask { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ask-kk { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 20px; padding: 14px 16px; border-radius: 14px; background: #FFFDF0; border: 1px solid #F6E27A; font-size: 14px; color: var(--navy-80); }
+.ask-kk[hidden] { display: none; }
+.ask-kk p { margin: 0; flex: 1 1 220px; }
+.ask-kk .btn { flex: none; }
+.channel.is-main { border-color: #F3D600; background: #FFFDF0; }
+.channel.is-main:hover { border-color: #E5C800; }
+.ch-tag { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: var(--kakao); color: var(--kakao-ink); font-size: 11.5px; font-style: normal; font-weight: 800; vertical-align: 2px; }
+.mc-act { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.od-help { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #FFFDF0; border: 1px solid #F6E27A; font-size: 13px; color: var(--navy-80); }
+.od-help .btn { flex: none; padding: 8px 14px; font-size: 13.5px; }
+.pd-ask { margin: -2px 0 0; text-align: center; font-size: 13.5px; color: var(--muted); }
+.pd-ask a { color: var(--navy); font-weight: 800; text-decoration: underline; text-decoration-color: #F3D600; text-decoration-thickness: 3px; text-underline-offset: 3px; display: inline-block; padding: 8px 0; margin: -8px 0; }
+.pd-ask[hidden], .od-help[hidden] { display: none; }
+.form-done .actions { margin-top: 18px; }
+/* 계산기 하단 막대(모바일): [카카오톡 보내기] [내역 보기] */
+.est-bar .eb-act { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.est-bar .eb-kk { gap: 5px; padding: 10px 14px; }
+.est-bar .eb-kk span { font-size: 13.5px; font-weight: 800; }
+@media (max-width: 400px) { .est-bar .eb-kk { padding: 10px 11px; } .est-bar .eb-kk span { display: none; } }

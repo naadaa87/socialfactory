@@ -59,7 +59,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 7번 참고)
 | --- | --- | --- |
 | 정식 주소(도메인) | `siteUrl` + 각 html의 canonical/OG, robots.txt, sitemap.xml (아래 6번) | 기본값 `https://socialfactory.co.kr` |
 | 운영 상태 | `status.mode` (`preparing`/`open`) | 화면 맨 위 운영 안내 띠는 2026-10-11에 없앴습니다 (값은 남겨 둠) |
-| 예약 채널 · 상담 채널 (카카오톡 문의채널 · 이메일은 입력 완료) | `contact.*`, `booking.primary` | 채널 버튼 숨김, 예약 버튼은 '대관 문의하기'로 대체 |
+| 예약 채널 · 상담 채널 (카카오톡 문의채널 · 이메일은 입력 완료 — 카카오톡이 주 상담 채널) | `contact.*`, `booking.primary` | 채널 버튼 숨김, 예약 버튼은 '대관 문의하기'로 대체 |
 | 요금 (2026년 10월 최종 가격구조도 반영 완료) | `pricing.*` | — |
 | 공휴일 (2026~2027년 입력 완료) | `pricing.holidays` — 2028년 공휴일은 2027년 안에 추가 | 빠진 날은 계산기에서 직접 체크 |
 | 룸별 장비 · 배치별 인원 | `rooms.r1~r5` | "확인 중" 표시 |
@@ -83,6 +83,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 7번 참고)
 5. **Commit changes** 클릭
 
 이미 저장소가 있다면 바뀐 파일만 같은 자리에 다시 올리면 됩니다.
+- 2026-10-14 카카오톡 문의 버튼 곳곳에 추가(헤더 · 오른쪽 아래 버튼 · 각 페이지): html 전부(`admin.html` 제외), `product/` 5개, `tour.html`, `css/style.css`, `js/main.js` · `js/estimate.js` · `js/shop.js` · `js/site-config.js`, `README.md`, `rss.xml`
 - 2026-10-14 이용권 온라인 결제(KG이니시스) · 관리자 화면 개편 · 카카오 로그인 제거: html 전부, `shop.html` · `order.html` · `order-complete.html` · `product/` 폴더(새 파일), `admin.html`, `css/style.css`, `js/main.js` · `js/member.js` · `js/site-config.js`, `js/shop.js`(새 파일), `functions/` 폴더 전체(`functions/api/auth/kakao/` 는 삭제), `schema.sql`, `schema-upgrade-orders.sql`(새 파일), `schema-upgrade-members.sql`, `images/scenes/10-ai-class-sm.webp`(새 파일), `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-11 회원 기능 추가: html 전부, `admin.html`, `css/style.css`, `js/main.js`, `js/site-config.js`, `js/member.js`(새 파일), `functions/` 폴더 전체, `schema.sql`, `schema-upgrade-members.sql`(새 파일), `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-11 메인 첫 화면 정리 · 맨 위 운영 안내 띠 삭제: html 9개(tour·admin 제외), `css/style.css`, `js/site-config.js`, `README.md`, `rss.xml`
@@ -123,6 +124,21 @@ GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값
 - 정기대관 · 제휴 별도 문의, 빠른 상담(일자·시간·인원·모임 유형), 강사·호스트·모임장 모집, 대형 공간 활용 상담 배너는 여러 페이지에 함께 들어 있습니다. 문구를 바꿀 때는 각 html에서 같은 문장을 모두 찾아 함께 바꿔 주세요.
 - `inquiry.retention` — 개인정보 안내문의 보유 기간. 실제 삭제 작업과 같은 기준으로 적습니다.
 - `company` — 채우면 푸터에 표기됩니다. 계약서·결제 안내의 사업자명과 같아야 합니다.
+
+### 카카오톡 문의 버튼
+대부분의 문의를 카카오톡으로 받도록 2026-10-14에 홈페이지 곳곳에 노란 '카카오톡 문의' 버튼을 넣었습니다. 모두 `js/site-config.js` 의 `contact.kakao` 주소 하나를 쓰고, 누르면 채널 소개 화면이 아니라 **1:1 채팅방이 바로 열리도록**(주소 끝에 `/chat`) 자동으로 연결됩니다. 휴대폰에서는 카카오톡 앱 채팅창이 열립니다.
+
+| 위치 | 내용 |
+| --- | --- |
+| 모든 페이지 맨 위 | PC는 메뉴 오른쪽 끝 [대관 문의] 옆, 휴대폰은 메뉴 버튼 옆 '카톡 문의'. 휴대폰 메뉴를 열면 맨 아래 큰 버튼 |
+| 모든 페이지 오른쪽 아래 | 화면을 조금 내리면 나타나는 떠 있는 버튼 (휴대폰은 동그란 '문의' 버튼). 이용 요금 계산 중에는 아래 합계 막대의 카톡 버튼으로 대신합니다 |
+| 메인 | 첫 화면 버튼, 룸 목록 아래 '어떤 방이 맞을지 모르겠다면', 코워킹 · 사무실 카드, 정기대관 · 제휴 카드, 빠른 상담, FAQ, 맨 아래 문의 띠 |
+| 공간 안내 | 룸 1~5 상세(룸별 카톡 문의), 코워킹, 독립사무실, 맨 아래 문의 띠 |
+| 이용 요금 | 계산기 '카카오톡으로 이 내용 보내기'(계산 내용을 복사한 뒤 채팅방을 엽니다), 사무실, 정기대관 · 제휴, 맨 아래 문의 띠 |
+| 문의 | 맨 위 '카카오톡으로 바로 문의하세요' 상자(QR 포함), 채널 목록 맨 위, 문의 접수 완료 화면 |
+| 그 밖에 | 이용 안내 · 소개 · 프로그램 · 지난 기록 · 이용권 상품과 주문서 · 마이페이지 · 404 · 3D 안내 · 푸터 |
+
+`contact.kakao` 를 비우면 이 버튼과 안내 문구가 모두 자동으로 숨겨지고 문의 폼 안내만 남습니다. 3D 안내(`tour.html`)도 같은 설정 파일을 읽습니다.
 
 ### 문구 바꾸기
 각 `.html` 파일을 GitHub에서 열어 글자만 고치면 됩니다. 꺾쇠(`< >`) 안의 내용은 건드리지 않고 그 사이의 글자만 바꾸세요.
