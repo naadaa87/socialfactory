@@ -173,6 +173,29 @@
     fabSync();
   }
 
+  /* ---------- 패밀리 브랜드 (site-config.js 의 family) ----------
+     주소 · 이름 · 소개를 설정 파일에서 고치면 푸터 · 패밀리 페이지 · 본문 링크에 바로 반영된다. 주소를 비우면 숨긴다. */
+  var FAM = {};
+  (CFG.family || []).forEach(function (f) { if (f && f.key) FAM[f.key] = f; });
+  var famDomain = function (u) { return String(u || "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, ""); };
+  var famEsc = function (v) { return String(v == null ? "" : v).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  $$("[data-family-link]").forEach(function (a) {
+    var f = FAM[a.getAttribute("data-family-link")];
+    if (f && f.url) { a.href = f.url; a.target = "_blank"; a.rel = "noopener"; }
+    else { a.removeAttribute("href"); a.removeAttribute("target"); }
+  });
+  $$("[data-family]").forEach(function (box) {
+    var f = FAM[box.getAttribute("data-family")];
+    if (!f || !f.url) { box.hidden = true; return; }
+    $$("[data-ff]", box).forEach(function (el) {
+      var k = el.getAttribute("data-ff");
+      if (k === "domain") el.textContent = famDomain(f.url);
+      else if (k === "uses") { if (f.uses && f.uses.length) el.innerHTML = f.uses.map(function (u) { return "<li>" + famEsc(u) + "</li>"; }).join(""); }
+      else if (f[k] != null && f[k] !== "") el.textContent = f[k];
+    });
+  });
+  window.SF_FAMILY = FAM;
+
   // 회원 메뉴 — site-config.js 의 members.enabled 가 true 일 때만 보인다 (sf_m 쿠키는 로그인 여부 표시용)
   var memberCfg = CFG.members || {};
   var loggedIn = /(?:^|;\s*)sf_m=1/.test(document.cookie);
@@ -266,7 +289,11 @@
       order.forEach(function (c) { list.appendChild(c); });
       if (result) {
         if (!p && !u) result.textContent = "인원이나 진행 방식을 고르면 맞는 룸을 앞으로 모아 보여 드립니다.";
-        else if (!matched.length && p > 40) result.textContent = "40명이 넘는 모임은 여러 룸을 함께 쓰거나 층 전체를 쓰는 방법을 상담해 드립니다. 일자 · 시간 · 인원 · 모임 유형을 문의로 남겨 주세요.";
+        else if (!matched.length && p > 40) {
+          var mega = FAM.megaspot;
+          result.innerHTML = "40명이 넘는 모임은 여러 룸을 함께 쓰거나 층 전체를 쓰는 방법을 상담해 드립니다." +
+            (mega && mega.url ? " 한 공간에 모두 모여야 한다면 같은 건물 2층의 190평 대형 행사장 <a href=\"" + famEsc(mega.url) + "\" target=\"_blank\" rel=\"noopener\">" + famEsc(mega.name || "메가스팟") + "</a>(최대 200명)을 확인해 보세요." : " 일자 · 시간 · 인원 · 모임 유형을 문의로 남겨 주세요.");
+        }
         else if (!matched.length) result.textContent = "조건에 맞는 룸이 없습니다. 인원을 나누어 진행하거나 문의 폼에 조건을 남겨 주세요.";
         else result.textContent = "조건에 맞는 룸 " + matched.length + "개를 앞으로 모았습니다. 최대 인원은 배치에 따라 달라질 수 있으니 상세에서 사진과 배치를 확인해 주세요.";
       }

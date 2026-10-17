@@ -12,6 +12,7 @@ pricing.html      이용 요금 — 예상 금액 계산기(PDF 저장·인쇄·
 guide.html        이용 안내 — 예약부터 퇴실까지, 이용 원칙, 운영 시간, 요금·취소·환불, 오시는 길, FAQ
 contact.html      대관과 이용 문의 — 빠른 상담 안내, 채널, 문의 폼(접수번호 발급 · 계산기 내용 자동 입력), 강사 모집·대형 공간 상담
 about.html        소셜팩토리 소개 — 운영 기준, 로고, 이력, 창업자
+family.html       패밀리 브랜드 — 같은 건물 · 용도별 안내 · 패밀리 브랜드 9곳 (목록은 js/site-config.js 의 family)
 program.html      프로그램·호스트 모집 — 함께하는 방법, 제휴·협업, 현재 모집, 소셜아카데미, 소셜패밀리, 기업·단체, 활용 예시, 홍대 시절 기록
 history.html      지난 기록 2015–2021
 tour.html         3D 공간 안내 (three.js 포함, 약 0.8MB · 참고 이미지는 images/tour/ 에서 필요할 때 불러옴)
@@ -83,6 +84,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 7번 참고)
 5. **Commit changes** 클릭
 
 이미 저장소가 있다면 바뀐 파일만 같은 자리에 다시 올리면 됩니다.
+- 2026-10-17 패밀리 브랜드 연결(푸터 FAMILY SITES · 패밀리 페이지 · 본문 연결): html 전부(`admin.html` 제외), `family.html`(새 파일), `product/` 5개, `css/style.css`, `js/main.js`, `js/site-config.js`, `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-14 카카오톡 문의 버튼 곳곳에 추가(헤더 · 오른쪽 아래 버튼 · 각 페이지): html 전부(`admin.html` 제외), `product/` 5개, `tour.html`, `css/style.css`, `js/main.js` · `js/estimate.js` · `js/shop.js` · `js/site-config.js`, `README.md`, `rss.xml`
 - 2026-10-14 이용권 온라인 결제(KG이니시스) · 관리자 화면 개편 · 카카오 로그인 제거: html 전부, `shop.html` · `order.html` · `order-complete.html` · `product/` 폴더(새 파일), `admin.html`, `css/style.css`, `js/main.js` · `js/member.js` · `js/site-config.js`, `js/shop.js`(새 파일), `functions/` 폴더 전체(`functions/api/auth/kakao/` 는 삭제), `schema.sql`, `schema-upgrade-orders.sql`(새 파일), `schema-upgrade-members.sql`, `images/scenes/10-ai-class-sm.webp`(새 파일), `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-11 회원 기능 추가: html 전부, `admin.html`, `css/style.css`, `js/main.js`, `js/site-config.js`, `js/member.js`(새 파일), `functions/` 폴더 전체, `schema.sql`, `schema-upgrade-members.sql`(새 파일), `README.md`, `sitemap.xml`, `rss.xml`
@@ -139,6 +141,21 @@ GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값
 | 그 밖에 | 이용 안내 · 소개 · 프로그램 · 지난 기록 · 이용권 상품과 주문서 · 마이페이지 · 404 · 3D 안내 · 푸터 |
 
 `contact.kakao` 를 비우면 이 버튼과 안내 문구가 모두 자동으로 숨겨지고 문의 폼 안내만 남습니다. 3D 안내(`tour.html`)도 같은 설정 파일을 읽습니다.
+
+### 패밀리 브랜드 (메가스팟 · 밍글 · 쏘플파티룸 · 플레이션 · 공백 · 코어무드 · 오르비스 · 최시준 · 여덟글자)
+함께 운영하는 브랜드를 2026-10-17에 홈페이지에 연결했습니다. 목록은 `js/site-config.js` 의 `family` 한 곳에 있고, 아래 자리에 모두 같은 값이 쓰입니다.
+
+| 위치 | 내용 |
+| --- | --- |
+| 모든 페이지 맨 아래 | 'FAMILY SITES' — 9개 브랜드 이름과 한 줄 소개, '패밀리 브랜드 한눈에 보기' 링크 |
+| 패밀리 페이지 `/family` | 같은 건물(소셜팩토리 4층 · 메가스팟 2층 · 밍글), 이럴 땐 이곳으로(용도별 안내표), 파티 · 놀이 공간, 공간을 만들고 운영하는 분께, 그 밖의 서비스 |
+| 메인 | 목적별 공간 아래 '다른 용도의 공간이 필요하다면'(메가스팟 · 쏘플파티룸 · 플레이션 · 밍글), 룸 고르기에서 '40명 넘게'를 고르면 메가스팟 안내, FAQ, 대형 공간 상담 배너의 '함께 보면 좋은 곳'(공백 · 코어무드 · 오르비스 · 대표 홈페이지) |
+| 공간 안내 · 이용 요금 · 이용 안내 · 문의 · 소개 | 40명이 넘는 행사 → 메가스팟, 술을 곁들이는 파티 → 쏘플파티룸 · 플레이션, 음료 · 다과 → 밍글, 대표 소개 → choisijun.com |
+
+- 주소 · 이름 · 한 줄 소개(`tag`) · 설명(`desc`) · 위치 표시(`where`) · 이럴 때(`uses`)를 고치면 Commit 뒤 바로 반영됩니다. `url` 을 `""` 로 비우면 그 브랜드는 모든 자리에서 숨겨집니다.
+- 새 브랜드를 더하거나 패밀리 페이지의 묶음을 바꾸려면 화면 배치를 함께 만들어야 합니다. 목록만 늘리면 새 브랜드는 보이지 않습니다.
+- 검색엔진용으로 패밀리 페이지에 브랜드 목록(ItemList)과 관련 링크(relatedLink), 메인에 대표(founder · choisijun.com)를 구조화 데이터로 넣었고, `/family` 를 사이트맵에 추가했습니다. 배포 뒤 네이버 서치어드바이저 · 구글 서치 콘솔에서 `https://socialfactory.co.kr/family` 수집을 한 번 요청해 주세요.
+- 다른 브랜드 홈페이지에도 같은 방식으로 소셜팩토리를 연결해 주면 서로 효과가 납니다. 이때 브랜드 이름을 그대로 링크 글자로 쓰고, '건대 세미나실 대관' 같은 검색어를 링크마다 반복해 넣지는 않는 것이 좋습니다(검색엔진이 링크 조작으로 볼 수 있음).
 
 ### 문구 바꾸기
 각 `.html` 파일을 GitHub에서 열어 글자만 고치면 됩니다. 꺾쇠(`< >`) 안의 내용은 건드리지 않고 그 사이의 글자만 바꾸세요.
