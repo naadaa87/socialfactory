@@ -4,10 +4,11 @@
  * PATCH  { id, action }       : reset(임시 비밀번호 발급) | block(이용 정지) | unblock(정지 해제)
  * DELETE { id }               : 회원 삭제
  */
-import { json, clean, isAdmin, hashPassword, tempPassword, deleteMember } from "../../_lib/auth.js";
+import { json, clean, hashPassword, tempPassword, deleteMember } from "../../_lib/auth.js";
+import { adminGate } from "../../_lib/admin.js";
 
 export async function onRequestGet({ request, env }) {
-  if (!isAdmin(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
+  const deny = await adminGate(request, env); if (deny) return deny;
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   const url = new URL(request.url);
   const q = clean(url.searchParams.get("q") || "", 60);
@@ -32,7 +33,7 @@ export async function onRequestGet({ request, env }) {
 }
 
 export async function onRequestPatch({ request, env }) {
-  if (!isAdmin(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
+  const deny = await adminGate(request, env); if (deny) return deny;
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   let b;
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
@@ -64,7 +65,7 @@ export async function onRequestPatch({ request, env }) {
 }
 
 export async function onRequestDelete({ request, env }) {
-  if (!isAdmin(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
+  const deny = await adminGate(request, env); if (deny) return deny;
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   let b;
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }

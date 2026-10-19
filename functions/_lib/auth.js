@@ -172,14 +172,7 @@ export async function countEvents(env, kind, field, value, minutes) {
   } catch { return 0; }
 }
 
-/* ---------- 관리자 ---------- */
-export function isAdmin(request, env) {
-  if (!env.ADMIN_KEY) return false;
-  const auth = request.headers.get("authorization") || "";
-  const bearer = auth.replace(/^Bearer\s+/i, "").trim();
-  const headerKey = request.headers.get("x-admin-key") || "";
-  return safeEqual(bearer, env.ADMIN_KEY) || safeEqual(headerKey, env.ADMIN_KEY);
-}
+/* 관리자 확인은 _lib/admin.js 의 adminGate · adminOk 를 씁니다 (로그인 쿠키 + 헤더 키). */
 
 /* ---------- 회원 정보를 화면에 보낼 때 (비밀번호 해시 등 제외) ---------- */
 export function publicMember(m) {

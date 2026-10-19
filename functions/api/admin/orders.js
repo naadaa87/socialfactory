@@ -4,11 +4,12 @@
  * PATCH { id, status, memo }   : 상태 변경(used · refund_requested · refunded · cancelled) · 운영 메모
  * ※ 실제 결제 취소(환불)는 KG이니시스 가맹점관리자(iniweb.inicis.com)에서 처리하고, 여기에는 결과만 기록합니다.
  */
-import { json, clean, isAdmin } from "../../_lib/auth.js";
+import { json, clean } from "../../_lib/auth.js";
+import { adminGate } from "../../_lib/admin.js";
 import { ORDER_STATUS } from "../../_lib/shop.js";
 
 export async function onRequestGet({ request, env }) {
-  if (!isAdmin(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
+  const deny = await adminGate(request, env); if (deny) return deny;
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   const url = new URL(request.url);
   const status = clean(url.searchParams.get("status") || "", 20), q = clean(url.searchParams.get("q") || "", 60);
@@ -28,7 +29,7 @@ export async function onRequestGet({ request, env }) {
 }
 
 export async function onRequestPatch({ request, env }) {
-  if (!isAdmin(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
+  const deny = await adminGate(request, env); if (deny) return deny;
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   let b;
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
