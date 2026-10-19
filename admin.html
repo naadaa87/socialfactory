@@ -4,540 +4,276 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="NaverBot" content="Noindex, Nofollow">
+  <meta name="Yeti" content="Noindex, Nofollow">
+  <meta name="theme-color" content="#F7F8FA">
   <title>관리자 | 소셜팩토리</title>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <style>
-    :root { --blue:#2855E8; --blue-25:#EEF3FF; --blue-50:#DCE7FF; --navy:#18233A; --navy-80:#2E3A55; --bg:#F7F8FA; --line:#E3E7EE; --muted:#5B6578; --green:#1D8A4E; --green-bg:#E6F6EC; --amber:#8A5A00; --amber-bg:#FFF4DB; --red:#C0392B; --red-bg:#FDECEA; }
-    * { box-sizing: border-box; }
-    html, body { margin:0; }
-    body { font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: var(--bg); color: var(--navy); font-size: 14px; line-height: 1.5; }
-    a { color: inherit; }
-    input, select, button, textarea { font: inherit; color: inherit; }
-    button { cursor: pointer; }
-    .btn { border:0; border-radius: 10px; padding: 10px 14px; background: var(--blue); color:#fff; font-weight:700; }
-    .btn.ghost { background:#fff; color: var(--navy); border:1.5px solid var(--line); }
-    .btn.ghost:hover { border-color: var(--navy); }
-    .btn.sm { padding: 6px 10px; font-size: 12.5px; border-radius: 8px; }
-    .btn.danger { color: var(--red); border-color: #E8B4A9; }
-    .btn[hidden] { display: none; }
-    input[type=password], input[type=search], input[type=text], select, textarea { border:1.5px solid var(--line); border-radius: 10px; padding: 9px 12px; background:#fff; min-width: 0; }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-25); }
-
-    /* 틀 */
-    .top { position: sticky; top: 0; z-index: 5; background:#fff; border-bottom:1px solid var(--line); padding: 0 20px; height: 58px; display:flex; align-items:center; gap:14px; }
-    .top .brand { display:flex; align-items:center; gap:10px; font-weight: 800; letter-spacing: -0.01em; text-decoration: none; }
-    .top .brand img { width: 28px; height: 28px; }
-    .top .brand small { font-weight: 600; color: var(--muted); margin-left: 4px; }
-    .top .sp { flex: 1; }
-    .top .who { font-size: 13px; color: var(--muted); }
-    .top .who b { color: var(--green); }
-    .shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: calc(100vh - 58px); }
-    .side { background:#fff; border-right:1px solid var(--line); padding: 18px 12px; }
-    .side nav { display:grid; gap: 4px; }
-    .side nav button { display:flex; align-items:center; gap: 10px; width:100%; text-align:left; border:0; background: transparent; padding: 11px 12px; border-radius: 10px; font-weight: 700; color: var(--navy-80); }
-    .side nav button .ic { width: 22px; height: 22px; border-radius: 7px; background: var(--bg); display:grid; place-items:center; font-size: 11px; font-weight: 800; color: var(--muted); }
-    .side nav button:hover { background: var(--bg); }
-    .side nav button[aria-selected="true"] { background: var(--blue-25); color: var(--blue); }
-    .side nav button[aria-selected="true"] .ic { background: var(--blue); color:#fff; }
-    .side nav button .cnt { margin-left:auto; min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--blue); color:#fff; font-size: 11.5px; text-align:center; }
-    .side nav button .cnt:empty { display:none; }
-    .side .foot { margin-top: 24px; padding: 12px; border-radius: 10px; background: var(--bg); font-size: 12.5px; color: var(--muted); }
-    main { padding: 22px 24px 48px; min-width: 0; }
-    .page { display: none; }
-    .page.on { display: block; }
-    .page-h { display:flex; align-items:flex-end; justify-content:space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
-    .page-h h1 { font-size: 20px; margin: 0; letter-spacing: -0.02em; }
-    .page-h p { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; }
-    .card { background:#fff; border:1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
-    .card + .card { margin-top: 14px; }
-    .card h2 { font-size: 15px; margin: 0 0 12px; }
-    .msg { color: var(--muted); margin: 10px 0 0; font-size: 13px; }
-    .msg.err { color: var(--red); }
-    .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    .toolbar .msg { margin: 0; }
-    .toolbar .right { margin-left: auto; }
-    .wrap { overflow-x: auto; margin-top: 12px; }
-    table { width:100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align:left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid var(--line); }
-    th { background: var(--bg); font-size: 12px; color: var(--muted); white-space: nowrap; position: sticky; top: 0; }
-    tr:hover td { background: #FBFCFE; }
-    td.msgcell { max-width: 420px; white-space: pre-wrap; }
-    td.nw, .nw { white-space: nowrap; }
-    #page-ord table { min-width: 1080px; }
-    #page-inq table { min-width: 900px; }
-    #page-mem table { min-width: 860px; }
-    td .memo { min-width: 150px; }
-    td.pay { min-width: 210px; max-width: 240px; overflow-wrap: anywhere; }
-    td.pay .mono { font-size: 11.5px; }
-    td.buyer { max-width: 180px; overflow-wrap: anywhere; }
-    td.prod { min-width: 150px; }
-    td a[href^='tel:'] { white-space: nowrap; }
-    td small, .small { color: var(--muted); font-size: 12px; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; letter-spacing: .02em; }
-    .tag { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: var(--bg); color: var(--navy); white-space: nowrap; }
-    .tag.blue { background: var(--blue-50); color: var(--blue); }
-    .tag.ok { background: var(--green-bg); color: var(--green); }
-    .tag.warn { background: var(--amber-bg); color: var(--amber); }
-    .tag.bad { background: var(--red-bg); color: var(--red); }
-    .tag.test { background: #FFF3E8; color: #B4580F; }
-    .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
-    .temp { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--amber-bg); border:1px solid #F3D399; }
-    .temp b { font-family: monospace; font-size: 16px; letter-spacing: .04em; }
-    .empty { padding: 28px; text-align:center; color: var(--muted); }
-
-    /* 로그인 */
-    .login { max-width: 560px; margin: 40px auto; }
-    .login p { margin: 0 0 14px; color: var(--navy-80); }
-    .login .toolbar input { flex: 1; min-width: 200px; }
-
-    /* 대시보드 */
-    .kpis { display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-    .kpi { background:#fff; border:1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
-    .kpi .k { font-size: 12.5px; font-weight: 700; color: var(--muted); }
-    .kpi .v { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin-top: 4px; }
-    .kpi .v small { font-size: 13px; font-weight: 600; color: var(--muted); margin-left: 2px; }
-    .kpi .s { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
-    .kpi.accent { background: var(--blue); border-color: var(--blue); color:#fff; }
-    .kpi.accent .k, .kpi.accent .s, .kpi.accent .v small { color: rgba(255,255,255,0.8); }
-    .period { display:inline-flex; border:1.5px solid var(--line); border-radius: 10px; overflow:hidden; background:#fff; }
-    .period button { border:0; background:#fff; padding: 8px 12px; font-weight: 700; color: var(--muted); }
-    .period button[aria-selected="true"] { background: var(--navy); color:#fff; }
-    .two { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
-    .two .card { margin: 0; }
-    .todo { display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
-    .todo button { text-align:left; background:#fff; border:1px solid var(--line); border-radius: 14px; padding: 14px 16px; display:flex; align-items:center; gap: 12px; }
-    .todo button:hover { border-color: var(--blue); }
-    .todo .n { font-size: 24px; font-weight: 800; color: var(--blue); min-width: 36px; }
-    .todo .t { font-weight: 700; }
-    .todo .d { display:block; font-size: 12.5px; color: var(--muted); font-weight: 500; }
-
-    /* 설정 · 상품 */
-    .chk { display:grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-    .chk li { display:flex; align-items:flex-start; gap: 10px; padding: 10px 12px; border:1px solid var(--line); border-radius: 10px; }
-    .chk .st { flex:none; width: 22px; height: 22px; border-radius: 50%; display:grid; place-items:center; font-size: 12px; font-weight: 800; }
-    .chk .st.ok { background: var(--green-bg); color: var(--green); }
-    .chk .st.no { background: var(--red-bg); color: var(--red); }
-    .chk .st.opt { background: var(--amber-bg); color: var(--amber); }
-    .chk b { display:block; }
-    .chk small { color: var(--muted); }
-    .chk code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: var(--bg); padding: 1px 5px; border-radius: 5px; }
-    .prod { display:grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-    .prod .p { border:1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
-    .prod .p small { display:block; color: var(--blue); font-weight: 700; font-size: 12px; }
-    .prod .p b { display:block; font-size: 15px; margin-top: 2px; }
-    .prod .p .pr { margin-top: 6px; font-weight: 800; font-size: 18px; }
-    .prod .p .so { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
-    .prod .p a { display:inline-block; margin-top: 8px; font-size: 12.5px; color: var(--blue); font-weight: 700; }
-    .memo { width: 100%; min-width: 160px; min-height: 36px; resize: vertical; font-size: 12.5px; padding: 6px 8px; }
-    details.help { margin-top: 14px; font-size: 13px; color: var(--navy-80); }
-    details.help summary { cursor:pointer; font-weight: 700; color: var(--muted); }
-    details.help ol { padding-left: 20px; }
-    .note-box { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--blue-25); font-size: 13px; color: var(--navy-80); }
-
-    @media (max-width: 900px) {
-      .shell { grid-template-columns: 1fr; }
-      .side { border-right: 0; border-bottom: 1px solid var(--line); padding: 10px 12px; position: sticky; top: 58px; z-index: 4; }
-      .side nav { display:flex; gap: 4px; overflow-x: auto; }
-      .side nav button { width: auto; white-space: nowrap; padding: 9px 12px; }
-      .side nav button .ic { display:none; }
-      .side .foot { display:none; }
-      main { padding: 16px 14px 40px; }
-      .kpis, .todo { grid-template-columns: repeat(2, 1fr); }
-      .two { grid-template-columns: 1fr; }
-      th, td { padding: 8px 6px; }
-    }
-    @media (max-width: 520px) { .kpis, .todo { grid-template-columns: 1fr; } .top .who { display:none; } }
-  </style>
+  <link rel="stylesheet" href="/css/admin.css?v=31336e1d">
 </head>
-<body>
-<header class="top">
-  <a class="brand" href="/"><img src="images/logo-mark.svg" alt=""> 소셜팩토리 <small>관리자</small></a>
-  <span class="sp"></span>
-  <span class="who" id="who"></span>
-  <button class="btn ghost sm" id="logout" hidden>키 지우기</button>
-  <a href="/" style="color:var(--muted); text-decoration:none; font-size:13px;">홈페이지 →</a>
-</header>
+<body class="adm">
+<div id="admin-root">
 
-<section class="card login" id="login">
-  <h2>관리자 로그인</h2>
-  <p>Cloudflare Pages 설정에 넣어 둔 <b>ADMIN_KEY</b> 값을 입력해 주세요. 키는 이 브라우저 탭에만 보관되며 주소창에 남지 않습니다.</p>
-  <div class="toolbar">
-    <input id="key" type="password" placeholder="관리자 키" autocomplete="current-password">
-    <button class="btn" id="go">들어가기</button>
-  </div>
-  <p class="msg" id="login-msg"></p>
-</section>
+<!-- ===== 로그인 ===== -->
+<div class="login" id="login">
+  <form class="login-card" id="login-form" novalidate>
+    <a class="brand" href="/" aria-label="소셜팩토리 홈으로"><img src="/images/logo-mark.svg" alt="" width="34" height="34"><span><b>소셜팩토리</b><small>SOCIAL FACTORY</small></span></a>
+    <h1>관리자 로그인</h1>
+    <p class="muted small">Cloudflare에 저장한 <code>ADMIN_KEY</code> 값으로 로그인합니다.</p>
+    <div class="f"><label for="login-key">관리자 비밀번호</label><input class="input" type="password" id="login-key" autocomplete="current-password" required></div>
+    <label class="chk"><input type="checkbox" id="login-remember"> <span>이 기기에서 7일 동안 로그인 유지 <small class="muted">(공용 PC에서는 체크하지 마세요)</small></span></label>
+    <button class="btn btn-primary btn-lg" type="submit" id="login-btn">로그인</button>
+    <div class="login-msg" id="login-msg" hidden></div>
+    <a class="small muted" href="/">← 홈페이지로 돌아가기</a>
+  </form>
+</div>
 
-<div class="shell" id="shell" hidden>
+<!-- ===== 관리자 화면 ===== -->
+<div class="app" id="app" hidden>
   <aside class="side">
-    <nav aria-label="관리 메뉴">
-      <button type="button" data-tab="dash" aria-selected="true"><span class="ic">D</span>대시보드</button>
-      <button type="button" data-tab="inq" aria-selected="false"><span class="ic">Q</span>문의<span class="cnt" id="cnt-inq"></span></button>
-      <button type="button" data-tab="ord" aria-selected="false"><span class="ic">₩</span>주문 · 결제<span class="cnt" id="cnt-ord"></span></button>
-      <button type="button" data-tab="mem" aria-selected="false"><span class="ic">M</span>회원</button>
-      <button type="button" data-tab="prod" aria-selected="false"><span class="ic">P</span>상품</button>
-      <button type="button" data-tab="set" aria-selected="false"><span class="ic">S</span>설정 상태</button>
+    <div class="side-brand">
+      <a href="/admin" class="brand"><img src="/images/logo-mark.svg" alt="" width="28" height="28"><span><b>소셜팩토리</b></span></a>
+      <span class="badge">관리자</span>
+    </div>
+    <button class="btn btn-primary side-new" type="button" data-new-res>+ 예약 등록</button>
+    <nav class="side-nav" id="nav" aria-label="관리 메뉴">
+      <span class="nav-cap">운영</span>
+      <button type="button" data-view="dash">대시보드</button>
+      <button type="button" data-view="board">예약 현황</button>
+      <button type="button" data-view="list">일자별 예약<em data-count="unpaid" title="결제 전 예약" hidden></em></button>
+      <button type="button" data-view="sales">매출</button>
+      <span class="nav-cap">고객</span>
+      <button type="button" data-view="inq">문의<em data-count="inq" hidden></em></button>
+      <button type="button" data-view="ord">주문 · 결제<em data-count="ord" hidden></em></button>
+      <button type="button" data-view="mem">회원</button>
+      <span class="nav-cap">설정</span>
+      <button type="button" data-view="prod">상품</button>
+      <button type="button" data-view="set">설정 상태</button>
     </nav>
-    <div class="foot">문의 · 회원 · 주문 데이터는 Cloudflare D1 에 저장됩니다. 결제 취소(환불)는 KG이니시스 가맹점관리자에서 처리하고 여기에는 결과를 기록합니다.</div>
+    <div class="side-links" id="side-links"></div>
+    <div class="side-foot"><a href="/" target="_blank" rel="noopener">홈페이지 보기 ↗</a><button type="button" id="logout">로그아웃</button></div>
   </aside>
 
-  <main>
+  <main class="main">
     <!-- 대시보드 -->
-    <section class="page on" id="page-dash">
-      <div class="page-h">
-        <div><h1>대시보드</h1><p>문의 · 결제 · 회원 흐름을 한 화면에서 봅니다. 테스트 결제는 매출에 넣지 않습니다.</p></div>
-        <div class="toolbar"><div class="period" id="period"><button type="button" data-p="today" aria-selected="true">오늘</button><button type="button" data-p="week" aria-selected="false">7일</button><button type="button" data-p="month" aria-selected="false">30일</button><button type="button" data-p="all" aria-selected="false">전체</button></div><button class="btn ghost" id="dash-reload">새로고침</button></div>
+    <section class="view" id="view-dash">
+      <header class="vh">
+        <div><h1>오늘 확인할 것</h1><p class="muted small" id="dash-date"></p></div>
+        <div class="acts"><button class="btn btn-primary btn-sm" type="button" data-new-res>+ 예약 등록</button><button class="btn btn-light btn-sm" type="button" id="dash-reload">새로고침</button></div>
+      </header>
+      <div class="kpis" id="dash-kpis"></div>
+      <div class="grid2">
+        <div class="card"><h2 class="ch"><span>오늘 예약</span><button class="btn btn-light btn-xs" type="button" data-go="board">예약 현황 →</button></h2><div id="dash-today" class="rlist"></div></div>
+        <div class="card"><h2 class="ch"><span>내일 예약</span></h2><div id="dash-tomorrow" class="rlist"></div></div>
+        <div class="card"><h2 class="ch"><span>결제 확인이 필요한 예약 <small>결제 전 · 이용일 순</small></span></h2><div id="dash-unpaid" class="rlist"></div></div>
+        <div class="card"><h2 class="ch"><span>답하지 않은 문의 <small>새 문의 · 오래된 순</small></span><button class="btn btn-light btn-xs" type="button" data-go="inq">문의 전체 →</button></h2><div id="dash-inq" class="rlist"></div></div>
       </div>
-      <div class="kpis" id="kpis"></div>
-      <div class="todo" id="todo"></div>
-      <div class="two">
-        <div class="card"><h2>최근 문의</h2><div class="wrap" style="margin-top:0"><table><thead><tr><th>접수</th><th>상태</th><th>목적</th><th>이름</th></tr></thead><tbody id="recent-inq"></tbody></table></div></div>
-        <div class="card"><h2>최근 결제</h2><div class="wrap" style="margin-top:0"><table><thead><tr><th>주문</th><th>상태</th><th>상품</th><th>금액</th></tr></thead><tbody id="recent-ord"></tbody></table></div></div>
+      <div class="card mt"><h2 class="ch"><span>다가오는 예약 <small>모레부터 7일</small></span><button class="btn btn-light btn-xs" type="button" data-go="list">일자별 예약 →</button></h2><div id="dash-upcoming" class="rlist"></div></div>
+      <div class="card mt"><h2 class="ch"><span>이번 달 매출 <small>이용일 기준 · 결제 완료</small></span><button class="btn btn-light btn-xs" type="button" data-go="sales">매출 자세히 →</button></h2><div id="dash-month"></div></div>
+      <div class="card mt"><h2 class="ch"><span>채널 바로가기 <small>새 창으로 열립니다</small></span></h2><div id="dash-links" class="ch-links"></div></div>
+      <div class="card mt"><h2 class="ch"><span>최근 온라인 결제 <small>홈페이지 이용권</small></span><button class="btn btn-light btn-xs" type="button" data-go="ord">주문 · 결제 →</button></h2><div id="dash-orders" class="rlist"></div></div>
+    </section>
+
+    <!-- 예약 현황 (룸별 시간표 · 달력) -->
+    <section class="view" id="view-board" hidden>
+      <header class="vh">
+        <div><h1>예약 현황</h1><p class="muted small">룸별 시간표로 하루 예약을 봅니다. 빈 칸을 누르면 그 룸 · 시간으로 예약 등록 창이 열리고, 예약을 누르면 상세 내용이 열립니다.</p></div>
+        <div class="acts"><div class="seg" id="bd-mode" role="group" aria-label="보기"><button type="button" data-mode="day" class="on">일간</button><button type="button" data-mode="month">월간</button></div><button class="btn btn-primary btn-sm" type="button" data-new-res>+ 예약 등록</button></div>
+      </header>
+      <div class="bd-bar">
+        <button class="btn btn-light btn-sm" type="button" id="bd-prev" aria-label="이전">←</button>
+        <input class="input" type="date" id="bd-date" aria-label="날짜">
+        <button class="btn btn-light btn-sm" type="button" id="bd-next" aria-label="다음">→</button>
+        <button class="btn btn-light btn-sm" type="button" id="bd-today">오늘</button>
+        <b class="bd-title" id="bd-title"></b>
+        <label class="chk small"><input type="checkbox" id="bd-cancel"> 취소한 예약도 보기</label>
       </div>
-      <p class="msg" id="dash-msg"></p>
+      <div class="card bd-card">
+        <div id="bd-day"></div>
+        <div id="bd-month" hidden></div>
+        <div class="legend small"><span class="lg paid">결제 완료</span><span class="lg unpaid">결제 전</span><span class="lg cancel">취소</span><span class="lg night">심야 · 오전 요금 시간대</span></div>
+      </div>
+      <div class="card mt" id="bd-sum-card"><h2 class="ch"><span id="bd-sum-title">이 날 예약</span><span class="small muted" id="bd-sum"></span></h2><div id="bd-list" class="rlist"></div></div>
+    </section>
+
+    <!-- 일자별 예약 -->
+    <section class="view" id="view-list" hidden>
+      <header class="vh">
+        <div><h1>일자별 예약</h1><p class="muted small">날짜마다 예약을 모아 봅니다. 줄을 누르면 상세 내용이 열리고, 결제 전 예약은 <b>결제 확인</b>으로 바로 결제 완료 처리할 수 있습니다.</p></div>
+        <div class="acts"><button class="btn btn-light btn-sm" type="button" id="ls-csv">CSV 내려받기</button><button class="btn btn-light btn-sm" type="button" id="ls-print">인쇄</button><button class="btn btn-light btn-sm" type="button" id="ls-reload">새로고침</button></div>
+      </header>
+      <div class="ls-bar">
+        <div class="chips" id="ls-range" role="group" aria-label="기간"><button type="button" class="chip" data-range="week">이번 주</button><button type="button" class="chip" data-range="month">이번 달</button><button type="button" class="chip" data-range="next">다음 달</button><button type="button" class="chip on" data-range="upcoming">앞으로 전체</button><button type="button" class="chip" data-range="past">지난 예약</button></div>
+        <div class="dates"><input class="input" type="date" id="ls-from" aria-label="시작일"><span>~</span><input class="input" type="date" id="ls-to" aria-label="종료일"></div>
+      </div>
+      <div class="filters">
+        <select class="select" id="ls-status" aria-label="예약 상태"><option value="active">취소 제외</option><option value="">취소 포함 전체</option><option value="cancelled">취소만</option></select>
+        <select class="select" id="ls-space" aria-label="공간"><option value="">모든 공간</option></select>
+        <select class="select" id="ls-pay" aria-label="결제수단"><option value="">모든 결제수단</option></select>
+        <select class="select" id="ls-pstatus" aria-label="결제 상태"><option value="">모든 결제 상태</option><option value="paid">결제 완료</option><option value="unpaid">결제 전</option><option value="refunded">환불</option></select>
+        <input class="input" id="ls-q" placeholder="이름 · 연락처 · 예약번호 · 메모" aria-label="검색">
+      </div>
+      <div class="kpis kpis-4" id="ls-kpis"></div>
+      <div id="ls-list"></div>
+    </section>
+
+    <!-- 매출 -->
+    <section class="view" id="view-sales" hidden>
+      <header class="vh">
+        <div><h1>매출</h1><p class="muted small">관리자 화면에서 등록한 예약의 결제 금액을 결제수단별로 모았습니다. 결제 전 예약은 매출에 넣지 않고 미수금으로 따로 보여 줍니다.</p></div>
+        <div class="acts">
+          <select class="select select-sm" id="sl-year" aria-label="연도"></select>
+          <div class="seg" id="sl-basis" role="group" aria-label="집계 기준"><button type="button" data-basis="use" class="on">이용일 기준</button><button type="button" data-basis="paid">결제일 기준</button></div>
+          <label class="chk small"><input type="checkbox" id="sl-orders" checked> 홈페이지 이용권 포함</label>
+          <button class="btn btn-light btn-sm" type="button" id="sl-csv">CSV 내려받기</button>
+        </div>
+      </header>
+      <div class="kpis kpis-5" id="sl-kpis"></div>
+      <div class="grid2 sl-grid">
+        <div class="card"><h2 class="ch"><span>결제수단별 <small id="sl-year-label"></small></span></h2><div id="sl-methods" class="bars"></div></div>
+        <div class="card"><h2 class="ch"><span>월별 추이</span></h2><div id="sl-chart" class="mchart"></div><div id="sl-chart-legend" class="mlegend small"></div></div>
+      </div>
+      <div class="card mt"><h2 class="ch"><span>월별 · 결제수단별 매출 <small>월을 누르면 그 달의 예약 목록이 열립니다</small></span></h2><div class="tbl-wrap"><table class="tbl sl-table" id="sl-table"></table></div></div>
+      <div class="grid2 mt">
+        <div class="card"><h2 class="ch"><span>공간별</span></h2><div id="sl-spaces" class="bars"></div></div>
+        <div class="card"><h2 class="ch"><span>예약 경로별</span></h2><div id="sl-channels" class="bars"></div></div>
+      </div>
+      <p class="tiny muted mt">매출 = 결제 완료 · 환불 예약의 (결제 금액 − 환불 금액). 취소했어도 환불하지 않은 금액은 매출로 남습니다. 결제일 기준은 결제일을 적지 않은 예약을 이용일로 셉니다. 홈페이지 이용권은 KG이니시스 결제일 기준이며 테스트 결제와 환불 · 취소 주문은 빠집니다.</p>
     </section>
 
     <!-- 문의 -->
-    <section class="page" id="page-inq">
-      <div class="page-h"><div><h1>문의</h1><p>홈페이지 문의 폼으로 들어온 내용입니다. 상태를 바꾸면 회원은 마이페이지에서 바로 볼 수 있습니다.</p></div></div>
-      <div class="card">
-        <div class="toolbar">
-          <select id="filter"><option value="">전체 상태</option><option value="new">새 문의</option><option value="in_progress">진행 중</option><option value="done">처리 완료</option></select>
-          <button class="btn ghost" id="reload">새로고침</button>
-          <button class="btn ghost" id="csv">CSV 내려받기</button>
-          <span class="msg" id="count"></span>
-        </div>
-        <div class="wrap">
-          <table>
-            <thead><tr><th>접수번호</th><th>접수 시각</th><th>상태</th><th>목적 · 공간</th><th>이름 · 연락처</th><th>일정 · 인원</th><th>내용</th><th>알림</th></tr></thead>
-            <tbody id="rows"></tbody>
-          </table>
-        </div>
-      </div>
+    <section class="view" id="view-inq" hidden>
+      <header class="vh"><div><h1>문의</h1><p class="muted small">홈페이지 문의 폼으로 들어온 내용입니다. 상태를 바꾸면 회원은 마이페이지에서 바로 볼 수 있고, <b>예약 등록</b>을 누르면 이름 · 연락처 · 공간이 채워진 예약 등록 창이 열립니다.</p></div>
+        <div class="acts"><select class="select select-sm" id="inq-filter" aria-label="상태"><option value="">전체 상태</option><option value="new">새 문의</option><option value="in_progress">진행 중</option><option value="done">처리 완료</option></select><button class="btn btn-light btn-sm" type="button" id="inq-reload">새로고침</button><button class="btn btn-light btn-sm" type="button" id="inq-csv">CSV 내려받기</button></div></header>
+      <p class="small muted" id="inq-count"></p>
+      <div class="card flush"><div class="tbl-wrap"><table class="tbl" id="inq-table"><thead><tr><th>접수번호</th><th>접수 시각</th><th>상태</th><th>목적 · 공간</th><th>이름 · 연락처</th><th>일정 · 인원</th><th>내용</th><th></th></tr></thead><tbody id="inq-rows"></tbody></table></div></div>
     </section>
 
     <!-- 주문 · 결제 -->
-    <section class="page" id="page-ord">
-      <div class="page-h"><div><h1>주문 · 결제</h1><p>이용권 온라인 결제 내역입니다. 입실 처리는 '이용 완료', 환불은 가맹점관리자에서 취소한 뒤 '환불 완료'로 바꿔 주세요.</p></div></div>
-      <div class="card">
-        <div class="toolbar">
-          <select id="ofilter"><option value="">전체 상태</option><option value="paid">결제 완료</option><option value="used">이용 완료</option><option value="refund_requested">환불 요청</option><option value="refunded">환불 완료</option><option value="cancelled">취소</option><option value="failed">결제 실패</option><option value="pending">결제 대기</option></select>
-          <input id="oq" type="search" placeholder="주문번호 · 이름 · 전화 · 상품 검색">
-          <label style="display:inline-flex;gap:6px;align-items:center;"><input type="checkbox" id="otest"> 테스트 결제 포함</label>
-          <button class="btn ghost" id="oreload">검색 · 새로고침</button>
-          <button class="btn ghost" id="ocsv">CSV 내려받기</button>
-          <span class="msg" id="ocount"></span>
-        </div>
-        <div class="wrap">
-          <table>
-            <thead><tr><th>주문번호 · 시각</th><th>상태</th><th>상품</th><th>금액</th><th>구매자</th><th>결제</th><th>이용 시작일 · 요청</th><th>운영 메모</th></tr></thead>
-            <tbody id="orows"></tbody>
-          </table>
-        </div>
-        <details class="help">
-          <summary>환불은 어떻게 처리하나요?</summary>
-          <ol>
-            <li>고객이 카카오톡 · 이메일 · 문의 폼으로 주문번호와 함께 환불을 요청하면, 이 표에서 상태를 <b>환불 요청</b>으로 바꿔 둡니다.</li>
-            <li>KG이니시스 <b>가맹점관리자(iniweb.inicis.com)</b> → 거래내역 조회에서 같은 주문번호(TID)를 찾아 전체 취소 또는 부분 취소합니다. 규정(7일 안 전액, 이후 90%, 정기권 일할 차감)에 맞는 금액으로 취소해 주세요.</li>
-            <li>취소가 끝나면 상태를 <b>환불 완료</b>로 바꾸고 운영 메모에 취소 금액을 적어 둡니다. 회원 주문이면 마이페이지에도 같은 상태가 보입니다.</li>
-          </ol>
-        </details>
+    <section class="view" id="view-ord" hidden>
+      <header class="vh"><div><h1>주문 · 결제</h1><p class="muted small">홈페이지 이용권 온라인 결제(KG이니시스) 내역입니다. 입실 처리는 '이용 완료', 환불은 가맹점관리자에서 취소한 뒤 '환불 완료'로 바꿔 주세요.</p></div></header>
+      <div class="filters">
+        <select class="select" id="ord-filter" aria-label="상태"><option value="">전체 상태</option><option value="paid">결제 완료</option><option value="used">이용 완료</option><option value="refund_requested">환불 요청</option><option value="refunded">환불 완료</option><option value="cancelled">취소</option><option value="failed">결제 실패</option><option value="pending">결제 대기</option></select>
+        <input class="input" id="ord-q" type="search" placeholder="주문번호 · 이름 · 전화 · 상품" aria-label="검색">
+        <label class="chk small"><input type="checkbox" id="ord-test"> 테스트 결제 포함</label>
+        <button class="btn btn-light btn-sm" type="button" id="ord-reload">검색 · 새로고침</button>
+        <button class="btn btn-light btn-sm" type="button" id="ord-csv">CSV 내려받기</button>
       </div>
+      <p class="small muted" id="ord-count"></p>
+      <div class="card flush"><div class="tbl-wrap"><table class="tbl" id="ord-table"><thead><tr><th>주문번호 · 시각</th><th>상태</th><th>상품</th><th>금액</th><th>구매자</th><th>결제</th><th>이용 시작일 · 요청</th><th>운영 메모</th></tr></thead><tbody id="ord-rows"></tbody></table></div></div>
+      <details class="help card mt"><summary>환불은 어떻게 처리하나요?</summary>
+        <ol>
+          <li>고객이 주문번호와 함께 환불을 요청하면 상태를 <b>환불 요청</b>으로 바꿔 둡니다.</li>
+          <li>KG이니시스 <b>가맹점관리자(iniweb.inicis.com)</b> → 거래내역 조회에서 같은 주문번호(TID)를 찾아 전체 취소 또는 부분 취소합니다. 규정(7일 안 전액, 이후 90%, 정기권 일할 차감)에 맞는 금액으로 취소해 주세요.</li>
+          <li>취소가 끝나면 상태를 <b>환불 완료</b>로 바꾸고 운영 메모에 취소 금액을 적어 둡니다.</li>
+        </ol>
+      </details>
     </section>
 
     <!-- 회원 -->
-    <section class="page" id="page-mem">
-      <div class="page-h"><div><h1>회원</h1><p>이메일로 가입한 회원 목록입니다. 비밀번호를 잊은 회원은 본인 확인 후 임시 비밀번호를 발급해 전달해 주세요.</p></div></div>
-      <div class="card">
-        <div class="toolbar">
-          <input id="mq" type="search" placeholder="이름 · 이메일 · 전화번호 검색">
-          <label style="display:inline-flex;gap:6px;align-items:center;"><input type="checkbox" id="mk"> 소식 수신 동의만</label>
-          <button class="btn ghost" id="mreload">검색 · 새로고침</button>
-          <button class="btn ghost" id="mcsv">CSV 내려받기</button>
-          <span class="msg" id="mcount"></span>
-        </div>
-        <div class="temp" id="temp" hidden></div>
-        <div class="wrap">
-          <table>
-            <thead><tr><th>번호</th><th>가입</th><th>이름 · 연락처</th><th>소식 수신</th><th>상태</th><th>문의</th><th>최근 로그인</th><th>관리</th></tr></thead>
-            <tbody id="mrows"></tbody>
-          </table>
-        </div>
-        <p class="msg">임시 비밀번호는 발급 직후 한 번만 보입니다. 회원은 로그인 뒤 마이페이지에서 새 비밀번호로 바꾸게 됩니다.</p>
+    <section class="view" id="view-mem" hidden>
+      <header class="vh"><div><h1>회원</h1><p class="muted small">이메일로 가입한 회원 목록입니다. 비밀번호를 잊은 회원은 본인 확인 후 임시 비밀번호를 발급해 전달해 주세요.</p></div></header>
+      <div class="filters">
+        <input class="input" id="mem-q" type="search" placeholder="이름 · 이메일 · 전화번호" aria-label="검색">
+        <label class="chk small"><input type="checkbox" id="mem-mk"> 소식 수신 동의만</label>
+        <button class="btn btn-light btn-sm" type="button" id="mem-reload">검색 · 새로고침</button>
+        <button class="btn btn-light btn-sm" type="button" id="mem-csv">CSV 내려받기</button>
       </div>
+      <p class="small muted" id="mem-count"></p>
+      <div class="temp" id="mem-temp" hidden></div>
+      <div class="card flush"><div class="tbl-wrap"><table class="tbl" id="mem-table"><thead><tr><th>번호</th><th>가입</th><th>이름 · 연락처</th><th>소식 수신</th><th>상태</th><th>문의</th><th>최근 로그인</th><th>관리</th></tr></thead><tbody id="mem-rows"></tbody></table></div></div>
+      <p class="tiny muted mt">임시 비밀번호는 발급 직후 한 번만 보입니다. 회원은 로그인 뒤 마이페이지에서 새 비밀번호로 바꾸게 됩니다.</p>
     </section>
 
     <!-- 상품 -->
-    <section class="page" id="page-prod">
-      <div class="page-h"><div><h1>상품</h1><p>홈페이지에서 판매 중인 이용권과 누적 판매량입니다.</p></div></div>
-      <div class="card">
-        <div class="prod" id="prod"></div>
-        <div class="note-box">상품 이름 · 가격 · 설명을 바꾸려면 GitHub 저장소의 <code>functions/_lib/products.js</code> 파일을 수정하고 Commit 하면 됩니다. 홈페이지 상품 페이지와 결제 금액 검증이 모두 이 파일 하나를 쓰기 때문에, 바꾼 뒤에는 상품 페이지(<code>/product/상품id</code>)가 새 값으로 보이는지 한 번 확인해 주세요. 가격을 0원이나 빈값으로 두면 결제 심사 조건에 어긋납니다.</div>
-      </div>
+    <section class="view" id="view-prod" hidden>
+      <header class="vh"><div><h1>상품</h1><p class="muted small">홈페이지에서 판매 중인 이용권과 누적 판매량입니다. (테스트 결제 제외)</p></div></header>
+      <div class="prod" id="prod"></div>
+      <div class="note mt">상품 이름 · 가격 · 설명을 바꾸려면 GitHub 저장소의 <code>functions/_lib/products.js</code> 파일을 고치고 Commit 하면 됩니다. 홈페이지 상품 페이지와 결제 금액 검증이 모두 이 파일 하나를 씁니다. 룸 대관 요금은 <code>js/site-config.js</code> 의 <code>pricing</code> 이고, 예약 등록 창의 요금표 계산도 같은 값을 씁니다.</div>
     </section>
 
     <!-- 설정 상태 -->
-    <section class="page" id="page-set">
-      <div class="page-h"><div><h1>설정 상태</h1><p>Cloudflare Pages 설정값과 데이터베이스 표가 준비되었는지 확인합니다. 값 자체는 보이지 않고 있는지 없는지만 봅니다.</p></div></div>
-      <div class="card"><h2>필수</h2><ul class="chk" id="set-req"></ul></div>
-      <div class="card"><h2>결제 (KG이니시스)</h2><ul class="chk" id="set-pay"></ul></div>
-      <div class="card"><h2>선택</h2><ul class="chk" id="set-opt"></ul></div>
-      <p class="msg">자세한 설정 방법은 저장소의 README.md 3번(문의 · 회원) 과 4번(결제) 항목에 있습니다.</p>
+    <section class="view" id="view-set" hidden>
+      <header class="vh"><div><h1>설정 상태</h1><p class="muted small">Cloudflare Pages 설정값과 데이터베이스 표가 준비되었는지 확인합니다. 값 자체는 보이지 않고 있는지 없는지만 봅니다.</p></div></header>
+      <div class="card"><h2 class="ch"><span>필수</span></h2><ul class="setlist" id="set-req"></ul></div>
+      <div class="card mt"><h2 class="ch"><span>결제 (KG이니시스)</span></h2><ul class="setlist" id="set-pay"></ul></div>
+      <div class="card mt"><h2 class="ch"><span>선택</span></h2><ul class="setlist" id="set-opt"></ul></div>
+      <p class="tiny muted mt">자세한 설정 방법은 저장소의 README.md 에 있습니다. 관리자 비밀번호(ADMIN_KEY)를 바꾸면 로그인해 둔 모든 기기에서 자동으로 로그아웃됩니다.</p>
     </section>
   </main>
 </div>
 
-<script>
-(function () {
-  var $ = function (s) { return document.querySelector(s); };
-  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
-  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
-  var won = function (n) { return Number(n || 0).toLocaleString("ko-KR"); };
-  var P = { rental: "공간 대관", regular: "정기대관", business: "기업·단체·학교", coworking: "코워킹", office: "독립사무실", partner: "호스트·제휴·협업", proposal: "공간 활용 상담", other: "기타" };
-  var S = { r1: "1번룸", r2: "2번룸", r3: "3번룸", r4: "4번룸", r5: "5번룸", coworking: "코워킹", office: "독립사무실", undecided: "미정", "": "-" };
-  var ST = { new: ["새 문의", "blue"], in_progress: ["진행 중", "warn"], done: ["처리 완료", "ok"] };
-  var OST = { pending: ["결제 대기", ""], paid: ["결제 완료", "ok"], used: ["이용 완료", "blue"], cancelled: ["취소", ""], refund_requested: ["환불 요청", "warn"], refunded: ["환불 완료", ""], failed: ["결제 실패", "bad"] };
-  var PM = { Card: "카드", DirectBank: "계좌이체", VBank: "가상계좌", HPP: "휴대폰", Kakaopay: "카카오페이", NaverPay: "네이버페이", Samsungpay: "삼성페이", Payco: "페이코", "0": "카드", "1": "계좌이체", "2": "가상계좌", "3": "휴대폰" };
-  var key = ""; try { key = sessionStorage.getItem("sf_admin_key") || ""; } catch (e) {}
-  var call = function (path, method, body) {
-    return fetch(path, { method: method || "GET", headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined })
-      .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j || {} }; }, function () { return { status: r.status, j: {} }; }); })
-      .catch(function () { return { status: 0, j: { error: "network" } }; });
-  };
-  var csv = function (name, head, list) {
-    var lines = [head.join(",")].concat(list.map(function (r) { return head.map(function (k) { return '"' + String(r[k] == null ? "" : r[k]).replace(/"/g, '""') + '"'; }).join(","); }));
-    var blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
-  };
-  var tag = function (pair) { return '<span class="tag ' + (pair[1] || "") + '">' + esc(pair[0]) + '</span>'; };
+<!-- ===== 예약 등록 · 수정 (오른쪽 패널) ===== -->
+<div class="drawer" id="dr-form" hidden>
+  <div class="drawer-bg" data-close></div>
+  <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="rf-title">
+    <div class="drawer-head"><h2 id="rf-title">예약 등록</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+    <form class="drawer-body form" id="rf" novalidate>
+      <p class="small muted" id="rf-intro">카카오톡 · 전화 · 스페이스클라우드 등으로 받은 예약을 등록합니다. 시간은 30분 단위이고, 1~5번룸은 요금표 금액이 자동으로 계산됩니다.</p>
+      <fieldset class="fs">
+        <legend>공간 <span class="req">*</span></legend>
+        <div class="space-pick" id="rf-spaces"></div>
+        <input class="input mt-s" name="space_note" id="rf-space-note" maxlength="40" placeholder="공간 이름 (예: 라운지 일부, 2 · 4번룸 함께)" hidden>
+      </fieldset>
+      <div class="frow three">
+        <div class="f"><label for="rf-date">이용일 <span class="req">*</span></label><input class="input" type="date" name="date" id="rf-date" required></div>
+        <div class="f"><label for="rf-start">시작 <span class="req">*</span></label><select class="select" name="start_min" id="rf-start"></select></div>
+        <div class="f"><label for="rf-end">종료 <span class="req">*</span></label><select class="select" name="end_min" id="rf-end"></select></div>
+      </div>
+      <div class="chips dur" id="rf-dur" aria-label="이용 시간 빠른 선택"></div>
+      <div class="rf-when small" id="rf-when"></div>
+      <div class="alert" id="rf-warn" hidden></div>
 
-  /* ---------- 로그인 ---------- */
-  var enter = function () {
-    $("#login-msg").textContent = "확인하는 중…"; $("#login-msg").className = "msg";
-    call("/api/admin/stats").then(function (res) {
-      if (res.status === 401) { $("#login-msg").textContent = "키가 맞지 않거나 ADMIN_KEY 가 설정되지 않았습니다."; $("#login-msg").className = "msg err"; return; }
-      if (!(res.j && res.j.ok)) { $("#login-msg").textContent = res.status === 0 ? "서버에 연결하지 못했습니다. 배포된 주소(socialfactory.co.kr/admin)에서 열어 주세요." : "불러오지 못했습니다."; $("#login-msg").className = "msg err"; return; }
-      try { sessionStorage.setItem("sf_admin_key", key); } catch (e) {}
-      $("#login").hidden = true; $("#shell").hidden = false; $("#logout").hidden = false; $("#who").innerHTML = "<b>●</b> 로그인됨";
-      stats = res.j; renderDash(); renderProducts(); renderSetup();
-      showTab(location.hash.replace("#", "") || "dash");
-    });
-  };
-  $("#go").addEventListener("click", function () { key = $("#key").value.trim(); if (!key) { $("#login-msg").textContent = "키를 입력해 주세요."; return; } enter(); });
-  $("#key").addEventListener("keydown", function (e) { if (e.key === "Enter") $("#go").click(); });
-  $("#logout").addEventListener("click", function () { key = ""; try { sessionStorage.removeItem("sf_admin_key"); } catch (e) {} location.hash = ""; location.reload(); });
+      <div class="frow">
+        <div class="f"><label for="rf-name">예약자 이름 · 단체 <span class="req">*</span></label><input class="input" name="customer_name" id="rf-name" maxlength="40" required></div>
+        <div class="f"><label for="rf-phone">연락처</label><input class="input" type="tel" name="phone" id="rf-phone" placeholder="010-0000-0000"></div>
+      </div>
+      <div class="frow three">
+        <div class="f"><label for="rf-people">인원</label><input class="input" name="people" id="rf-people" inputmode="numeric" placeholder="예: 20"></div>
+        <div class="f"><label for="rf-purpose">모임 목적</label><select class="select" name="purpose" id="rf-purpose"></select></div>
+        <div class="f"><label for="rf-channel">예약 경로</label><select class="select" name="channel" id="rf-channel"></select></div>
+      </div>
 
-  /* ---------- 탭 ---------- */
-  var loaded = {};
-  var showTab = function (t) {
-    if (!$("#page-" + t)) t = "dash";
-    $$("[data-tab]").forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-tab") === t ? "true" : "false"); });
-    $$(".page").forEach(function (p) { p.classList.toggle("on", p.id === "page-" + t); });
-    if (t === "inq" && !loaded.inq) load();
-    if (t === "ord" && !loaded.ord) oload();
-    if (t === "mem" && !loaded.mem) mload();
-    if (history.replaceState) history.replaceState(null, "", "#" + t);
-  };
-  $$("[data-tab]").forEach(function (b) { b.addEventListener("click", function () { showTab(b.getAttribute("data-tab")); }); });
-  window.addEventListener("hashchange", function () { if (!$("#shell").hidden) showTab(location.hash.replace("#", "") || "dash"); });
+      <fieldset class="fs">
+        <legend>금액</legend>
+        <div class="calc" id="rf-calc"></div>
+        <div class="frow">
+          <div class="f"><label for="rf-amount">결제 금액 (원, 부가세 포함) <span class="req">*</span></label><input class="input" type="number" min="0" step="500" inputmode="numeric" name="amount" id="rf-amount" placeholder="예: 90000"><span class="hint" id="rf-amount-hint"></span></div>
+          <div class="f"><label for="rf-amount-note">금액 메모</label><input class="input" name="amount_note" id="rf-amount-note" maxlength="200" placeholder="예: 정기대관 10% 할인, 노트북 1대 포함"></div>
+        </div>
+      </fieldset>
 
-  /* ---------- 대시보드 ---------- */
-  var stats = null, period = "today";
-  var PL = { today: "오늘", week: "최근 7일", month: "최근 30일", all: "전체" };
-  var renderDash = function () {
-    if (!stats) return;
-    var p = (stats.periods && stats.periods[period]) || {};
-    var n = function (v) { return v == null ? "—" : won(v); };
-    $("#kpis").innerHTML =
-      '<div class="kpi accent"><div class="k">매출 (' + PL[period] + ')</div><div class="v">' + n(p.sales) + '<small>원</small></div><div class="s">결제 완료 ' + n(p.orders) + '건' + (p.testOrders ? ' · 테스트 ' + p.testOrders + '건 제외' : '') + '</div></div>' +
-      '<div class="kpi"><div class="k">문의 (' + PL[period] + ')</div><div class="v">' + n(p.inquiries) + '<small>건</small></div><div class="s">아직 답하지 않은 새 문의 ' + n(p.newInquiries) + '건</div></div>' +
-      '<div class="kpi"><div class="k">신규 회원 (' + PL[period] + ')</div><div class="v">' + n(p.members) + '<small>명</small></div><div class="s">소식 수신 동의 전체 ' + n(stats.pending && stats.pending.marketing) + '명</div></div>' +
-      '<div class="kpi"><div class="k">결제 상태</div><div class="v">' + (stats.setup.inicis ? (stats.setup.inicisTest ? '테스트' : '운영 중') : '준비 중') + '</div><div class="s">' + (stats.setup.inicis ? 'MID ' + esc(stats.setup.inicisMid) + (stats.setup.inicisMobile ? ' · 모바일 결제 켬' : ' · 모바일은 PC 결제창 사용') : 'INICIS_MID · INICIS_SIGN_KEY 를 넣으면 결제가 열립니다') + '</div></div>';
-    var pd = stats.pending || {};
-    $("#todo").innerHTML =
-      '<button type="button" data-go="inq"><span class="n">' + n(pd.inquiries) + '</span><span><span class="t">답할 문의</span><span class="d">상태가 \'새 문의\'인 건</span></span></button>' +
-      '<button type="button" data-go="ord"><span class="n">' + n(pd.refunds) + '</span><span><span class="t">환불 요청</span><span class="d">가맹점관리자에서 취소 후 \'환불 완료\'로</span></span></button>' +
-      '<button type="button" data-go="set"><span class="n">' + (stats.setup.db && stats.setup.tables && stats.setup.tables.orders ? '✓' : '!') + '</span><span><span class="t">설정 상태</span><span class="d">' + (stats.setup.db ? (stats.setup.tables && stats.setup.tables.orders ? '데이터베이스 · 표 준비됨' : '주문 표(orders)가 없습니다') : '데이터베이스가 연결되지 않았습니다') + '</span></span></button>';
-    $$("#todo [data-go]").forEach(function (b) { b.addEventListener("click", function () { showTab(b.getAttribute("data-go")); }); });
-    $("#cnt-inq").textContent = pd.inquiries ? pd.inquiries : ""; $("#cnt-ord").textContent = pd.refunds ? pd.refunds : "";
-    var ri = (stats.recent && stats.recent.inquiries) || [], ro = (stats.recent && stats.recent.orders) || [];
-    $("#recent-inq").innerHTML = ri.length ? ri.map(function (r) { return '<tr><td><b>' + esc(r.receipt) + '</b><br><small>' + esc((r.created_at || "").slice(5, 16)) + '</small></td><td>' + tag(ST[r.status] || [r.status, ""]) + '</td><td>' + esc(P[r.purpose] || r.purpose) + '<br><small>' + esc(S[r.space] || "-") + '</small></td><td>' + esc(r.name) + '</td></tr>'; }).join("") : '<tr><td colspan="4" class="empty">아직 문의가 없습니다.</td></tr>';
-    $("#recent-ord").innerHTML = ro.length ? ro.map(function (o) { return '<tr><td><span class="mono">' + esc(o.oid) + '</span><br><small>' + esc((o.created_at || "").slice(5, 16)) + '</small></td><td>' + tag(OST[o.status] || [o.status, ""]) + (o.test_mode ? ' <span class="tag test">테스트</span>' : '') + '</td><td>' + esc(o.product_name) + '<br><small>' + esc(o.buyer_name) + '</small></td><td class="nw">' + won(o.amount) + '원</td></tr>'; }).join("") : '<tr><td colspan="4" class="empty">아직 결제가 없습니다.</td></tr>';
-    $("#dash-msg").textContent = stats.setup.db ? "" : "D1 데이터베이스가 연결되지 않아 숫자를 셀 수 없습니다. README 3번을 확인해 주세요.";
-  };
-  $$("#period button").forEach(function (b) { b.addEventListener("click", function () { period = b.getAttribute("data-p"); $$("#period button").forEach(function (x) { x.setAttribute("aria-selected", x === b ? "true" : "false"); }); renderDash(); }); });
-  var dashReload = function () { $("#dash-msg").textContent = "불러오는 중…"; call("/api/admin/stats").then(function (res) { if (res.j && res.j.ok) { stats = res.j; renderDash(); renderProducts(); renderSetup(); } else $("#dash-msg").textContent = "불러오지 못했습니다."; }); };
-  $("#dash-reload").addEventListener("click", dashReload);
+      <fieldset class="fs">
+        <legend>결제수단 <span class="req">*</span></legend>
+        <div class="pay-pick" id="rf-pay"></div>
+        <div class="frow">
+          <div class="f"><span class="lbl">결제 상태</span><div class="seg seg-full" id="rf-pstatus"><label><input type="radio" name="pay_status" value="paid" checked> 결제 완료</label><label><input type="radio" name="pay_status" value="unpaid"> 결제 전 (입금 대기)</label></div></div>
+          <div class="f" id="rf-paid-wrap"><label for="rf-paid-at">결제일</label><input class="input" type="date" name="paid_at" id="rf-paid-at"></div>
+        </div>
+        <p class="tiny muted" id="rf-refund-note" hidden></p>
+      </fieldset>
 
-  /* ---------- 상품 ---------- */
-  var renderProducts = function () {
-    var list = (stats && stats.products) || [];
-    $("#prod").innerHTML = list.map(function (p) {
-      return '<div class="p"><small>' + esc(p.category) + '</small><b>' + esc(p.name) + '</b><div class="pr">' + won(p.price) + '원</div><div class="so">누적 판매 ' + won(p.sold) + ' · ' + won(p.sales) + '원</div><a href="/product/' + esc(p.id) + '" target="_blank" rel="noopener">상품 페이지 보기 →</a></div>';
-    }).join("") || '<p class="empty">상품이 없습니다.</p>';
-  };
+      <div class="f"><label for="rf-memo">메모</label><textarea class="textarea" name="memo" id="rf-memo" rows="3" maxlength="1000" placeholder="예: 강단 배치, 노트북 대여 1대, 스페이스클라우드 예약번호 · 정산 금액"></textarea></div>
+      <div class="f"><label for="rf-ref">연결 문의번호 <small class="muted">(선택)</small></label><input class="input" name="inquiry_ref" id="rf-ref" maxlength="40" placeholder="SF-261019-XXXX"></div>
+      <div class="drawer-actions"><button class="btn btn-primary" type="submit" id="rf-submit">예약 등록</button><button class="btn btn-light" type="button" data-close>취소</button></div>
+      <div class="form-note" id="rf-msg" hidden></div>
+    </form>
+  </div>
+</div>
 
-  /* ---------- 설정 상태 ---------- */
-  var renderSetup = function () {
-    var s = (stats && stats.setup) || {}, t = s.tables || {};
-    var li = function (ok, title, desc, opt) { return '<li><span class="st ' + (ok ? "ok" : (opt ? "opt" : "no")) + '">' + (ok ? "✓" : (opt ? "–" : "!")) + '</span><div><b>' + title + '</b><small>' + desc + '</small></div></li>'; };
-    $("#set-req").innerHTML =
-      li(s.db, "D1 데이터베이스 연결 (<code>DB</code>)", s.db ? "연결되어 있습니다." : "Pages → Settings → Bindings 에서 D1 을 DB 이름으로 연결해 주세요. README 3-1.") +
-      li(s.adminKey, "관리자 키 (<code>ADMIN_KEY</code>)", "이 화면에 들어올 때 쓰는 키입니다.") +
-      li(s.sessionSecret, "세션 비밀값 (<code>SESSION_SECRET</code>)", s.sessionSecret ? "설정되어 있습니다." : "회원 로그인 쿠키 서명에 씁니다. 긴 무작위 문자열을 넣어 주세요. README 3-3.") +
-      li(t.inquiries, "문의 표 (inquiries)", t.inquiries ? "준비되어 있습니다." : "schema.sql 을 D1 콘솔에서 실행해 주세요.") +
-      li(t.members && t.sessions, "회원 표 (members · sessions)", t.members ? "준비되어 있습니다." : "schema.sql 또는 schema-upgrade-members.sql 을 실행해 주세요.") +
-      li(t.orders, "주문 표 (orders)", t.orders ? "준비되어 있습니다." : "schema-upgrade-orders.sql 을 D1 콘솔에서 실행해 주세요. README 4-1.");
-    $("#set-pay").innerHTML =
-      li(s.inicis, "상점 아이디 · Sign Key (<code>INICIS_MID</code> · <code>INICIS_SIGN_KEY</code>)", s.inicis ? "설정되어 있습니다 (MID " + esc(s.inicisMid) + "). " + (s.inicisTest ? "지금은 테스트 결제 상태입니다 — 실제 돈이 오가지 않습니다." : "운영 결제 상태입니다.") : "없으면 상품은 보이되 '결제 준비 중'으로 표시됩니다. README 4-2.") +
-      li(s.inicisMobile, "모바일 Hash Key (<code>INICIS_MOBILE_HASH_KEY</code>)", s.inicisMobile ? "휴대폰에서는 이니시스 모바일 결제 페이지를 씁니다." : "없으면 휴대폰에서도 PC 결제창을 씁니다 (동작에는 문제 없음).", true) +
-      li(!s.inicisTest || !s.inicis, "운영 전환 (<code>INICIS_TEST</code> 지우기)", s.inicis && s.inicisTest ? "심사가 끝나고 실제 MID 를 받으면 INICIS_MID · INICIS_SIGN_KEY 를 실제 값으로 바꾸고 INICIS_TEST 를 지워 주세요." : "테스트 표시가 꺼져 있습니다.", true);
-    $("#set-opt").innerHTML =
-      li(s.ipSalt, "IP 해시 소금값 (<code>IP_SALT</code>)", "접속 IP 를 그대로 저장하지 않기 위한 값입니다. 없어도 동작합니다.", true) +
-      li(s.webhook, "알림 웹훅 (<code>NOTIFY_WEBHOOK</code>)", s.webhook ? "새 문의 · 결제 완료가 웹훅으로 전달됩니다." : "슬랙 · 디스코드 웹훅 주소를 넣으면 새 문의와 결제 완료를 바로 받을 수 있습니다.", true);
-  };
+<!-- ===== 예약 상세 ===== -->
+<div class="drawer" id="dr-detail" hidden>
+  <div class="drawer-bg" data-close></div>
+  <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="dt-title">
+    <div class="drawer-head"><h2 id="dt-title">예약 상세</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+    <div class="drawer-body" id="dt-body"></div>
+  </div>
+</div>
 
-  /* ---------- 문의 ---------- */
-  var rows = [];
-  var render = function () {
-    var tb = $("#rows");
-    tb.innerHTML = rows.length ? "" : '<tr><td colspan="8" class="empty">문의가 없습니다.</td></tr>';
-    rows.forEach(function (r) {
-      var tr = document.createElement("tr");
-      var notify = r.notify_status || "-";
-      var ncls = /^sent/.test(notify) ? "ok" : (/^failed/.test(notify) ? "bad" : "");
-      tr.innerHTML = '<td><b>' + esc(r.receipt) + '</b>' + (r.member_id ? '<br><span class="tag blue">회원 #' + esc(r.member_id) + '</span>' : '') + '</td><td>' + esc(r.created_at) + '</td>' +
-        '<td><select data-id="' + r.id + '"><option value="new"' + (r.status === "new" ? " selected" : "") + '>새 문의</option><option value="in_progress"' + (r.status === "in_progress" ? " selected" : "") + '>진행 중</option><option value="done"' + (r.status === "done" ? " selected" : "") + '>처리 완료</option></select></td>' +
-        '<td>' + esc(P[r.purpose] || r.purpose) + '<br><span class="tag">' + esc(S[r.space] || r.space || "-") + '</span></td>' +
-        '<td>' + esc(r.name) + (r.company ? '<br>' + esc(r.company) : '') + '<br><a href="tel:' + esc(String(r.phone).replace(/[^0-9+]/g, "")) + '">' + esc(r.phone) + '</a>' + (r.email ? '<br><a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : '') + '</td>' +
-        '<td>' + esc(r.when_text || "-") + '<br>' + esc(r.people || "-") + (r.schedule ? '<br>' + esc(r.schedule) : '') + '</td>' +
-        '<td class="msgcell">' + esc(r.message) + '</td>' +
-        '<td><span class="tag ' + ncls + '">' + esc(notify) + '</span>' + (r.consent ? '' : '<br><span class="tag bad">동의 없음</span>') + '</td>';
-      tb.appendChild(tr);
-    });
-    $("#count").textContent = rows.length + "건";
-    $$("#rows select[data-id]").forEach(function (sel) {
-      sel.addEventListener("change", function () {
-        call("/api/inquiry", "PATCH", { id: parseInt(sel.getAttribute("data-id"), 10), status: sel.value }).then(function (res) {
-          if (!(res.j && res.j.ok)) alert("상태를 바꾸지 못했습니다. 다시 시도해 주세요."); else dashReload();
-        });
-      });
-    });
-  };
-  var load = function () {
-    var f = $("#filter").value;
-    $("#count").textContent = "불러오는 중…";
-    call("/api/inquiry?limit=300" + (f ? "&status=" + f : "")).then(function (res) {
-      if (res.status === 503) { $("#count").textContent = "D1 데이터베이스가 연결되지 않았습니다."; return; }
-      if (!(res.j && res.j.ok)) { $("#count").textContent = "불러오지 못했습니다."; return; }
-      rows = res.j.results || []; loaded.inq = true; render();
-    });
-  };
-  $("#reload").addEventListener("click", load);
-  $("#filter").addEventListener("change", load);
-  $("#csv").addEventListener("click", function () { csv("socialfactory-inquiries.csv", ["receipt", "created_at", "status", "purpose", "space", "name", "phone", "email", "company", "when_text", "people", "schedule", "message", "consent", "notice_version", "notify_status"], rows); });
-
-  /* ---------- 주문 · 결제 ---------- */
-  var orders = [];
-  var orender = function () {
-    var tb = $("#orows");
-    var list = orders.filter(function (o) { return $("#otest").checked || !o.test_mode; });
-    tb.innerHTML = list.length ? "" : '<tr><td colspan="8" class="empty">주문이 없습니다.</td></tr>';
-    list.forEach(function (o) {
-      var tr = document.createElement("tr");
-      var opts = ["paid", "used", "refund_requested", "refunded", "cancelled"];
-      var sel = (o.status === "pending" || o.status === "failed")
-        ? tag(OST[o.status]) + (o.fail_msg ? '<br><small>' + esc(o.fail_msg) + '</small>' : '')
-        : '<select data-oid="' + o.id + '">' + opts.map(function (k) { return '<option value="' + k + '"' + (o.status === k ? " selected" : "") + '>' + OST[k][0] + '</option>'; }).join("") + '</select>';
-      tr.innerHTML = '<td><span class="mono"><b>' + esc(o.oid) + '</b></span><br><small>' + esc(o.created_at) + '</small>' + (o.test_mode ? '<br><span class="tag test">테스트</span>' : '') + (o.member_id ? '<br><span class="tag blue">회원 #' + esc(o.member_id) + '</span>' : '') + '</td>' +
-        '<td>' + sel + '</td>' +
-        '<td class="prod">' + esc(o.product_name) + '<br><small>' + esc(o.product_id) + ' · ' + esc(o.qty) + '개</small></td>' +
-        '<td class="nw"><b>' + won(o.amount) + '원</b></td>' +
-        '<td class="buyer">' + esc(o.buyer_name) + '<br><a href="tel:' + esc(String(o.buyer_phone).replace(/[^0-9+]/g, "")) + '">' + esc(o.buyer_phone) + '</a>' + (o.buyer_email ? '<br><a href="mailto:' + esc(o.buyer_email) + '">' + esc(o.buyer_email) + '</a>' : '') + '</td>' +
-        '<td class="pay">' + esc(PM[o.pg_method] || (o.pay_method === "bank" ? "계좌이체" : "카드")) + (o.card_name ? ' · ' + esc(o.card_name) : '') + (o.card_num ? '<br><small>' + esc(o.card_num) + '</small>' : '') + (o.paid_at ? '<br><small>' + esc(o.paid_at) + '</small>' : '') + (o.tid ? '<br><small class="mono">TID ' + esc(o.tid) + '</small>' : '') + '<br><small>' + (o.device === "mobile" ? "모바일" : "PC") + '</small></td>' +
-        '<td>' + (o.start_date ? '<b>' + esc(o.start_date) + '</b>' : '-') + (o.memo ? '<br><small>' + esc(o.memo) + '</small>' : '') + '</td>' +
-        '<td><textarea class="memo" data-memo="' + o.id + '" placeholder="메모 (예: 11/8 입실, 환불 4,000원 취소 완료)">' + esc(o.admin_memo || "") + '</textarea></td>';
-      tb.appendChild(tr);
-    });
-    $$("#orows select[data-oid]").forEach(function (sel) {
-      sel.addEventListener("change", function () {
-        var id = parseInt(sel.getAttribute("data-oid"), 10);
-        if (sel.value === "refunded" && !confirm("KG이니시스 가맹점관리자에서 결제 취소를 마쳤나요? 여기서는 상태만 기록됩니다.")) { oload(); return; }
-        call("/api/admin/orders", "PATCH", { id: id, status: sel.value }).then(function (res) { if (!(res.j && res.j.ok)) alert("상태를 바꾸지 못했습니다."); else dashReload(); });
-      });
-    });
-    var shown = $("#ocount").textContent.replace(/^표시 \d+건/, "표시 " + list.length + "건"); if (/^표시/.test($("#ocount").textContent)) $("#ocount").textContent = shown;
-    $$("#orows textarea[data-memo]").forEach(function (ta) {
-      ta.addEventListener("change", function () {
-        call("/api/admin/orders", "PATCH", { id: parseInt(ta.getAttribute("data-memo"), 10), memo: ta.value }).then(function (res) { if (!(res.j && res.j.ok)) alert("메모를 저장하지 못했습니다."); else { ta.style.borderColor = "#1D8A4E"; setTimeout(function () { ta.style.borderColor = ""; }, 1200); } });
-      });
-    });
-  };
-  var oload = function () {
-    $("#ocount").textContent = "불러오는 중…";
-    var f = $("#ofilter").value, q = $("#oq").value.trim();
-    call("/api/admin/orders?status=" + encodeURIComponent(f) + "&q=" + encodeURIComponent(q)).then(function (res) {
-      if (res.status === 503) { $("#ocount").textContent = "D1 데이터베이스가 연결되지 않았습니다."; return; }
-      if (!(res.j && res.j.ok)) { $("#ocount").textContent = res.j && res.j.error === "no-table" ? "주문 표(orders)가 아직 없습니다. schema-upgrade-orders.sql 을 실행해 주세요 (README 4-1)." : "불러오지 못했습니다."; return; }
-      orders = res.j.results || []; loaded.ord = true; orender();
-      $("#ocount").textContent = "표시 " + orders.filter(function (o) { return $("#otest").checked || !o.test_mode; }).length + "건 · 전체 주문 " + won(res.j.total) + "건 · 누적 매출 " + won(res.j.sales) + "원";
-    });
-  };
-  $("#oreload").addEventListener("click", oload);
-  $("#ofilter").addEventListener("change", oload);
-  $("#otest").addEventListener("change", orender);
-  $("#oq").addEventListener("keydown", function (e) { if (e.key === "Enter") oload(); });
-  $("#ocsv").addEventListener("click", function () { csv("socialfactory-orders.csv", ["oid", "created_at", "status", "product_id", "product_name", "qty", "amount", "buyer_name", "buyer_phone", "buyer_email", "start_date", "memo", "admin_memo", "pay_method", "pg_method", "card_name", "card_num", "tid", "paid_at", "device", "member_id", "test_mode"], orders); });
-
-  /* ---------- 회원 ---------- */
-  var members = [];
-  var mrender = function () {
-    var tb = $("#mrows");
-    tb.innerHTML = members.length ? "" : '<tr><td colspan="8" class="empty">회원이 없습니다.</td></tr>';
-    members.forEach(function (m) {
-      var tr = document.createElement("tr");
-      tr.innerHTML = '<td>' + esc(m.id) + '</td><td>' + esc(m.created_at) + '</td>' +
-        '<td><b>' + esc(m.name) + '</b><br>' + esc(m.phone) + (m.email ? '<br>' + esc(m.email) : '') + (m.must_change_pw ? '<br><span class="tag warn">임시 비밀번호</span>' : '') + '</td>' +
-        '<td>' + (m.marketing ? '<span class="tag ok">동의</span><br><small>' + esc(m.marketing_at || "") + '</small>' : '<span class="tag">-</span>') + '</td>' +
-        '<td>' + (m.status === "active" ? '<span class="tag ok">정상</span>' : '<span class="tag bad">정지</span>') + '</td>' +
-        '<td>' + esc(m.inquiries == null ? "-" : m.inquiries) + '</td><td>' + esc(m.last_login_at || "-") + '</td>' +
-        '<td><div class="row-actions"><button class="btn ghost sm" data-act="reset" data-id="' + m.id + '">임시 비밀번호</button>' +
-        '<button class="btn ghost sm" data-act="' + (m.status === "active" ? "block" : "unblock") + '" data-id="' + m.id + '">' + (m.status === "active" ? "이용 정지" : "정지 해제") + '</button>' +
-        '<button class="btn ghost sm danger" data-act="delete" data-id="' + m.id + '">삭제</button></div></td>';
-      tb.appendChild(tr);
-    });
-    $$("#mrows button[data-act]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var id = parseInt(b.getAttribute("data-id"), 10), act = b.getAttribute("data-act");
-        var m = members.filter(function (x) { return x.id === id; })[0] || {};
-        var ask = { reset: m.name + "님에게 임시 비밀번호를 새로 발급할까요? 지금 로그인된 기기는 모두 로그아웃됩니다.", block: m.name + "님의 이용을 정지할까요?", unblock: m.name + "님의 이용 정지를 풀까요?", "delete": m.name + "님의 회원 정보를 삭제할까요? 되돌릴 수 없습니다." }[act];
-        if (!confirm(ask)) return;
-        call("/api/admin/members", act === "delete" ? "DELETE" : "PATCH", act === "delete" ? { id: id } : { id: id, action: act }).then(function (res) {
-          if (!(res.j && res.j.ok)) { alert("처리하지 못했습니다."); return; }
-          if (act === "reset") { var t = $("#temp"); t.hidden = false; t.innerHTML = esc(m.name) + "님 임시 비밀번호: <b>" + esc(res.j.tempPassword) + "</b> — 이 화면을 닫으면 다시 볼 수 없으니 회원에게 바로 전달해 주세요."; }
-          mload();
-        });
-      });
-    });
-  };
-  var mload = function () {
-    var q = $("#mq").value.trim();
-    $("#mcount").textContent = "불러오는 중…";
-    call("/api/admin/members?q=" + encodeURIComponent(q) + ($("#mk").checked ? "&marketing=1" : "")).then(function (res) {
-      if (res.status === 503) { $("#mcount").textContent = "D1 데이터베이스가 연결되지 않았습니다."; return; }
-      if (!(res.j && res.j.ok)) { $("#mcount").textContent = "회원 표가 아직 없거나 불러오지 못했습니다. README 3번의 SQL 실행을 확인해 주세요."; return; }
-      members = res.j.results || []; loaded.mem = true; mrender();
-      $("#mcount").textContent = "전체 " + res.j.total + "명 · 소식 수신 동의 " + res.j.marketing + "명 · 표시 " + members.length + "명";
-    });
-  };
-  $("#mreload").addEventListener("click", mload);
-  $("#mq").addEventListener("keydown", function (e) { if (e.key === "Enter") mload(); });
-  $("#mk").addEventListener("change", mload);
-  $("#mcsv").addEventListener("click", function () { csv("socialfactory-members.csv", ["id", "created_at", "name", "phone", "email", "marketing", "marketing_at", "status", "last_login_at"], members); });
-
-  if (key) { $("#key").value = key; enter(); }
-})();
-</script>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</div>
+<script src="/js/site-config.js?v=08fcae4e"></script>
+<script src="/js/admin.js?v=d69182fc"></script>
 </body>
 </html>

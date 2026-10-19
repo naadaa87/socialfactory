@@ -1,10 +1,11 @@
 // GET /api/admin/stats — 대시보드 숫자 (오늘 · 7일 · 30일) 와 설정 상태
-import { json, isAdmin } from "../../_lib/auth.js";
+import { json } from "../../_lib/auth.js";
+import { adminGate } from "../../_lib/admin.js";
 import { payConfig } from "../../_lib/shop.js";
 import { PRODUCTS } from "../../_lib/products.js";
 
 export async function onRequestGet({ request, env }) {
-  if (!isAdmin(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
+  const deny = await adminGate(request, env, { needDb: false }); if (deny) return deny;
   const cfg = payConfig(env);
   const setup = {
     db: !!env.DB, adminKey: !!env.ADMIN_KEY, sessionSecret: !!env.SESSION_SECRET, ipSalt: !!env.IP_SALT, webhook: !!env.NOTIFY_WEBHOOK,
@@ -15,7 +16,7 @@ export async function onRequestGet({ request, env }) {
   if (!env.DB) return json(out);
   const count = async (sql, ...args) => { try { const r = await env.DB.prepare(sql).bind(...args).first(); return Number(r && r.n) || 0; } catch { return null; } };
   const sum = async (sql, ...args) => { try { const r = await env.DB.prepare(sql).bind(...args).first(); return Number(r && r.s) || 0; } catch { return null; } };
-  for (const t of ["inquiries", "members", "orders", "sessions"]) setup.tables[t] = (await count(`SELECT COUNT(*) AS n FROM ${t}`)) !== null;
+  for (const t of ["inquiries", "members", "orders", "sessions", "reservations", "admin_sessions"]) setup.tables[t] = (await count(`SELECT COUNT(*) AS n FROM ${t}`)) !== null;
   for (const [key, mod] of [["today", "start of day"], ["week", "-7 days"], ["month", "-30 days"], ["all", "-100 years"]]) {
     const since = `datetime('now', '+9 hours', '${mod}')`;
     out.periods[key] = {

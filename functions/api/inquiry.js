@@ -16,7 +16,8 @@
  * 오류 응답에는 내부 상세(DB 메시지 등)를 담지 않습니다.
  */
 
-import { getMember, isAdmin } from "../_lib/auth.js";
+import { getMember } from "../_lib/auth.js";
+import { adminGate } from "../_lib/admin.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -181,7 +182,7 @@ export async function onRequestPost({ request, env }) {
 }
 
 export async function onRequestGet({ request, env }) {
-  if (!isAdmin(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
+  const deny = await adminGate(request, env); if (deny) return deny;
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   const url = new URL(request.url);
   const status = url.searchParams.get("status") || "";
@@ -201,7 +202,7 @@ export async function onRequestGet({ request, env }) {
 }
 
 export async function onRequestPatch({ request, env }) {
-  if (!isAdmin(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
+  const deny = await adminGate(request, env); if (deny) return deny;
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }

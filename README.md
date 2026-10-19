@@ -16,7 +16,8 @@ family.html       패밀리 브랜드 — 같은 건물 · 용도별 안내 · �
 program.html      프로그램·호스트 모집 — 함께하는 방법, 제휴·협업, 현재 모집, 소셜아카데미, 소셜패밀리, 기업·단체, 활용 예시, 홍대 시절 기록
 history.html      지난 기록 2015–2021
 tour.html         3D 공간 안내 (three.js 포함, 약 0.8MB · 참고 이미지는 images/tour/ 에서 필요할 때 불러옴)
-admin.html        관리자 화면 — 대시보드 · 문의 · 주문 · 결제 · 회원 · 상품 · 설정 상태 (관리자 키 입력 · 검색엔진 제외)
+admin.html        관리자 화면 — 대시보드 · 예약 현황(룸별 시간표 · 달력) · 일자별 예약 · 예약 등록(30분 단위) · 매출(결제수단별 · 월별) · 문의 · 주문 · 회원 · 상품 · 설정 상태 (3-8, 검색엔진 제외)
+css/admin.css · js/admin.js  관리자 화면 디자인 · 동작 (요금 · 공휴일은 js/site-config.js 를 그대로 씀)
 404.html          없는 주소 안내
 css/style.css     디자인
 js/site-config.js ★ 운영 상태 · 연락처 · 예약 채널 · 요금 · 장비 · 정책 설정 파일 (여기만 고치면 전 페이지에 반영)
@@ -38,16 +39,18 @@ js/member.js      회원 화면 동작
 functions/api/inquiry.js  문의 접수 API (Cloudflare Pages Functions)
 functions/api/auth/*      회원가입 · 로그인 · 로그아웃 · 내 정보 · 비밀번호 API
 functions/api/member/*    마이페이지 문의 목록 · 주문 내역 API
-functions/api/admin/*     관리자 화면 API (회원 · 주문 · 대시보드 숫자)
+functions/api/admin/*     관리자 화면 API (로그인 · 예약 · 매출 · 대시보드 · 회원 · 주문)
 functions/api/shop/products.js     상품 목록 · 결제 준비 상태 API
 functions/api/orders/*    주문 만들기 · 주문 결과 조회 API
 functions/api/pay/inicis/*  KG이니시스 결제 결과 받기(PC · 모바일) · 승인 요청
 functions/_lib/products.js ★ 판매 상품(이름 · 가격 · 설명 · 유효기간) 과 발급 · 교환 · 환불 안내 — 상품을 바꿀 때 이 파일만 고칩니다
 functions/_lib/shop.js    결제 공통 코드 (서명 · 주문번호 · 금액 검증)
 functions/_lib/auth.js    회원 기능 공통 코드 (주소로 열리지 않음)
+functions/_lib/admin.js   관리자 로그인 · 표 자동 준비 · 결제수단 목록 (주소로 열리지 않음)
 schema.sql        문의 · 회원 · 주문 저장용 D1 테이블 (처음 설정할 때)
 schema-upgrade-members.sql  문의 표를 이미 쓰고 있을 때 회원 표만 추가
 schema-upgrade-orders.sql   문의 · 회원 표를 이미 쓰고 있을 때 주문 표만 추가
+schema-upgrade-reservations.sql  예약 · 관리자 로그인 표 (관리자 화면에 처음 로그인하면 자동으로 만들어져 보통은 실행하지 않아도 됨)
 _headers          보안 · 캐시 헤더
 robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 7번 참고)
 ```
@@ -84,6 +87,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 7번 참고)
 5. **Commit changes** 클릭
 
 이미 저장소가 있다면 바뀐 파일만 같은 자리에 다시 올리면 됩니다.
+- 2026-10-19 관리자 화면 개편(메가스팟 관리자와 같은 구성) · 예약 등록(30분 단위) · 결제수단별 매출: `admin.html`, `css/admin.css` · `js/admin.js`(새 파일), `functions/_lib/admin.js` · `functions/api/admin/` 의 `login.js` · `logout.js` · `session.js` · `dashboard.js` · `reservations.js` · `sales.js`(새 파일), `functions/_lib/auth.js` · `functions/api/admin/stats.js` · `orders.js` · `members.js` · `functions/api/inquiry.js`, `schema.sql`, `schema-upgrade-reservations.sql`(새 파일), `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-17 패밀리 브랜드 연결(푸터 FAMILY SITES · 패밀리 페이지 · 본문 연결): html 전부(`admin.html` 제외), `family.html`(새 파일), `product/` 5개, `css/style.css`, `js/main.js`, `js/site-config.js`, `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-14 카카오톡 문의 버튼 곳곳에 추가(헤더 · 오른쪽 아래 버튼 · 각 페이지): html 전부(`admin.html` 제외), `product/` 5개, `tour.html`, `css/style.css`, `js/main.js` · `js/estimate.js` · `js/shop.js` · `js/site-config.js`, `README.md`, `rss.xml`
 - 2026-10-14 이용권 온라인 결제(KG이니시스) · 관리자 화면 개편 · 카카오 로그인 제거: html 전부, `shop.html` · `order.html` · `order-complete.html` · `product/` 폴더(새 파일), `admin.html`, `css/style.css`, `js/main.js` · `js/member.js` · `js/site-config.js`, `js/shop.js`(새 파일), `functions/` 폴더 전체(`functions/api/auth/kakao/` 는 삭제), `schema.sql`, `schema-upgrade-orders.sql`(새 파일), `schema-upgrade-members.sql`, `images/scenes/10-ai-class-sm.webp`(새 파일), `README.md`, `sitemap.xml`, `rss.xml`
@@ -219,7 +223,7 @@ GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값
 ### 3-3. 다시 배포하고 확인
 1. **Deployments** → 가장 위 배포 오른쪽 **⋯** → **Retry deployment** (바인딩과 비밀 값은 새 배포부터 적용됩니다)
 2. 홈페이지 문의 폼으로 시험 문의를 1건 보내 접수번호(SF-…)가 나오는지 확인합니다.
-3. `https://socialfactory.co.kr/admin` 에서 ADMIN_KEY 를 넣고 **들어가기** → 왼쪽 **문의** 메뉴에 방금 문의가 보이면 끝입니다. **설정 상태** 메뉴에서 빠진 설정이 있는지도 한눈에 볼 수 있습니다. 상태(새 문의 · 진행 중 · 처리 완료)를 바꾸면 회원의 마이페이지에도 '접수 · 상담 중 · 완료'로 바로 보입니다.
+3. `https://socialfactory.co.kr/admin` 에서 ADMIN_KEY 를 관리자 비밀번호로 넣고 **로그인** → 왼쪽 **문의** 메뉴에 방금 문의가 보이면 끝입니다. **설정 상태** 메뉴에서 빠진 설정이 있는지도 한눈에 볼 수 있습니다. 상태(새 문의 · 진행 중 · 처리 완료)를 바꾸면 회원의 마이페이지에도 '접수 · 상담 중 · 완료'로 바로 보입니다.
 
 ### 3-4. (선택) 새 문의를 휴대폰으로 알림 받기 — Discord 예시
 1. Discord 앱에서 내 서버를 하나 만들고, 알림 받을 채널 옆 톱니바퀴(채널 편집) → **연동** → **웹후크** → **새 웹후크** → **웹후크 URL 복사**
@@ -239,6 +243,23 @@ GitHub에서 `js/site-config.js` 를 열고 연필 아이콘(Edit)을 눌러 값
 - `privacy.html`(개인정보 처리방침), `terms.html`(이용약관)이 푸터에 연결되어 있습니다. 운영 법인명은 `site-config.js` 의 `company.name` 을 채우면 두 문서에 자동으로 들어갑니다(비어 있으면 '소셜팩토리').
 - 개인정보 보호책임자는 '최시준 (대표)', 연락처는 `contact.email` · 카카오톡 문의채널로 적혀 있습니다. 담당자가 바뀌면 `privacy.html` 7번을 고쳐 주세요.
 - 새 문의 알림(Discord · Slack 등)을 쓰면 처리방침 3번 '운영자 알림 메신저' 칸에 실제 서비스 이름을 적어 두는 것이 좋습니다.
+
+### 3-8. 관리자 화면에서 예약 · 매출 관리 (2026-10-19)
+메가스팟 관리자 화면과 같은 구성입니다. `https://socialfactory.co.kr/admin` 에 ADMIN_KEY 로 로그인합니다.
+
+- **로그인**: 비밀번호는 서버에서만 확인하고, 브라우저에는 다시 읽을 수 없는 로그인 쿠키만 남습니다. 기본 12시간, '7일 동안 로그인 유지'를 고르면 7일. 공용 PC에서는 쓰지 말고 다 쓰면 **로그아웃** 을 누릅니다. 같은 곳에서 15분 안에 8번 틀리면 15분 동안 막힙니다. Cloudflare 에서 ADMIN_KEY 를 바꾸면 모든 기기에서 로그아웃됩니다.
+- **표 자동 준비**: 예약 · 관리자 로그인 표(reservations · admin_sessions)는 처음 로그인할 때 자동으로 만들어집니다. D1 콘솔에서 따로 실행할 SQL 은 없습니다.
+- **예약 등록** (왼쪽 위 **+ 예약 등록**, 또는 예약 현황 시간표의 빈 칸 누르기, 또는 문의 목록의 **예약 등록**)
+  - 공간(1~5번룸 · 코워킹 · 독립사무실 · 기타), 이용일, 시작 · 종료를 **30분 단위**로 고릅니다. 1시간 · 2시간 · 3시간처럼 바로 고르는 버튼도 있고, 자정을 넘기면 '익일 02:00'처럼 다음 날까지 이어서 등록됩니다 (한 번에 최대 24시간).
+  - 1~5번룸은 `js/site-config.js` 의 요금표(평일 · 주말 · 공휴일, 오전 · 심야 / 오후 · 저녁)로 금액이 자동 계산됩니다. 30분은 시간 요금의 절반입니다. 할인했거나 스페이스클라우드 판매가가 다르면 결제 금액만 고치고 금액 메모에 이유를 적습니다.
+  - **결제수단** 5가지 중 하나를 꼭 고릅니다: 계좌이체(블랭크) · 계좌이체(별도) · 스페이스클라우드 · 카드결제(오프라인) · 카드결제(온라인). 입금 전이면 **결제 전(입금 대기)** 으로 등록해 두고, 입금되면 **결제 확인** 을 누릅니다.
+  - 같은 룸 · 같은 시간에 예약이 있으면 등록 전에 알려 줍니다. 정말 함께 받는 경우에만 **겹쳐도 등록** 을 누릅니다.
+- **예약 상세**: 예약을 누르면 열립니다. 수정, 고객 안내문 복사(카카오톡 · 문자에 붙여 넣기), 결제 완료 처리, **취소 · 환불**(환불 규정에 맞는 금액을 자동으로 제안 — 실제로 돌려준 금액을 적습니다), 취소한 예약 복원, 잘못 등록한 예약 삭제를 할 수 있습니다.
+- **예약 현황**: 일간은 1~5번룸 시간표, 월간은 달력입니다. 파란색은 결제 완료, 노란색은 결제 전입니다.
+- **일자별 예약**: 기간 · 공간 · 결제수단 · 결제 상태로 골라 보고 **CSV 내려받기** · **인쇄** 를 할 수 있습니다.
+- **매출**: 누적 총매출, 올해 · 이번 달 · 지난달 매출, 미수금(결제 전), 결제수단별 합계, 월별 · 결제수단별 표, 공간별 · 예약 경로별 매출을 봅니다. **이용일 기준** 과 **결제일 기준** 을 바꿔 볼 수 있고, 홈페이지에서 결제된 이용권(KG이니시스, 테스트 결제 제외)을 함께 더할지 고를 수 있습니다. 표의 월을 누르면 그 달 예약 목록이 열립니다.
+- 매출 계산: 결제 완료 · 환불 예약의 (결제 금액 − 환불 금액)을 더합니다. 결제 전 예약은 매출이 아니라 미수금으로 셉니다. 취소했어도 환불하지 않은 금액(취소 수수료)은 매출로 남습니다.
+- 공휴일이 요금 계산에 들어가려면 `pricing.holidays` 에 날짜가 있어야 합니다. 2028년 공휴일은 2027년 안에 추가해 주세요.
 
 D1 을 연결하지 않으면 문의 폼은 "접수되지 않았습니다"를 보여 주고 `contact.email` 이 있을 때만 메일 앱으로 보내는 길을 안내합니다. 둘 다 준비되지 않았다면 `inquiry.enabled: false` 로 폼을 닫아 두세요.
 
