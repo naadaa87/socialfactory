@@ -5,5 +5,7 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /admin
+Disallow: /toss-front-plugin/
+Disallow: /workers/
 
 Sitemap: https://socialfactory.co.kr/sitemap.xml

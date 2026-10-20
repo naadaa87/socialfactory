@@ -1,0 +1,11 @@
+# 알림 발송기 Worker — 홈페이지(Pages)와 별도로 배포합니다. README '토스프론트 이용권' 항목 참고.
+name = "socialfactory-notify-cron"
+main = "index.js"
+compatibility_date = "2026-10-01"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+SITE_URL = "https://socialfactory.co.kr"
+# CRON_KEY 는 비밀 값이라 여기에 적지 않고 대시보드(Settings → Variables and Secrets)에서 Secret 으로 넣습니다.

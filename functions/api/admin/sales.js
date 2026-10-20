@@ -5,6 +5,7 @@
  *   취소했어도 환불하지 않은 금액(취소 수수료)은 매출로 남습니다.
  * - basis=use  : 이용일 기준 (기본)  · basis=paid : 결제일 기준
  * - orders=1   : 홈페이지에서 KG이니시스로 결제한 이용권 주문도 '이용권 온라인 결제'로 함께 더합니다 (테스트 결제 제외).
+ *               토스프론트 · 관리자 직접 발급 이용권(pass_payments)도 '토스프론트 이용권'으로 함께 더합니다 (결제일 기준, 환불 차감).
  */
 import { json, clean } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, SPACES, CHANNELS, kstToday } from "../../_lib/admin.js";
@@ -22,7 +23,9 @@ export async function onRequestGet({ request, env }) {
   const all = async (sql, ...a) => { try { return (await env.DB.prepare(sql).bind(...a).all()).results || []; } catch (e) { console.error("sales", e && e.message); return []; } };
   const one = async (sql, ...a) => { try { return (await env.DB.prepare(sql).bind(...a).first()) || {}; } catch (e) { console.error("sales", e && e.message); return {}; } };
 
-  const methods = Object.keys(PAY_METHODS).concat(withOrders ? ["orders"] : []);
+  const methods = Object.keys(PAY_METHODS).concat(withOrders ? ["orders", "kiosk"] : []);
+  const KIOSK = "FROM pass_payments WHERE status IN ('paid', 'refunded') AND test_mode = 0 AND paid_at IS NOT NULL";
+  const KNET = "MAX(amount - refund_amount, 0)";
   const blank = () => { const o = {}; methods.forEach((k) => { o[k] = 0; }); return o; };
   const months = [];
   for (let m = 1; m <= 12; m++) months.push({ ym: year + "-" + String(m).padStart(2, "0"), byMethod: blank(), count: blank(), total: 0, n: 0, refunds: 0, unpaid: 0 });
@@ -42,6 +45,10 @@ export async function onRequestGet({ request, env }) {
     for (const r of await all("SELECT substr(paid_at, 1, 7) AS ym, COUNT(*) AS n, SUM(amount) AS s FROM orders WHERE status IN ('paid', 'used') AND test_mode = 0 AND paid_at IS NOT NULL AND substr(paid_at, 1, 4) = ?1 GROUP BY ym", year)) {
       const m = byYm[r.ym]; if (!m) continue;
       m.byMethod.orders += Number(r.s) || 0; m.count.orders += Number(r.n) || 0;
+    }
+    for (const r of await all(`SELECT substr(paid_at, 1, 7) AS ym, COUNT(*) AS n, SUM(${KNET}) AS s, SUM(refund_amount) AS rf ${KIOSK} AND substr(paid_at, 1, 4) = ?1 GROUP BY ym`, year)) {
+      const m = byYm[r.ym]; if (!m) continue;
+      m.byMethod.kiosk += Number(r.s) || 0; m.count.kiosk += Number(r.n) || 0; m.refunds += Number(r.rf) || 0;
     }
   }
   const byMethod = blank(), countBy = blank();
@@ -64,23 +71,26 @@ export async function onRequestGet({ request, env }) {
   // 누적(전체 기간) · 미수금 · 이번 달 · 지난달
   const resAll = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}), 0) AS s FROM reservations WHERE ${PAID}`);
   const ordAll = withOrders ? await one("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM orders WHERE status IN ('paid', 'used') AND test_mode = 0") : { n: 0, s: 0 };
+  const kioskAll = withOrders ? await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${KNET}), 0) AS s ${KIOSK}`) : { n: 0, s: 0 };
   const unpaid = await one("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM reservations WHERE pay_status = 'unpaid' AND status = 'confirmed'");
   const monthTotal = async (ym) => {
     const a = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}), 0) AS s FROM reservations WHERE ${PAID} AND substr(${dcol}, 1, 7) = ?1`, ym);
     const o = withOrders ? await one("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM orders WHERE status IN ('paid', 'used') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1", ym) : { n: 0, s: 0 };
-    return { ym, total: (Number(a.s) || 0) + (Number(o.s) || 0), n: (Number(a.n) || 0) + (Number(o.n) || 0) };
+    const k = withOrders ? await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${KNET}), 0) AS s ${KIOSK} AND substr(paid_at, 1, 7) = ?1`, ym) : { n: 0, s: 0 };
+    return { ym, total: (Number(a.s) || 0) + (Number(o.s) || 0) + (Number(k.s) || 0), n: (Number(a.n) || 0) + (Number(o.n) || 0) + (Number(k.n) || 0) };
   };
   const thisYm = today.slice(0, 7);
   const d = new Date(Date.parse(thisYm + "-01T00:00:00Z") - 864e5), lastYm = d.toISOString().slice(0, 7);
-  const ys = await all("SELECT DISTINCT substr(date, 1, 4) AS y FROM reservations UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM reservations WHERE paid_at IS NOT NULL UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM orders WHERE paid_at IS NOT NULL AND status IN ('paid', 'used') AND test_mode = 0");
+  const ys = (await all("SELECT DISTINCT substr(date, 1, 4) AS y FROM reservations UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM reservations WHERE paid_at IS NOT NULL UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM orders WHERE paid_at IS NOT NULL AND status IN ('paid', 'used') AND test_mode = 0"))
+    .concat(await all(`SELECT DISTINCT substr(paid_at, 1, 4) AS y ${KIOSK}`));
   const years = Array.from(new Set(ys.map((r) => r.y).filter((y) => /^\d{4}$/.test(y || "")).concat([today.slice(0, 4), year]))).sort().reverse();
 
   return json({
     ok: true, today, year, basis, withOrders, years,
-    methods: methods.map((k) => ({ key: k, label: k === "orders" ? "이용권 온라인 결제" : PAY_METHODS[k] })),
+    methods: methods.map((k) => ({ key: k, label: k === "orders" ? "이용권 온라인 결제" : k === "kiosk" ? "토스프론트 이용권" : PAY_METHODS[k] })),
     months, byMethod, countBy, total, n, refunds,
     bySpace, byChannel,
-    allTime: { total: (Number(resAll.s) || 0) + (Number(ordAll.s) || 0), n: (Number(resAll.n) || 0) + (Number(ordAll.n) || 0) },
+    allTime: { total: (Number(resAll.s) || 0) + (Number(ordAll.s) || 0) + (Number(kioskAll.s) || 0), n: (Number(resAll.n) || 0) + (Number(ordAll.n) || 0) + (Number(kioskAll.n) || 0) },
     unpaid: { n: Number(unpaid.n) || 0, amount: Number(unpaid.s) || 0 },
     thisMonth: await monthTotal(thisYm), lastMonth: await monthTotal(lastYm)
   });

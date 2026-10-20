@@ -1,6 +1,7 @@
 /**
  * GET /api/admin/dashboard — 관리자 첫 화면 '오늘 확인할 것'
- * 오늘 · 내일 예약, 앞으로 7일 예약, 결제 확인이 필요한 예약(결제 전), 답하지 않은 문의, 환불 요청 주문, 이번 달 매출(결제수단별)
+ * 오늘 · 내일 예약, 앞으로 7일 예약, 결제 확인이 필요한 예약(결제 전), 답하지 않은 문의, 환불 요청 주문, 이번 달 매출(결제수단별),
+ * 토스프론트 이용권(이용 중 · 오늘 만료 · 알림 실패)
  */
 import { json } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, kstToday, addDaysIso } from "../../_lib/admin.js";
@@ -32,12 +33,19 @@ export async function onRequestGet({ request, env }) {
   }
   const ord = await one("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM orders WHERE status IN ('paid', 'used') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1", ym);
   const resMonth = await one("SELECT COUNT(*) AS n, COALESCE(SUM(end_min - start_min), 0) AS mins FROM reservations WHERE status = 'confirmed' AND substr(date, 1, 7) = ?1", ym);
+  const kio = await one("SELECT COUNT(*) AS n, COALESCE(SUM(MAX(amount - refund_amount, 0)), 0) AS s FROM pass_payments WHERE status IN ('paid', 'refunded') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1", ym);
+  // 토스프론트 이용권: 지금 이용 중 · 오늘 만료 · 알림 발송 실패 (표가 아직 없으면 0)
+  const nowTs = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 19).replace("T", " ");
+  const passNow = await one("SELECT COUNT(DISTINCT customer_id) AS n FROM passes WHERE status = 'active' AND starts_at <= ?1 AND ends_at > ?1", nowTs);
+  const passToday = await one("SELECT COUNT(DISTINCT customer_id) AS n FROM passes WHERE status = 'active' AND ends_at > ?1 AND substr(ends_at, 1, 10) = ?2", nowTs, today);
+  const jobFail = await one("SELECT COUNT(*) AS n FROM notification_jobs WHERE status = 'failed'");
   const ordersRecent = await all("SELECT id, oid, created_at, status, product_name, amount, buyer_name, test_mode, paid_at FROM orders WHERE status <> 'pending' ORDER BY id DESC LIMIT 5");
 
   return json({
     ok: true, today, tomorrow,
-    counts: { today: todayList.length, tomorrow: tomorrowList.length, upcoming: upcoming.length, unpaid: Number(unpaidSum.n) || 0, unpaidAmount: Number(unpaidSum.s) || 0, newInquiries: Number(newInqN.n) || 0, refundRequests: Number(refundReq.n) || 0 },
+    counts: { today: todayList.length, tomorrow: tomorrowList.length, upcoming: upcoming.length, unpaid: Number(unpaidSum.n) || 0, unpaidAmount: Number(unpaidSum.s) || 0, newInquiries: Number(newInqN.n) || 0, refundRequests: Number(refundReq.n) || 0,
+      passInUse: Number(passNow.n) || 0, passEndsToday: Number(passToday.n) || 0, notifyFailed: Number(jobFail.n) || 0 },
     todayList, tomorrowList, upcoming, unpaid, newInquiries: newInq, ordersRecent,
-    month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, total: resTotal + (Number(ord.s) || 0), byMethod, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }
+    month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, kiosk: Number(kio.s) || 0, kioskN: Number(kio.n) || 0, total: resTotal + (Number(ord.s) || 0) + (Number(kio.s) || 0), byMethod, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }
   });
 }

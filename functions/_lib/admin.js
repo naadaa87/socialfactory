@@ -52,7 +52,19 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS reservations (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), updated_at TEXT, status TEXT NOT NULL DEFAULT 'confirmed', space TEXT NOT NULL, space_note TEXT, date TEXT NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, customer_name TEXT NOT NULL, phone TEXT, people INTEGER, purpose TEXT, channel TEXT, amount INTEGER NOT NULL DEFAULT 0, list_amount INTEGER, amount_note TEXT, pay_method TEXT NOT NULL, pay_status TEXT NOT NULL DEFAULT 'paid', paid_at TEXT, refund_amount INTEGER NOT NULL DEFAULT 0, refunded_at TEXT, cancel_reason TEXT, cancelled_at TEXT, inquiry_ref TEXT, memo TEXT)`,
   `CREATE INDEX IF NOT EXISTS idx_res_date ON reservations (date, space)`,
   `CREATE INDEX IF NOT EXISTS idx_res_paid ON reservations (paid_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_res_status ON reservations (status, pay_status)`
+  `CREATE INDEX IF NOT EXISTS idx_res_status ON reservations (status, pay_status)`,
+  // 토스프론트 이용권 (고객 · 결제 · 이용권 · 알림 대기열 · 단말기) — 자세한 설명은 schema-upgrade-passes.sql
+  `CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT NOT NULL UNIQUE, phone_fmt TEXT, name TEXT, memo TEXT, member_id INTEGER, privacy_agreed_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), updated_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS pass_payments (id INTEGER PRIMARY KEY AUTOINCREMENT, payment_key TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), updated_at TEXT, status TEXT NOT NULL DEFAULT 'pending', channel TEXT NOT NULL DEFAULT 'toss_front', device_id INTEGER, customer_id INTEGER NOT NULL, product_id TEXT NOT NULL, product_name TEXT NOT NULL, amount INTEGER NOT NULL, tax INTEGER NOT NULL DEFAULT 0, supply INTEGER NOT NULL DEFAULT 0, pay_method TEXT, approval_number TEXT, approved_ts INTEGER, tid TEXT, van_key TEXT, card_issuer TEXT, masked_card TEXT, installment INTEGER NOT NULL DEFAULT 0, paid_at TEXT, fail_reason TEXT, refund_amount INTEGER NOT NULL DEFAULT 0, refunded_at TEXT, admin_memo TEXT, test_mode INTEGER NOT NULL DEFAULT 0, raw TEXT)`,
+  `CREATE INDEX IF NOT EXISTS idx_pp_customer ON pass_payments (customer_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pp_status ON pass_payments (status, paid_at)`,
+  `CREATE TABLE IF NOT EXISTS passes (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, payment_id INTEGER NOT NULL UNIQUE, customer_id INTEGER NOT NULL, product_id TEXT NOT NULL, product_name TEXT NOT NULL, pass_group TEXT NOT NULL DEFAULT 'seat', starts_at TEXT NOT NULL, ends_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', source TEXT, memo TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), updated_at TEXT)`,
+  `CREATE INDEX IF NOT EXISTS idx_passes_customer ON passes (customer_id, pass_group, status, ends_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_passes_ends ON passes (status, ends_at)`,
+  `CREATE TABLE IF NOT EXISTS notification_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, dedupe_key TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, customer_id INTEGER, pass_id INTEGER, pass_group TEXT, phone TEXT NOT NULL, vars TEXT, send_after TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued', attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, provider TEXT, provider_msg_id TEXT, rendered TEXT, sent_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), updated_at TEXT)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_due ON notification_jobs (status, send_after)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_customer ON notification_jobs (customer_id)`,
+  `CREATE TABLE IF NOT EXISTS kiosk_devices (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pairing', token_hash TEXT UNIQUE, pair_hash TEXT, pair_expires_at TEXT, serial TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), paired_at TEXT, last_seen_at TEXT)`
 ];
 // 예전에 만든 표에 나중에 추가한 칸 — 이미 있으면 오류가 나므로 하나씩 실행하고 오류는 무시합니다.
 const MIGRATIONS = ["ALTER TABLE inquiries ADD COLUMN member_id INTEGER"];
