@@ -45,3 +45,10 @@ https://:version.:project.pages.dev/*
 /api/*
   X-Robots-Tag: noindex
   Cache-Control: no-store
+
+# 토스프론트 플러그인 원본 · 알림 발송기 코드는 검색에 나오지 않게 합니다 (실제 플러그인은 토스 개발자센터에 ZIP 으로 올림)
+/toss-front-plugin/*
+  X-Robots-Tag: noindex, nofollow
+
+/workers/*
+  X-Robots-Tag: noindex, nofollow

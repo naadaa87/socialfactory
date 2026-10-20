@@ -1,0 +1,261 @@
+/* 소셜팩토리 토스프론트 플러그인 — 이용권 선택 → 휴대폰 번호 → 개인정보 안내 동의 → 금액 확인 → 카드 결제 → 완료
+   화면은 모두 토스 SDK Template API(renderIdlePage · renderSelectPage · renderInputPage · renderAgreementPage · renderOrderPage · renderResultPage)로 그립니다.
+   결제는 sdk.payment.requestPayment, 응답 유실 복구는 sdk.payment.getPayment, 단말기 토큰 · 진행 중 결제는 sdk.storage 를 씁니다.
+
+   결제 순서
+   1) 서버(/api/kiosk/intents)가 고객을 찾고 금액 · 부가세 · 결제 식별자(paymentKey)를 정해 줍니다.
+   2) paymentKey 를 단말기 저장소에 적어 둔 뒤 requestPayment 를 부릅니다.
+   3) 결과를 서버(/api/kiosk/result)에 보고합니다. 서버가 이용권을 1장만 발급합니다 (같은 보고가 여러 번 가도 안전).
+   4) 보고가 실패하면 저장소에 남겨 두고, 대기 화면으로 돌아올 때마다 getPayment 로 다시 확인해 보고합니다. */
+(function () {
+  "use strict";
+  var sdk = window.TossFrontSDK;
+  var CFG = window.SF_PLUGIN || {};
+  var API = String(CFG.apiBase || "").replace(/\/+$/, "");
+  var K_TOKEN = "sf_kiosk_token", K_PENDING = "sf_kiosk_pending";
+  var isLocal = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+
+  // 이 PC 브라우저에서 시험할 때만: 토스 예제(sdk.js)와 같은 방식으로 단말기 · 매장 정보를 흉내 냅니다.
+  if (isLocal && sdk && typeof sdk.overrides === "function") {
+    sdk.overrides({ serialNumber: "000000000000000", merchant: { id: 0, name: "테스트 매장", businessNumber: "0000000000" } });
+  }
+
+  var won = function (n) { return Number(n || 0).toLocaleString("ko-KR") + "원"; };
+  var digits = function (v) { return String(v || "").replace(/[^0-9]/g, ""); };
+  var imageUrl = function (name) { return name ? new URL("images/" + name, location.href).href : undefined; };
+  var toast = function (message, icon) { try { sdk.template.openToast(icon ? { message: message, icon: icon } : { message: message }); } catch (e) { console.log(message); } };
+
+  /* ---------- 저장소 (sdk.storage: 문자열만 저장) ---------- */
+  function sget(key) { return sdk.storage.get({ key: key }).then(function (r) { return r && r.value != null ? r.value : null; }).catch(function () { return null; }); }
+  function sset(key, value) { return sdk.storage.set({ key: key, value: value }).catch(function (e) { console.error("storage.set", e); }); }
+  function sdel(key) { return sdk.storage.remove({ key: key }).catch(function () {}); }
+
+  /* ---------- 서버 ---------- */
+  var token = null;
+  function api(path, body, opt) {
+    opt = opt || {};
+    var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    var t = ctrl ? setTimeout(function () { ctrl.abort(); }, opt.timeoutMs || 15000) : null;
+    var headers = { "Content-Type": "application/json" };
+    if (token && !opt.noAuth) headers.Authorization = "Bearer " + token;
+    return fetch(API + path, { method: body === undefined ? "GET" : "POST", headers: headers, body: body === undefined ? undefined : JSON.stringify(body), signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (r.ok && j.ok !== false) return j;
+          var e = new Error(j.message || j.error || ("HTTP " + r.status)); e.status = r.status; e.code = j.code || j.error || ""; throw e;
+        });
+      }, function () { var e = new Error("서버에 연결하지 못했어요"); e.code = "NETWORK"; throw e; })
+      .finally(function () { if (t) clearTimeout(t); });
+  }
+  // 결제 결과 보고는 네트워크가 잠깐 끊겨도 몇 번 더 시도합니다.
+  function report(paymentKey, result) {
+    var body = { paymentKey: paymentKey, type: result.type };
+    if (result.type === "SUCCESS") body.response = result.response;
+    if (result.message) body.message = String(result.message).slice(0, 200);
+    var tries = 0;
+    function once() {
+      tries++;
+      return api("/api/kiosk/result", body).catch(function (e) {
+        if (tries < 4 && (e.code === "NETWORK" || e.status >= 500)) return new Promise(function (res) { setTimeout(res, 800 * tries); }).then(once);
+        throw e;
+      });
+    }
+    return once();
+  }
+  function onAuthError(e) {
+    if (e && (e.status === 401 || e.code === "DEVICE_AUTH")) { token = null; sdel(K_TOKEN); toast("단말기 연결이 해제됐어요. 다시 연결해 주세요.", "error"); renderPair(); return true; }
+    return false;
+  }
+
+  /* ---------- 단말기 연결 (처음 한 번) ---------- */
+  function renderPair() {
+    sdk.template.renderOnboardingPage({
+      title: (CFG.storeName || "소셜팩토리") + " 단말기 연결",
+      inputs: { code: { label: "연결 코드 (8자리)", type: "text", placeholder: "관리자 화면 → 고객 · 이용권 → 단말기에서 만든 코드" } },
+      onSubmit: function (values) {
+        var code = String((values && values.code) || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+        if (code.length !== 8) { toast("연결 코드 8자리를 확인해 주세요.", "error"); return; }
+        return sdk.app.getSerialNumber().catch(function () { return {}; }).then(function (sn) {
+          return api("/api/kiosk/pair", { code: code, serialNumber: (sn && sn.serialNumber) || "" }, { noAuth: true });
+        }).then(function (j) {
+          token = j.token; return sset(K_TOKEN, j.token).then(function () { toast("단말기를 연결했어요.", "success"); renderIdle(); });
+        }).catch(function (e) {
+          toast(e.code === "bad-code" ? "연결 코드가 맞지 않거나 시간이 지났어요." : e.code === "too-many" ? "잠시 뒤 다시 시도해 주세요." : (e.message || "연결하지 못했어요."), "error");
+        });
+      }
+    });
+  }
+
+  /* ---------- 대기 화면 ---------- */
+  function renderIdle() {
+    sdk.template.renderIdlePage({
+      type: "twoButton",
+      title: { text1: CFG.storeName || "소셜팩토리", text2: "이용권 구매" },
+      description: { text: "24시간 코워킹 · 스터디 라운지", subText: "결제한 순간부터 이용이 시작돼요" },
+      primaryButton: { text: "이용권 구매", onClick: startPurchase },
+      secondaryButton: { text: "남은 시간 확인", onClick: startLookup }
+    });
+    recoverPending();
+  }
+
+  /* ---------- 1. 이용권 선택 ---------- */
+  var PRODUCTS = null, PRIVACY_URL = "", loadedAt = 0;
+  function loadProducts() {
+    if (PRODUCTS && Date.now() - loadedAt < 5 * 60e3) return Promise.resolve(PRODUCTS);
+    return api("/api/kiosk/products").then(function (j) { PRODUCTS = j.products || []; PRIVACY_URL = j.privacyUrl || ""; loadedAt = Date.now(); return PRODUCTS; });
+  }
+  function startPurchase() {
+    loadProducts().then(function (list) {
+      sdk.template.renderSelectPage({
+        // 이 템플릿은 title 이 위의 작은 글씨, subtitle 이 큰 제목으로 보입니다.
+        title: "결제한 순간부터 시작 · 이용 중이면 이어서",
+        subtitle: "이용권을 골라 주세요",
+        options: list.map(function (p) {
+          return {
+            title: p.name,
+            subtitle: won(p.price) + (p.listPrice ? " (정가 " + won(p.listPrice) + ")" : ""),
+            description: p.short,
+            iconUrl: imageUrl(p.image),
+            onClick: function () { askPhone(p); }
+          };
+        }),
+        onBack: renderIdle
+      });
+    }).catch(function (e) { if (!onAuthError(e)) { toast("이용권 목록을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.", "error"); renderIdle(); } });
+  }
+
+  /* ---------- 2. 휴대폰 번호 ---------- */
+  function askPhone(p) {
+    sdk.template.renderInputPage({
+      type: "phone",
+      top: { title: "휴대폰 번호를 입력해 주세요", subtitle: p.name + " · " + won(p.price) },
+      input: { placeholder: "010-0000-0000" },
+      disclaimer: "이용권 확인과 만료 안내(카카오 알림톡)에만 사용해요.",
+      onSubmit: function (value) {
+        var d = digits(value);
+        if (!/^01[016789]\d{7,8}$/.test(d)) { toast("휴대폰 번호를 다시 확인해 주세요.", "error"); return; }
+        askAgreement(p, d);
+      },
+      onBack: startPurchase
+    });
+  }
+
+  /* ---------- 3. 개인정보 수집 · 이용 안내 동의 ---------- */
+  function askAgreement(p, phone) {
+    sdk.template.renderAgreementPage({
+      title: "개인정보 수집 · 이용 안내",
+      subtitle: "휴대폰 번호를 이용권 관리와 만료 안내에 써요",
+      agreements: { required: [{ id: "privacy", title: "개인정보 수집 · 이용 동의 (필수)", href: PRIVACY_URL || (API + "/privacy") }], optional: [] },
+      onSubmit: function (ids) {
+        if (!ids || ids.indexOf("privacy") < 0) { toast("필수 항목에 동의해 주세요.", "error"); return; }
+        return prepare(p, phone);
+      }
+    });
+  }
+
+  /* ---------- 4. 결제 준비 · 금액 확인 ---------- */
+  function prepare(p, phone) {
+    return api("/api/kiosk/intents", { productId: p.id, phone: phone, agreePrivacy: true }).then(function (it) {
+      var discount = it.listPrice ? it.listPrice - it.amount : 0;
+      sdk.template.renderOrderPage({
+        localeCode: "ko",
+        order: {
+          items: [{ label: it.productName, value: it.listPrice || it.amount, quantity: 1, imageUrl: imageUrl(p.image) }],
+          discounts: discount ? [{ label: "친구 동반 할인", value: discount }] : [],
+          summary: {
+            totalAmount: it.amount,
+            discountAmount: discount || undefined,
+            earned: { label: it.preview.extends ? "이용 기간 (이어서)" : "이용 기간", value: it.preview.startsText + " ~ " + it.preview.endsText }
+          }
+        },
+        onClick: function () { pay(it); },
+        onBack: renderIdle
+      });
+    }).catch(function (e) { if (!onAuthError(e)) { toast(e.message && e.status === 400 ? e.message : "결제를 준비하지 못했어요. 다시 시도해 주세요.", "error"); renderIdle(); } });
+  }
+
+  /* ---------- 5. 결제 · 결과 보고 ---------- */
+  var paying = false;
+  function pay(it) {
+    if (paying) return; paying = true;
+    var pending = JSON.stringify({ paymentKey: it.paymentKey, productName: it.productName, at: Date.now() });
+    sset(K_PENDING, pending).then(function () {
+      return sdk.payment.requestPayment({
+        paymentKey: it.paymentKey, tax: it.payment.tax, supplyValue: it.payment.supplyValue,
+        taxExemptValue: 0, tip: 0, localeCode: "ko"
+      }).catch(function (e) { return { type: "FAILED", message: (e && e.message) || "결제 오류" }; });
+    }).then(function (result) {
+      result = result || { type: "FAILED", message: "결제 결과 없음" };
+      if (result.type === "SUCCESS") {
+        return report(it.paymentKey, result).then(function (j) {
+          sdel(K_PENDING);
+          showDone(j.pass.productName, j.pass.startsText + " ~ " + j.pass.endsText, j.phoneMasked);
+        }, function (e) {
+          // 결제는 됐지만 서버 보고가 안 된 경우: 저장소에 남겨 두고 대기 화면에서 다시 보고합니다.
+          console.error("report", e);
+          showDone(it.productName, it.preview.startsText + " ~ " + it.preview.endsText, it.phoneMasked, "이용권 등록이 잠시 늦어질 수 있어요");
+        });
+      }
+      // 시간 초과는 실제로 승인됐을 수도 있어 저장소에 남겨 두고 나중에 getPayment 로 확인합니다.
+      if (result.type !== "TIMEOUT") sdel(K_PENDING);
+      report(it.paymentKey, result).catch(function (e) { console.error("report", e); });
+      sdk.template.renderResultPage({
+        type: "image", status: "error",
+        title: result.type === "CANCELED" ? "결제를 취소했어요" : result.type === "TIMEOUT" ? "결제 시간이 지났어요" : "결제하지 못했어요",
+        description: "처음 화면으로 돌아가요",
+        timerMs: 5000, onTimeout: renderIdle, localeCode: "ko",
+        buttons: [{ label: "처음으로", onClick: renderIdle, closeOnClick: true }]
+      });
+    }).finally(function () { paying = false; });
+  }
+  function showDone(name, period, phoneMasked, extra) {
+    sdk.template.renderResultPage({
+      type: "image", status: "success",
+      title: "결제가 끝났어요",
+      description: name + "\n" + period + "\n" + (phoneMasked || "") + (extra ? "\n" + extra : ""),
+      timerMs: 10000, onTimeout: renderIdle, localeCode: "ko",
+      buttons: [{ label: "확인", onClick: renderIdle, closeOnClick: true }]
+    });
+  }
+
+  /* ---------- 응답 유실 복구 (대기 화면으로 돌아올 때마다) ---------- */
+  var recovering = false;
+  function recoverPending() {
+    if (recovering || paying || !token) return;
+    recovering = true;
+    sget(K_PENDING).then(function (raw) {
+      if (!raw) return;
+      var p; try { p = JSON.parse(raw); } catch (e) { return sdel(K_PENDING); }
+      return sdk.payment.getPayment({ paymentKey: p.paymentKey }).then(function (res) {
+        if (res && res.type === "SUCCESS") return report(p.paymentKey, res).then(function () { return sdel(K_PENDING); });
+      }, function (e) {
+        // 승인 결과가 없으면(PAYMENT_NOT_FOUND) 결제가 안 된 것 — 2분이 지났으면 시간 초과로 정리합니다.
+        if (/PAYMENT_NOT_FOUND/.test(String((e && (e.code || e.message)) || e)) && Date.now() - (p.at || 0) > 120e3) {
+          return report(p.paymentKey, { type: "TIMEOUT", message: "PAYMENT_NOT_FOUND" }).catch(function () {}).then(function () { return sdel(K_PENDING); });
+        }
+      });
+    }).catch(function (e) { console.error("recover", e); }).finally(function () { recovering = false; });
+  }
+
+  /* ---------- 남은 시간 확인 ---------- */
+  function startLookup() {
+    sdk.template.renderInputPage({
+      type: "phone",
+      top: { title: "휴대폰 번호를 입력해 주세요", subtitle: "이용권이 언제까지인지 알려 드려요" },
+      input: { placeholder: "010-0000-0000" },
+      onSubmit: function (value) {
+        var d = digits(value);
+        if (!/^01[016789]\d{7,8}$/.test(d)) { toast("휴대폰 번호를 다시 확인해 주세요.", "error"); return; }
+        return api("/api/kiosk/lookup", { phone: d }).then(function (j) {
+          if (j.active) sdk.template.renderResultPage({ type: "text", text: j.endsText, title: "이 시각까지 이용할 수 있어요", description: j.phoneMasked, timerMs: 8000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "확인", onClick: renderIdle, closeOnClick: true }] });
+          else sdk.template.renderResultPage({ type: "image", status: "error", title: "이용 중인 이용권이 없어요", description: j.phoneMasked + " · 이용권을 구매해 주세요", timerMs: 6000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "이용권 구매", onClick: startPurchase, closeOnClick: true }] });
+        }).catch(function (e) { if (!onAuthError(e)) toast("확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.", "error"); });
+      },
+      onBack: renderIdle
+    });
+  }
+
+  /* ---------- 시작 ---------- */
+  if (!sdk) { document.getElementById("app").textContent = "토스 프론트 SDK를 불러오지 못했습니다."; return; }
+  sget(K_TOKEN).then(function (t) { token = t; if (token) renderIdle(); else renderPair(); });
+})();
