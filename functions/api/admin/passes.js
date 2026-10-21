@@ -14,7 +14,7 @@
 import { json, clean, phoneDigits } from "../../_lib/auth.js";
 import { adminGate, kstNow } from "../../_lib/admin.js";
 import { KIOSK_PRODUCT_MAP, splitVat } from "../../_lib/kiosk-products.js";
-import { issuePassForPayment, expiryNoticeStmts, upsertCustomer, validMobile, addDuration, nextStart, toMs, fromMs } from "../../_lib/kiosk.js";
+import { issuePassForPayment, expiryNoticeStmts, upsertCustomer, validMobile, addDuration, nextStart, toMs, fromMs, cancelPass } from "../../_lib/kiosk.js";
 
 const TS = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
 const normTs = (s) => { s = clean(s, 19).replace("T", " "); if (!TS.test(s)) return ""; s = s.length === 16 ? s + ":00" : s; return isNaN(toMs(s)) ? "" : fromMs(toMs(s)); };
@@ -58,7 +58,7 @@ export async function onRequestGet({ request, env }) {
       upcoming: "p.status = 'active' AND p.starts_at > ?1",
       expiring: "p.status = 'active' AND p.ends_at > ?1 AND p.ends_at <= ?2",
       expired: "p.status = 'active' AND p.ends_at <= ?1",
-      cancelled: "p.status = 'cancelled'"
+      cancelled: "p.status = 'cancelled' AND ?1 = ?1"
     };
     if (state === "expiring") args.push(in3);
     if (W[state]) where.push(W[state]);
@@ -141,23 +141,7 @@ export async function onRequestPatch({ request, env }) {
       await renotice(p.customer_id);
     } else if (action === "cancel") {
       if (p.status === "cancelled") return json({ ok: false, error: "invalid", message: "이미 취소된 이용권입니다." }, 400);
-      const pay = await env.DB.prepare("SELECT * FROM pass_payments WHERE id = ?1").bind(p.payment_id).first();
-      const refund = Math.max(0, Math.min(parseInt(b.refundAmount, 10) || 0, pay ? pay.amount : 0));
-      const stmts = [env.DB.prepare("UPDATE passes SET status = 'cancelled', memo = COALESCE(?1, memo), updated_at = datetime('now', '+9 hours') WHERE id = ?2").bind(memo, id)];
-      if (refund > 0) stmts.push(env.DB.prepare("UPDATE pass_payments SET status = 'refunded', refund_amount = ?1, refunded_at = datetime('now', '+9 hours'), updated_at = datetime('now', '+9 hours') WHERE id = ?2").bind(refund, p.payment_id));
-      // 뒤에 이어 붙어 있던 이용권을 취소한 이용권 자리로 앞당깁니다 (기간 길이는 각 상품 규칙대로 다시 계산)
-      if (b.rechain !== false) {
-        const { results: later } = await env.DB.prepare("SELECT * FROM passes WHERE customer_id = ?1 AND pass_group = ?2 AND status = 'active' AND id <> ?3 AND starts_at >= ?4 ORDER BY starts_at").bind(p.customer_id, p.pass_group, id, p.ends_at).all();
-        let cursor = p.starts_at > kstNow() ? p.starts_at : kstNow();
-        for (const x of later) {
-          const prod = KIOSK_PRODUCT_MAP[x.product_id]; if (!prod) continue;
-          const ends = addDuration(cursor, prod.duration);
-          stmts.push(env.DB.prepare("UPDATE passes SET starts_at = ?1, ends_at = ?2, updated_at = datetime('now', '+9 hours') WHERE id = ?3").bind(cursor, ends, x.id));
-          cursor = ends;
-        }
-      }
-      await env.DB.batch(stmts);
-      await renotice(p.customer_id);
+      await cancelPass(env, p, { refundAmount: parseInt(b.refundAmount, 10) || 0, rechain: b.rechain !== false, memo });
     } else if (action === "move") {
       if (!validMobile(b.phone)) return json({ ok: false, error: "invalid", message: "옮길 휴대폰 번호를 확인해 주세요." }, 400);
       const to = await upsertCustomer(env, b.phone);

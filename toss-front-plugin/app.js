@@ -1,6 +1,7 @@
 /* 소셜팩토리 토스프론트 플러그인 — 이용권 선택 → 휴대폰 번호 → 개인정보 안내 동의 → 금액 확인 → 카드 결제 → 완료
    화면은 모두 토스 SDK Template API(renderIdlePage · renderSelectPage · renderInputPage · renderAgreementPage · renderOrderPage · renderResultPage)로 그립니다.
    결제는 sdk.payment.requestPayment, 응답 유실 복구는 sdk.payment.getPayment, 단말기 토큰 · 진행 중 결제는 sdk.storage 를 씁니다.
+   직원용 카드 결제 취소는 sdk.payment.requestPaymentCancel · getPaymentCancel 을 씁니다 (이용권 고르기 화면의 '관리').
 
    결제 순서
    1) 서버(/api/kiosk/intents)가 고객을 찾고 금액 · 부가세 · 결제 식별자(paymentKey)를 정해 줍니다.
@@ -12,7 +13,7 @@
   var sdk = window.TossFrontSDK;
   var CFG = window.SF_PLUGIN || {};
   var API = String(CFG.apiBase || "").replace(/\/+$/, "");
-  var K_TOKEN = "sf_kiosk_token", K_PENDING = "sf_kiosk_pending";
+  var K_TOKEN = "sf_kiosk_token", K_PENDING = "sf_kiosk_pending", K_CANCEL = "sf_kiosk_pending_cancel";
   var isLocal = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 
   // 이 PC 브라우저에서 시험할 때만: 토스 예제(sdk.js)와 같은 방식으로 단말기 · 매장 정보를 흉내 냅니다.
@@ -119,6 +120,7 @@
             onClick: function () { askPhone(p); }
           };
         }),
+        navbarButton: { label: "관리", onClick: startStaff },
         onBack: renderIdle
       });
     }).catch(function (e) { if (!onAuthError(e)) { toast("이용권 목록을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.", "error"); renderIdle(); } });
@@ -182,7 +184,8 @@
     sset(K_PENDING, pending).then(function () {
       return sdk.payment.requestPayment({
         paymentKey: it.paymentKey, tax: it.payment.tax, supplyValue: it.payment.supplyValue,
-        taxExemptValue: 0, tip: 0, localeCode: "ko"
+        taxExemptValue: 0, tip: 0, localeCode: "ko",
+        excludePaymentTypes: ["CASH"]          // 무인 매장이라 현금은 받지 않습니다
       }).catch(function (e) { return { type: "FAILED", message: (e && e.message) || "결제 오류" }; });
     }).then(function (result) {
       result = result || { type: "FAILED", message: "결제 결과 없음" };
@@ -235,6 +238,79 @@
         }
       });
     }).catch(function (e) { console.error("recover", e); }).finally(function () { recovering = false; });
+  }
+
+  /* ---------- 관리 (직원): 카드 결제 취소 ----------
+     플러그인 결제는 토스 POS 에 남지 않아 POS 에서 취소할 수 없으므로, 결제한 이 단말기에서 취소합니다.
+     이용권 고르기 화면 오른쪽 위 '관리' → 관리 비밀번호(KIOSK_STAFF_PIN) → 최근 결제 → 취소 확인 → requestPaymentCancel */
+  var staffToken = null;
+  function startStaff() {
+    sdk.template.renderInputPage({
+      type: "number",
+      top: { title: "관리 비밀번호를 입력해 주세요", subtitle: "매장 직원 전용" },
+      input: { placeholder: "비밀번호", type: "password", maxLength: 8 },
+      button: { label: "확인" },
+      onSubmit: function (value) {
+        return api("/api/kiosk/staff", { pin: digits(value) }).then(function (j) {
+          staffToken = j.staffToken;
+          return recoverCancel().then(function () { showRefundList(j.payments || []); });
+        }).catch(function (e) { if (!onAuthError(e)) toast(e.message || "확인하지 못했어요.", "error"); });
+      },
+      onBack: startPurchase
+    });
+  }
+  function showRefundList(list) {
+    sdk.template.renderSelectPage({
+      title: "최근 30일 · 이 단말기에서 결제한 이용권",
+      subtitle: list.length ? "취소할 결제를 골라 주세요" : "취소할 수 있는 결제가 없어요",
+      options: list.map(function (x) {
+        return { title: x.productName + " · " + won(x.amount), subtitle: x.paidText + " · " + x.phoneMasked, description: "누르면 취소 확인 화면으로 가요", onClick: function () { confirmRefund(x); } };
+      }),
+      onBack: renderIdle
+    });
+  }
+  function confirmRefund(x) {
+    sdk.template.renderSelectPage({
+      title: x.productName + " · " + won(x.amount) + " · " + x.phoneMasked,
+      subtitle: "이 결제를 전액 취소할까요?",
+      options: [
+        { title: "네, 결제 취소", description: "카드 승인을 취소하고 이용권도 취소해요", onClick: function () { doRefund(x); } },
+        { title: "아니요", onClick: function () { renderIdle(); } }
+      ],
+      onBack: renderIdle
+    });
+  }
+  function doRefund(x) {
+    if (paying) return; paying = true;
+    api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: x.paymentKey, stage: "start" }).then(function (j) {
+      return sset(K_CANCEL, x.paymentKey).then(function () {
+        return sdk.payment.requestPaymentCancel(j.params).catch(function (e) { return { type: "FAILED", message: (e && e.message) || "취소 오류" }; });
+      });
+    }).then(function (result) {
+      result = result || { type: "FAILED" };
+      if (result.type !== "SUCCESS") {
+        sdel(K_CANCEL);
+        sdk.template.renderResultPage({ type: "image", status: "error", title: "결제를 취소하지 못했어요", description: result.type === "CANCELED" ? "취소 화면을 닫았어요" : "다시 시도해 주세요", timerMs: 6000, onTimeout: renderIdle, localeCode: "ko" });
+        return;
+      }
+      return api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: x.paymentKey, stage: "result", type: "SUCCESS", response: result.response }).then(function () {
+        sdel(K_CANCEL);
+        sdk.template.renderResultPage({ type: "image", status: "success", title: "결제를 취소했어요", description: x.productName + " · " + won(x.amount) + "\n이용권도 취소했어요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
+      }, function () {
+        sdk.template.renderResultPage({ type: "image", status: "success", title: "카드 취소는 됐어요", description: "서버 기록은 다음에 관리 화면에 들어올 때 다시 맞춰요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
+      });
+    }).catch(function (e) {
+      if (!onAuthError(e)) { toast(e.message || "취소를 준비하지 못했어요.", "error"); renderIdle(); }
+    }).finally(function () { paying = false; });
+  }
+  // 취소 응답이 서버에 못 갔던 건: 관리 화면에 들어올 때 getPaymentCancel 로 확인해 다시 보고합니다.
+  function recoverCancel() {
+    return sget(K_CANCEL).then(function (key) {
+      if (!key) return;
+      return sdk.payment.getPaymentCancel({ paymentKey: key }).then(function (res) {
+        if (res && res.type === "SUCCESS") return api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: key, stage: "result", type: "SUCCESS", response: res.response }).then(function () { toast("지난 결제 취소를 기록했어요.", "success"); });
+      }, function () { /* 취소 결과 없음 = 취소 안 됨 */ }).then(function () { return sdel(K_CANCEL); });
+    }).catch(function (e) { console.error("recover-cancel", e); });
   }
 
   /* ---------- 남은 시간 확인 ---------- */

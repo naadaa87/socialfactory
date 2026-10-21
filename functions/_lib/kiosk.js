@@ -176,3 +176,44 @@ export function paymentFields(response) {
     valid: method === "CASH" ? true : !!(method && (card.approvalNumber))
   };
 }
+
+/* ---------- 이용권 취소 (관리자 화면 · 프론트 결제 취소 공통) ---------- */
+/**
+ * 이용권을 취소하고, 환불 금액이 있으면 결제를 환불로 기록합니다.
+ * rechain 이면 뒤에 이어 붙어 있던 같은 그룹 이용권을 취소한 자리로 앞당기고(기간은 상품 규칙대로 다시 계산), 만료 알림을 다시 계산합니다.
+ */
+export async function cancelPass(env, p, { refundAmount = 0, rechain = true, memo = null, refundNote = null } = {}) {
+  const pay = await env.DB.prepare("SELECT * FROM pass_payments WHERE id = ?1").bind(p.payment_id).first();
+  const refund = Math.max(0, Math.min(refundAmount || 0, pay ? pay.amount : 0));
+  const stmts = [env.DB.prepare("UPDATE passes SET status = 'cancelled', memo = COALESCE(?1, memo), updated_at = datetime('now', '+9 hours') WHERE id = ?2 AND status <> 'cancelled'").bind(memo, p.id)];
+  if (refund > 0) stmts.push(env.DB.prepare(
+    "UPDATE pass_payments SET status = 'refunded', refund_amount = ?1, refunded_at = datetime('now', '+9 hours'), admin_memo = CASE WHEN ?2 IS NULL THEN admin_memo ELSE TRIM(COALESCE(admin_memo, '') || ' ' || ?2) END, updated_at = datetime('now', '+9 hours') WHERE id = ?3"
+  ).bind(refund, refundNote, p.payment_id));
+  if (rechain) {
+    const { results: later } = await env.DB.prepare("SELECT * FROM passes WHERE customer_id = ?1 AND pass_group = ?2 AND status = 'active' AND id <> ?3 AND starts_at >= ?4 ORDER BY starts_at").bind(p.customer_id, p.pass_group, p.id, p.ends_at).all();
+    let cursor = p.starts_at > kstNow() ? p.starts_at : kstNow();
+    for (const x of later) {
+      const prod = KIOSK_PRODUCT_MAP[x.product_id]; if (!prod) continue;
+      const ends = addDuration(cursor, prod.duration);
+      stmts.push(env.DB.prepare("UPDATE passes SET starts_at = ?1, ends_at = ?2, updated_at = datetime('now', '+9 hours') WHERE id = ?3").bind(cursor, ends, x.id));
+      cursor = ends;
+    }
+  }
+  await env.DB.batch(stmts);
+  const c = await env.DB.prepare("SELECT * FROM customers WHERE id = ?1").bind(p.customer_id).first();
+  if (c) await env.DB.batch(await expiryNoticeStmts(env, c, p.pass_group));
+}
+
+/* ---------- 매장 직원 확인 (프론트의 '관리' → 결제 취소) ---------- */
+// KIOSK_STAFF_PIN(숫자 4~8자리)이 맞으면 10분짜리 서명 토큰을 줍니다. 토큰은 그 단말기에서만 쓸 수 있습니다.
+const staffSecret = (env) => "staff|" + String(env.SESSION_SECRET || env.ADMIN_KEY || "");
+export async function makeStaffToken(env, deviceId) {
+  const exp = Date.now() + 10 * 60e3;
+  return exp + "." + (await sha256Hex(staffSecret(env) + "|" + deviceId + "|" + exp)).slice(0, 40);
+}
+export async function staffTokenOk(env, deviceId, tok) {
+  const [exp, sig] = String(tok || "").split(".");
+  if (!exp || !sig || Number(exp) < Date.now()) return false;
+  const want = (await sha256Hex(staffSecret(env) + "|" + deviceId + "|" + exp)).slice(0, 40);
+  return want.length === sig.length && want === sig;
+}
