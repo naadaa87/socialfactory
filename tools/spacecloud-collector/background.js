@@ -5,10 +5,9 @@ async function inject(tabId){await chrome.scripting.executeScript({target:{tabId
 chrome.action.onClicked.addListener(async tab=>{
   if(!validUrl(tab.url)) {await chrome.action.setBadgeText({tabId:tab.id,text:'예정'});return;}
   const old=await job();if(old&&old.tabId===tab.id&&old.running)return;
-  const start=new URL(tab.url);start.searchParams.set('page','1');
   await chrome.storage.session.set({job:{tabId:tab.id,running:true,rows:[],visited:[],skipped:0}});
   await chrome.action.setBadgeText({tabId:tab.id,text:'수집'});
-  if(new URL(tab.url).searchParams.get('page')!=='1')await chrome.tabs.update(tab.id,{url:start.href});else await inject(tab.id);
+  await inject(tab.id);
 });
 chrome.tabs.onUpdated.addListener(async(tabId,change)=>{
   if(change.status!=='complete')return;const j=await job();
@@ -17,10 +16,10 @@ chrome.tabs.onUpdated.addListener(async(tabId,change)=>{
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   (async()=>{
     const j=await job();if(!j||!j.running||j.tabId!==sender.tab?.id||!validUrl(sender.url))return {ok:false};
-    if(message.type==='state')return {ok:true,previousSignature:j.signature||null};
+    if(message.type==='state')return {ok:true,previousSignature:j.signature||null,firstPage:j.visited.length===0};
     if(message.type==='error'){await chrome.storage.session.remove('job');await chrome.action.setBadgeText({tabId:j.tabId,text:'오류'});return {ok:false};}
     if(message.type!=='page'||!Array.isArray(message.rows))return {ok:false};
-    const url=new URL(sender.url);const page=Number(url.searchParams.get('page')||1);
+    const url=new URL(message.pageUrl||sender.url);if(!validUrl(url.href))throw Error('수집 화면 주소를 확인할 수 없습니다.');const page=Number(url.searchParams.get('page')||1);
     if(j.visited.includes(page)||j.visited.length>=100)throw Error('중복 페이지 또는 수집 한도 초과');
     if(message.signature&&j.signature===message.signature)throw Error('이전 페이지의 예약 표가 남아 있습니다. 새로고침 후 다시 수집해 주세요.');
     j.signature=message.signature||null;
@@ -35,7 +34,7 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
       const next=new URL(message.next,HOST);
       if(!validUrl(next.href)||Number(next.searchParams.get('page'))!==page+1)throw Error('다음 페이지 주소를 확인할 수 없습니다.');
       const a=new URL(url),b=new URL(next);a.searchParams.delete('page');b.searchParams.delete('page');a.searchParams.sort();b.searchParams.sort();if(a.search!==b.search)throw Error('페이지 사이 조회 조건이 변경됐습니다.');
-      await chrome.storage.session.set({job:j});await chrome.tabs.update(j.tabId,{url:next.href});return {ok:true,next:true};
+      await chrome.storage.session.set({job:j});return {ok:true,next:next.href};
     }
     await chrome.storage.session.remove('job');await chrome.action.setBadgeText({tabId:j.tabId,text:'완료'});
     return {ok:true,file:{format:'socialfactory-spacecloud-payments',version:1,source:'host-draft',collected_at:new Date().toISOString(),pages:j.visited.length,skipped:j.skipped,rows:j.rows}};

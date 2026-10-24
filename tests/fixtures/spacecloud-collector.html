@@ -5,4 +5,17 @@
 <tr><td>2026.10.24</td><td>555</td><td>다른 공간</td><td>NICE</td><td>제외 고객</td><td>90,000원</td><td>2026.11.10</td><td><button>상세보기</button></td></tr></tbody></table>
 <template id="detail"><tr><td colspan="8"><ul><li><span>예약공간</span> : 소셜팩토리 건대 (초특가), 1번룸 (최대 30명)</li><li><span>예약내용</span> : 2026.10.30 (금) 19:00~21:00</li><li><span>결제일시</span> : 2026.10.24 (토) 18:26</li><li><span>결제금액</span> : 40,000원 (VAT포함)</li><li><span>취소금액</span> : 0 원</li><li><span>정산예정금액</span> : 36,364원</li></ul></td></tr></template>
 <pre id="result"></pre>
-<script>window.chrome={runtime:{async sendMessage(m){if(m.type==='state')return {ok:true};document.querySelector('#result').textContent=JSON.stringify(m,null,2);return {ok:true,next:true};}}};</script><script src="/tools/spacecloud-collector/content.js"></script>
+<a id="next-page" href="?page=2">2</a>
+<script>
+var priorSignature=null,pages=[];
+document.querySelector('#next-page').addEventListener('click',function(e){
+ e.preventDefault();history.pushState({},'',this.href);
+ document.querySelector('tbody').innerHTML='<tr><td>2026.10.24</td><td>999</td><td>다른 공간</td><td>NICE</td><td>제외 고객</td><td>0 원</td><td>2026.11.10</td><td><button>상세보기</button></td></tr>';
+ this.remove();
+});
+window.chrome={runtime:{async sendMessage(m){
+ if(m.type==='state')return {ok:true,previousSignature:priorSignature,firstPage:pages.length===0};
+ if(m.type==='error'){document.querySelector('#result').textContent='ERROR';return {ok:false};}
+ pages.push(m);priorSignature=m.signature;document.querySelector('#result').textContent=JSON.stringify({pages:pages.length,rows:pages.flatMap(p=>p.rows),skipped:pages.reduce((n,p)=>n+p.skipped,0)},null,2);return {ok:true,next:m.next};
+}}};
+</script><script src="/tools/spacecloud-collector/content.js"></script>
