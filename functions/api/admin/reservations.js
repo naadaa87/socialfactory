@@ -58,7 +58,7 @@ async function conflicts(env, v, exceptCode) {
   ).bind(v.space, addDaysIso(v.date, -1), addDaysIso(v.date, 1), exceptCode || "").all();
   const base = dayIndex(v.date) * 1440, s = base + v.start_min, e = base + v.end_min;
   const external = await loadSpacecloud(env);
-  return (results || []).concat(external.results).filter((r) => r.space === v.space).filter((r) => { const b0 = dayIndex(r.date) * 1440; return b0 + r.start_min < e && s < b0 + r.end_min; })
+  return (results || []).concat(external.results).filter((r) => r.code !== exceptCode && r.space === v.space).filter((r) => { const b0 = dayIndex(r.date) * 1440; return b0 + r.start_min < e && s < b0 + r.end_min; })
     .map((r) => ({ code: r.code, date: r.date, time: hm(r.start_min) + "–" + hm(r.end_min), name: r.customer_name, people: r.people }));
 }
 
@@ -90,12 +90,29 @@ export async function onRequestGet({ request, env }) {
 export async function onRequestPost({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
   let b; try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
+  let source = null;
+  const sourceCode = clean(b && b.sourceCode, 20);
+  if (sourceCode) {
+    if (!/^SC[1-5]-[a-f0-9]{16}$/.test(sourceCode)) return bad("sourceCode", "외부 일정 번호를 확인해 주세요.");
+    const existing = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(sourceCode).first();
+    if (existing) return json({ ok: true, code: existing.code, item: existing, already: true });
+    const external = await loadSpacecloud(env);
+    source = external.results.find(x => x.code === sourceCode);
+    if (!source) return bad("sourceCode", "외부 일정을 찾지 못했습니다. 일정을 새로고침해 주세요.");
+    if (source.source_start + 9 * 3600e3 < Date.parse(source.date + "T00:00:00Z") || source.source_end + 9 * 3600e3 > Date.parse(source.date + "T00:00:00Z") + 864e5)
+      return bad("sourceCode", "여러 날짜에 걸친 예약은 날짜별 배분 금액을 확인해 직접 예약으로 등록해 주세요.");
+    if (typeof b.amount !== "number" || !Number.isSafeInteger(b.amount) || b.amount < 0) return bad("amount", "실제 결제 금액을 정수로 입력해 주세요.");
+    if (!isIsoDate(b.paid_at)) return bad("paid_at", "실제 결제일을 입력해 주세요.");
+    b = { ...b, space: source.space, date: source.date, start_min: source.start_min, end_min: source.end_min,
+      customer_name: source.customer_name || "스페이스클라우드 예약", channel: "spacecloud", pay_method: "spacecloud", pay_status: "paid",
+      amount_note: "스페이스클라우드 실제 결제금액 수기 확인", memo: "외부 일정 연결: " + sourceCode, force: false };
+  }
   const r = readFields(b || {}); if (r.error) return bad(...r.error);
   const v = r.v;
-  const clash = await conflicts(env, v, "");
+  const clash = await conflicts(env, v, sourceCode);
   if (clash.length && !b.force) return json({ ok: false, error: "conflict", conflicts: clash }, 409);
   for (let i = 0; i < 5; i++) {
-    const code = makeResCode(v.date);
+    const code = sourceCode || makeResCode(v.date);
     try {
       await env.DB.prepare(
         `INSERT INTO reservations (code, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, list_amount, amount_note, pay_method, pay_status, paid_at, memo, inquiry_ref)
@@ -104,6 +121,10 @@ export async function onRequestPost({ request, env }) {
       const row = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(code).first();
       return json({ ok: true, code, item: row, overlapped: clash.length });
     } catch (e) {
+      if (sourceCode && /UNIQUE/i.test(String(e && e.message))) {
+        const row = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(sourceCode).first();
+        if (row) return json({ ok: true, code: row.code, item: row, already: true });
+      }
       if (!/UNIQUE/i.test(String(e && e.message))) { console.error("res-post", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
     }
   }

@@ -6,6 +6,7 @@
  * - basis=use  : 이용일 기준 (기본)  · basis=paid : 결제일 기준
  * - orders=1   : 홈페이지에서 KG이니시스로 결제한 이용권 주문도 '이용권 온라인 결제'로 함께 더합니다 (테스트 결제 제외).
  */
+import { loadSpacecloud, mergeCalendarRows } from "../../_lib/spacecloud.js";
 import { json, clean } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, SPACES, CHANNELS, kstToday } from "../../_lib/admin.js";
 
@@ -61,6 +62,15 @@ export async function onRequestGet({ request, env }) {
     byChannel[r.k] = { amount: Number(r.s) || 0, n: Number(r.n) || 0, label: CHANNELS[r.k] || "경로 미기록" };
   }
 
+  // 채널 비중의 분모를 총매출과 맞춥니다. 홈페이지 이용권도 홈페이지 채널에 포함합니다.
+  if (withOrders) {
+    const website = await one("SELECT COUNT(*) AS n, COALESCE(SUM(amount),0) AS s FROM orders WHERE status IN ('paid','used') AND test_mode = 0 AND substr(paid_at,1,4) = ?1", year);
+    const web = byChannel.web || { amount: 0, n: 0, label: "홈페이지" };
+    web.amount += Number(website.s) || 0; web.n += Number(website.n) || 0; web.label = "홈페이지";
+    byChannel.web = web;
+  }
+  Object.values(byChannel).forEach(x => { x.share = total ? x.amount / total * 100 : 0; });
+
   // 누적(전체 기간) · 미수금 · 이번 달 · 지난달
   const resAll = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}), 0) AS s FROM reservations WHERE ${PAID}`);
   const ordAll = withOrders ? await one("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM orders WHERE status IN ('paid', 'used') AND test_mode = 0") : { n: 0, s: 0 };
@@ -75,11 +85,14 @@ export async function onRequestGet({ request, env }) {
   const ys = await all("SELECT DISTINCT substr(date, 1, 4) AS y FROM reservations UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM reservations WHERE paid_at IS NOT NULL UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM orders WHERE paid_at IS NOT NULL AND status IN ('paid', 'used') AND test_mode = 0");
   const years = Array.from(new Set(ys.map((r) => r.y).filter((y) => /^\d{4}$/.test(y || "")).concat([today.slice(0, 4), year]))).sort().reverse();
 
+  const external = await loadSpacecloud(env);
+  const recorded = await all("SELECT code, status, channel, space, date, start_min, end_min FROM reservations WHERE channel = 'spacecloud'");
+  const missing = mergeCalendarRows(recorded, external.results).filter(x => x.external && x.date.slice(0,4) === year);
   return json({
     ok: true, today, year, basis, withOrders, years,
     methods: methods.map((k) => ({ key: k, label: k === "orders" ? "이용권 온라인 결제" : PAY_METHODS[k] })),
     months, byMethod, countBy, total, n, refunds,
-    bySpace, byChannel,
+    bySpace, byChannel, channelTotal: total, unrecordedSpacecloud: missing.length, spacecloud: external.info,
     allTime: { total: (Number(resAll.s) || 0) + (Number(ordAll.s) || 0), n: (Number(resAll.n) || 0) + (Number(ordAll.n) || 0) },
     unpaid: { n: Number(unpaid.n) || 0, amount: Number(unpaid.s) || 0 },
     thisMonth: await monthTotal(thisYm), lastMonth: await monthTotal(lastYm)
