@@ -17,15 +17,17 @@ chrome.tabs.onUpdated.addListener(async(tabId,change)=>{
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   (async()=>{
     const j=await job();if(!j||!j.running||j.tabId!==sender.tab?.id||!validUrl(sender.url))return {ok:false};
-    if(message.type==='state')return {ok:true};
+    if(message.type==='state')return {ok:true,previousSignature:j.signature||null};
     if(message.type==='error'){await chrome.storage.session.remove('job');await chrome.action.setBadgeText({tabId:j.tabId,text:'오류'});return {ok:false};}
     if(message.type!=='page'||!Array.isArray(message.rows))return {ok:false};
     const url=new URL(sender.url);const page=Number(url.searchParams.get('page')||1);
     if(j.visited.includes(page)||j.visited.length>=100)throw Error('중복 페이지 또는 수집 한도 초과');
+    if(message.signature&&j.signature===message.signature)throw Error('이전 페이지의 예약 표가 남아 있습니다. 새로고침 후 다시 수집해 주세요.');
+    j.signature=message.signature||null;
     j.visited.push(page);j.skipped+=message.skipped||0;
     for(const row of message.rows){
       const prev=j.rows.find(x=>x.reservation_id===row.reservation_id);
-      if(prev&&JSON.stringify(prev)!==JSON.stringify(row))throw Error('페이지 사이 예약 정보가 변경됐습니다. 다시 수집해 주세요.');
+      if(prev&&['reservation_id','venue','use_date','end_date','paid_at','amount','refund_amount'].some(key=>prev[key]!==row[key]))throw Error('페이지 사이 예약 정보가 변경됐습니다. 다시 수집해 주세요.');
       if(!prev)j.rows.push(row);
     }
     if(j.rows.length>5000)throw Error('5,000건 한도를 초과했습니다. 조회 기간을 줄여 주세요.');

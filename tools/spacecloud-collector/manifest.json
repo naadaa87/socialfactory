@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "소셜팩토리 스페이스클라우드 결제 수집",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "열린 호스트센터 정산 예정 화면의 실제 결제내역을 파일로 저장합니다.",
   "permissions": ["activeTab", "scripting", "storage"],
   "action": { "default_title": "현재 조회 조건의 정산 전 결제 수집" },
