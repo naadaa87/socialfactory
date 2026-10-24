@@ -47,5 +47,5 @@ test('day and month views render the separate external color and unknown payment
 });
 test('source errors show stale-data warnings in every visible status line without exposing feed tokens',()=>{
  const {hooks,statuses}=harness();hooks.renderSpacecloudStatus({configured:true,rooms:[{space:'r1',count:1,updated_at:1,error:'offline',stale:true}]});
- assert(statuses.every(n=>n.textContent.includes('1번룸 재확인 필요')));assert(statuses.every(n=>n.textContent.includes('외부 일정은 매출 제외')));
+ assert(statuses.every(n=>n.textContent.includes('1번룸') && n.textContent.includes('offline')));assert(statuses.every(n=>n.textContent.includes('외부 일정은 매출 제외')));
 });

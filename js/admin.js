@@ -570,7 +570,7 @@
     var text = info.error || (!info.configured ? "스페이스클라우드 캘린더가 아직 연결되지 않았습니다." :
       "스페이스클라우드 " + rooms.length + "개 룸 연결 · " + rooms.reduce(function (a, r) { return a + r.count; }, 0) + "개 일정 · "
       + (last ? new Date(last).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) + " 확인" : "확인 대기")
-      + (failures.length ? " · " + failures.map(function (r) { return SPL[r.space]; }).join(", ") + " 재확인 필요. 이전 일정을 표시합니다." : " · 열려 있는 동안 5분마다 확인")
+      + (failures.length ? " · " + failures.map(function (r) { return SPL[r.space] + (r.error ? " (" + r.error + ")" : " 재확인 필요"); }).join(", ") : " · 열려 있는 동안 5분마다 확인")
       + " · 외부 일정은 매출 제외");
     targets.forEach(function (el) { el.textContent = text; el.classList.toggle("sc-warning", !!info.error || failures.length > 0); });
   }
