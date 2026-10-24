@@ -482,3 +482,10 @@ details.help ol { padding-left: 20px; margin-bottom: 0; }
   .day { break-inside: avoid; border-color: #999; }
   .kpi { border-color: #999; }
 }
+
+/* SpaceCloud schedules are read-only and excluded from payment totals. */
+.sc-status-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; margin:0 0 16px; }
+.sc-warning { color:var(--red); }
+.sc-tag { background:#f1eafd; color:#6538a0; }
+.blk.sc-external, .ev.sc-external { background:#7451a8; color:#fff; }
+.lg.sc-external::before { background:#7451a8; }

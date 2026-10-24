@@ -123,12 +123,13 @@
   /* ---------- 공통 표시 ---------- */
   var spaceName = function (r) { return r.space === "other" && r.space_note ? r.space_note : (SPL[r.space] || r.space) + (r.space !== "other" && r.space_note ? " · " + r.space_note : ""); };
   var pmTag = function (k) { return '<span class="pm" style="--pm:var(--m-' + esc(k) + ')">' + esc(PAYL[k] || k || "—") + "</span>"; };
-  function pstTag(r) { var p = PST[r.pay_status] || [r.pay_status, ""]; var t = r.pay_status === "refunded" && r.refund_amount < r.amount ? "부분 환불" : p[0]; return '<span class="st ' + p[1] + '">' + esc(t) + "</span>"; }
+  function pstTag(r) { if (r.external) return '<span class="st sc-tag">금액 미제공</span>'; var p = PST[r.pay_status] || [r.pay_status, ""]; var t = r.pay_status === "refunded" && r.refund_amount < r.amount ? "부분 환불" : p[0]; return '<span class="st ' + p[1] + '">' + esc(t) + "</span>"; }
   function resStTag(r) {
+    if (r.external) return '<span class="st sc-tag">외부 일정</span>';
     if (r.status === "cancelled") return '<span class="st bad">취소</span>';
     var ph = phase(r); return ph === "done" ? '<span class="st gray">이용 완료</span>' : ph === "now" ? '<span class="st blue">이용 중</span>' : '<span class="st blue">예약 확정</span>';
   }
-  var net = function (r) { return r.pay_status === "unpaid" ? 0 : Math.max(0, (r.amount || 0) - (r.refund_amount || 0)); };
+  var net = function (r) { if (r.external) return 0; return r.pay_status === "unpaid" ? 0 : Math.max(0, (r.amount || 0) - (r.refund_amount || 0)); };
   var RES = {};   // 예약번호 → 예약 (화면에 불러온 것)
   function remember(list) { (list || []).forEach(function (r) { RES[r.code] = r; }); return list || []; }
   function resRow(r, o) {
@@ -140,7 +141,7 @@
     return '<div class="rrow' + (r.status === "cancelled" ? " cancelled" : "") + '" data-code="' + esc(r.code) + '" tabindex="0">'
       + '<div class="t">' + t + "</div>"
       + '<div class="w"><span class="room-tag">' + esc(spaceName(r)) + "</span><b>" + esc(r.customer_name) + "</b>" + (sub ? '<span class="sub">' + sub + "</span>" : "") + "</div>"
-      + '<div class="a"><b>' + won(r.amount) + "</b><span>" + pmTag(r.pay_method) + " " + pstTag(r) + "</span>" + btn + "</div></div>";
+      + '<div class="a"><b>' + (r.external ? '금액 미제공' : won(r.amount)) + "</b><span>" + pmTag(r.pay_method) + " " + pstTag(r) + "</span>" + btn + "</div></div>";
   }
 
   /* =================== 로그인 =================== */
@@ -236,6 +237,7 @@
   function loadDash() {
     $("#dash-date").textContent = kdateY(todayIso()) + " 기준";
     api("/api/admin/dashboard").then(function (d) {
+      renderSpacecloudStatus(d.spacecloud);
       var c = d.counts || {}, mo = d.month || {};
       applyCounts(c);
       remember(d.todayList); remember(d.tomorrowList); remember(d.upcoming); remember(d.unpaid);
@@ -442,6 +444,7 @@
   var DT = { code: null };
   function openDetail(code) {
     DT.code = code; var r = RES[code];
+    if (r && r.external) { renderExternalDetail(r); openDrawer("#dr-detail"); return; }
     $("#dt-title").textContent = "예약 " + code;
     if (r) renderDetail(r); else $("#dt-body").innerHTML = emptyMsg("불러오는 중…");
     openDrawer("#dr-detail");
@@ -461,6 +464,15 @@
     return { rate: hit ? hit.rate : 0, why: d === 0 ? "이용 당일" : "이용일 " + d + "일 전" };
   }
   var kv = function (k, v) { return v === "" || v == null ? "" : '<div class="kv"><span>' + esc(k) + "</span><b>" + v + "</b></div>"; };
+  function renderExternalDetail(r) {
+    var stamp = r.synced_at ? new Date(r.synced_at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) : "확인 중";
+    $("#dt-title").textContent = "스페이스클라우드 일정";
+    $("#dt-body").innerHTML = '<div class="dt-top"><span class="st sc-tag">외부 일정</span></div>'
+      + '<div class="dt-when">' + esc(kdateY(r.date)) + " " + esc(timeText(r)) + '<small>' + esc(spaceName(r)) + '</small></div>'
+      + '<div class="sec"><h3>스페이스클라우드</h3>' + kv("일정 제목", esc(r.customer_name)) + kv("마지막 확인", esc(stamp))
+      + '<p class="small muted">캘린더에서 제공하는 예약 시간입니다. 예약자 연락처 · 인원 · 결제금액은 제공되지 않으며 매출에 합산하지 않습니다. 일정 변경과 취소는 스페이스클라우드에서 처리해 주세요.</p>'
+      + (r.source_url ? '<a class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer" href="' + esc(r.source_url) + '">스페이스클라우드에서 확인</a>' : '') + '</div>';
+  }
   function renderDetail(r) {
     var tel = String(r.phone || "").replace(/[^0-9+]/g, ""), room = ROOMS[r.space], c = ROOM_KEYS.indexOf(r.space) >= 0 ? calcPrice(r.space, r.date, r.start_min, r.end_min) : null;
     var rule = refundRule(r), sug = r.pay_status === "unpaid" ? 0 : Math.round(r.amount * rule.rate / 100 / 100) * 100;
@@ -531,6 +543,49 @@
     return L.join("\n");
   }
 
+  function loadSpacecloudSettings() {
+    api("/api/admin/spacecloud").then(function (j) {
+      renderSpacecloudStatus(j.spacecloud);
+      $$("[data-sc-room]").forEach(function (el) { el.textContent = (j.rooms || []).indexOf(el.dataset.scRoom) >= 0 ? "연결됨 · 새 주소를 넣으면 교체" : "미연결"; });
+    }).catch(function (e) { if (!guard(e)) toast(e.message); });
+  }
+  $("#sc-settings").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var button = $("#sc-save"), msg = $("#sc-settings-msg"), feeds = {};
+    ROOM_KEYS.forEach(function (key) { feeds[key] = $("#sc-feed-" + key).value.trim(); });
+    button.disabled = true; msg.hidden = true;
+    api("/api/admin/spacecloud", { method: "POST", body: { action: "configure", feeds: feeds } }).then(function (j) {
+      ROOM_KEYS.forEach(function (key) { $("#sc-feed-" + key).value = ""; });
+      renderSpacecloudStatus(j.spacecloud); loadSpacecloudSettings();
+      var partial = (j.spacecloud.rooms || []).some(function (r) { return r.error; });
+      note(msg, partial ? "연결은 저장했지만 일부 룸을 불러오지 못했습니다. 주소를 확인하고 다시 불러와 주세요." : "연결을 저장하고 일정을 불러왔습니다. 예약 현황에서 확인하세요.", !partial);
+    }).catch(function (e) { if (!guard(e)) note(msg, esc(e.message), false); }).then(function () { button.disabled = false; });
+  });
+  function renderSpacecloudStatus(info) {
+    var targets = $$("[data-sc-status]");
+    if (!info) return;
+    var rooms = info.rooms || [], failures = rooms.filter(function (r) { return r.error || r.stale; });
+    var times = rooms.map(function (r) { return r.updated_at; }).filter(Boolean);
+    var last = times.length ? Math.min.apply(Math, times) : 0;
+    var text = info.error || (!info.configured ? "스페이스클라우드 캘린더가 아직 연결되지 않았습니다." :
+      "스페이스클라우드 " + rooms.length + "개 룸 연결 · " + rooms.reduce(function (a, r) { return a + r.count; }, 0) + "개 일정 · "
+      + (last ? new Date(last).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) + " 확인" : "확인 대기")
+      + (failures.length ? " · " + failures.map(function (r) { return SPL[r.space]; }).join(", ") + " 재확인 필요. 이전 일정을 표시합니다." : " · 열려 있는 동안 5분마다 확인")
+      + " · 외부 일정은 매출 제외");
+    targets.forEach(function (el) { el.textContent = text; el.classList.toggle("sc-warning", !!info.error || failures.length > 0); });
+  }
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest("[data-sc-refresh]"); if (!button) return;
+    button.disabled = true;
+    api("/api/admin/spacecloud", { method: "POST", body: {} }).then(function (j) {
+      renderSpacecloudStatus(j.spacecloud); reloadCurrent();
+      toast((j.spacecloud.rooms || []).some(function (r) { return r.error; }) ? "일부 룸을 확인하지 못했습니다. 이전 일정을 유지합니다." : "스페이스클라우드 일정을 새로 확인했습니다.");
+    }).catch(function (e) { if (!guard(e)) toast(e.message); }).then(function () { button.disabled = false; });
+  });
+  setInterval(function () {
+    if (!app.hidden && !document.hidden && ["dash", "board", "list"].indexOf(CUR) >= 0) reloadCurrent();
+  }, 5 * 60 * 1000);
+
   /* =================== 예약 현황 (일간 시간표 · 월간 달력) =================== */
   var BD = { mode: "day", date: null, items: [] };
   function bdSyncUi() {
@@ -550,6 +605,7 @@
     api("/api/admin/reservations?from=" + from + "&to=" + to).then(function (j) {
       if (key !== BD.mode + BD.date) return;
       BD.items = remember(j.results);
+      renderSpacecloudStatus(j.spacecloud);
       if (BD.mode === "day") drawDay(); else drawMonth();
     }).catch(fail(box));
   }
@@ -568,9 +624,9 @@
         + '<div class="tl-track" data-space="' + esc(sp) + '"><div class="tl-ghost"></div>'
         + blocks.map(function (r) {
           var x = rel(r), s = Math.max(0, x.s), e = Math.min(1440, x.e);
-          var cls = "blk" + (r.status === "cancelled" ? " cancelled" : r.pay_status === "unpaid" ? " unpaid" : "") + (x.s < 0 ? " cont-l" : "") + (x.e > 1440 ? " cont-r" : "");
-          return '<button type="button" class="' + cls + '" data-blk="' + esc(r.code) + '" style="left:' + (s / 1440 * 100).toFixed(3) + "%;width:" + ((e - s) / 1440 * 100).toFixed(3) + '%" title="' + esc(r.customer_name + " · " + timeText(r) + " · " + won(r.amount) + " · " + (PAYL[r.pay_method] || "") + " · " + (PST[r.pay_status] || [""])[0]) + '">'
-            + "<b>" + esc(r.customer_name) + (r.people ? " · " + r.people + "명" : "") + "</b><span>" + esc((x.s < 0 ? "← " : "") + timeText(r) + (x.e > 1440 ? " →" : "")) + "</span><span>" + esc(won(r.amount) + " · " + (r.pay_status === "unpaid" ? "결제 전" : PAYL[r.pay_method] || "")) + "</span></button>";
+          var cls = "blk" + (r.external ? " sc-external" : "") + (r.status === "cancelled" ? " cancelled" : r.pay_status === "unpaid" ? " unpaid" : "") + (x.s < 0 ? " cont-l" : "") + (x.e > 1440 ? " cont-r" : "");
+          return '<button type="button" class="' + cls + '" data-blk="' + esc(r.code) + '" style="left:' + (s / 1440 * 100).toFixed(3) + "%;width:" + ((e - s) / 1440 * 100).toFixed(3) + '%" title="' + esc(r.customer_name + " · " + timeText(r) + " · " + (r.external ? "외부 일정 · 금액 미제공" : won(r.amount)) + " · " + (PAYL[r.pay_method] || "") + " · " + (PST[r.pay_status] || [""])[0]) + '">'
+            + "<b>" + esc(r.customer_name) + (r.people ? " · " + r.people + "명" : "") + "</b><span>" + esc((x.s < 0 ? "← " : "") + timeText(r) + (x.e > 1440 ? " →" : "")) + "</span><span>" + esc((r.external ? "금액 미제공" : won(r.amount)) + " · " + (r.pay_status === "unpaid" ? "결제 전" : PAYL[r.pay_method] || "")) + "</span></button>";
         }).join("")
         + (isToday ? '<div class="tl-now" style="left:' + (nm / 1440 * 100).toFixed(3) + '%"></div>' : "") + "</div></div>";
     });
@@ -602,7 +658,7 @@
       var act = list.filter(function (r) { return r.status !== "cancelled"; }), sum = act.reduce(function (a, r) { return a + net(r); }, 0);
       mSum += sum; mN += act.length;
       h += '<div class="dc' + (iso === t ? " today" : "") + (iso < t ? " past" : "") + (isOff(iso) && w !== 6 ? " off" : "") + (w === 6 ? " sat" : "") + '" data-day="' + iso + '"><div class="dn"><b>' + d + "</b>" + (act.length ? "<small>" + act.length + "건 · " + manwon(sum) + "</small>" : (HOL[iso] ? "<small>공휴일</small>" : "")) + "</div>"
-        + list.slice(0, 4).map(function (r) { return '<i class="ev' + (r.status === "cancelled" ? " cancelled" : r.pay_status === "unpaid" ? " unpaid" : "") + '" data-ev="' + esc(r.code) + '">' + esc(hm(r.start_min)) + " " + esc((SPL[r.space] || "").replace("번룸", "룸")) + ' <span class="nm">' + esc(r.customer_name) + "</span></i>"; }).join("")
+        + list.slice(0, 4).map(function (r) { return '<i class="ev' + (r.external ? ' sc-external' : '') + (r.status === "cancelled" ? " cancelled" : r.pay_status === "unpaid" ? " unpaid" : "") + '" data-ev="' + esc(r.code) + '">' + esc(hm(r.start_min)) + " " + esc((SPL[r.space] || "").replace("번룸", "룸")) + ' <span class="nm">' + esc(r.customer_name) + "</span></i>"; }).join("")
         + (list.length > 4 ? '<span class="more">+' + (list.length - 4) + "건 더</span>" : "") + "</div>";
     }
     $("#bd-month").innerHTML = '<div class="cal">' + h + "</div>";
@@ -652,7 +708,7 @@
   setRange("upcoming");
   function loadList() {
     var box = $("#ls-list"); box.innerHTML = emptyMsg("불러오는 중…");
-    api("/api/admin/reservations?from=" + encodeURIComponent($("#ls-from").value) + "&to=" + encodeURIComponent($("#ls-to").value)).then(function (j) { LS.items = remember(j.results); drawList(); }).catch(fail(box));
+    api("/api/admin/reservations?from=" + encodeURIComponent($("#ls-from").value) + "&to=" + encodeURIComponent($("#ls-to").value)).then(function (j) { LS.items = remember(j.results); renderSpacecloudStatus(j.spacecloud); drawList(); }).catch(fail(box));
   }
   function listFiltered() {
     var st = $("#ls-status").value, sp = $("#ls-space").value, pm = $("#ls-pay").value, ps = $("#ls-pstatus").value, q = $("#ls-q").value.trim().toLowerCase().replace(/-/g, "");
@@ -698,7 +754,7 @@
                 + "<td>" + esc(spaceName(r)) + "</td>"
                 + '<td><b class="nm">' + esc(r.customer_name) + "</b><small>" + esc([r.phone, r.purpose].filter(Boolean).join(" · ")) + "</small></td>"
                 + "<td>" + (r.people != null ? esc(r.people) + "명" : "—") + "</td>"
-                + '<td class="r"><b>' + won(r.amount) + "</b>" + (r.refund_amount ? "<small>환불 " + won(r.refund_amount) + "</small>" : "") + "</td>"
+                + '<td class="r"><b>' + (r.external ? '금액 미제공' : won(r.amount)) + "</b>" + (r.refund_amount ? "<small>환불 " + won(r.refund_amount) + "</small>" : "") + "</td>"
                 + "<td>" + pmTag(r.pay_method) + "<br>" + pstTag(r) + (r.status === "cancelled" ? ' <span class="st bad">취소</span>' : "") + "</td>"
                 + "<td>" + esc(CHL[r.channel] || "—") + "</td>"
                 + '<td class="mono nw">' + esc(r.code) + (r.inquiry_ref ? "<small>" + esc(r.inquiry_ref) + "</small>" : "") + "</td>"
@@ -718,7 +774,7 @@
     var list = listFiltered(); if (!list.length) { toast("내려받을 예약이 없습니다."); return; }
     var cols = ["이용일", "요일", "시작", "종료", "이용 시간(분)", "공간", "예약자", "연락처", "인원", "모임 목적", "예약 경로", "요금표 금액", "결제 금액", "환불 금액", "매출", "결제수단", "결제 상태", "결제일", "예약 상태", "예약번호", "문의번호", "금액 메모", "메모", "등록 일시"];
     csvDownload("소셜팩토리_예약_" + ($("#ls-from").value || "처음") + "_" + ($("#ls-to").value || "이후") + ".csv", cols, list.map(function (r) {
-      return [r.date, DOW[dow(r.date)], hm(r.start_min), hm(r.end_min), r.end_min - r.start_min, spaceName(r), r.customer_name, r.phone, r.people == null ? "" : r.people, r.purpose, CHL[r.channel] || "", r.list_amount == null ? "" : r.list_amount, r.amount, r.refund_amount || 0, net(r), PAYL[r.pay_method] || r.pay_method, (PST[r.pay_status] || [r.pay_status])[0], r.paid_at || "", r.status === "cancelled" ? "취소" : "예약 확정", r.code, r.inquiry_ref || "", r.amount_note || "", r.memo || "", r.created_at];
+      return [r.date, DOW[dow(r.date)], hm(r.start_min), hm(r.end_min), r.end_min - r.start_min, spaceName(r), r.external && /^[=+@\-\t\r]/.test(r.customer_name) ? "'" + r.customer_name : r.customer_name, r.phone, r.people == null ? "" : r.people, r.purpose, CHL[r.channel] || "", r.list_amount == null ? "" : r.list_amount, r.external ? "" : r.amount, r.external ? "" : r.refund_amount || 0, r.external ? "" : net(r), PAYL[r.pay_method] || r.pay_method, (r.external ? "금액 미제공" : (PST[r.pay_status] || [r.pay_status])[0]), r.paid_at || "", r.status === "cancelled" ? "취소" : "예약 확정", r.code, r.inquiry_ref || "", r.amount_note || "", r.memo || "", r.created_at];
     }));
   });
 
@@ -887,6 +943,7 @@
 
   /* =================== 상품 · 설정 상태 =================== */
   function loadStats() {
+    if (CUR === "set") loadSpacecloudSettings();
     api("/api/admin/stats").then(function (s) {
       $("#prod").innerHTML = (s.products || []).map(function (p) { return '<div class="p"><small>' + esc(p.category) + "</small><b>" + esc(p.name) + '</b><div class="pr">' + won(p.price) + '</div><div class="so">누적 판매 ' + num(p.sold) + " · " + won(p.sales) + '</div><a href="/product/' + esc(p.id) + '" target="_blank" rel="noopener">상품 페이지 보기 →</a></div>'; }).join("") || emptyMsg("상품이 없습니다.");
       var st = s.setup || {}, t = st.tables || {};

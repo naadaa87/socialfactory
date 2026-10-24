@@ -10,7 +10,7 @@
   <title>관리자 | 소셜팩토리</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=31336e1d">
+  <link rel="stylesheet" href="/css/admin.css?v=05ba6263">
 </head>
 <body class="adm">
 <div id="admin-root">
@@ -62,6 +62,7 @@
         <div><h1>오늘 확인할 것</h1><p class="muted small" id="dash-date"></p></div>
         <div class="acts"><button class="btn btn-primary btn-sm" type="button" data-new-res>+ 예약 등록</button><button class="btn btn-light btn-sm" type="button" id="dash-reload">새로고침</button></div>
       </header>
+      <div class="sc-status-bar"><span class="small muted" data-sc-status role="status">스페이스클라우드 일정 확인 중…</span><button class="btn btn-light btn-xs" type="button" data-sc-refresh>외부 일정 새로 불러오기</button></div>
       <div class="kpis" id="dash-kpis"></div>
       <div class="grid2">
         <div class="card"><h2 class="ch"><span>오늘 예약</span><button class="btn btn-light btn-xs" type="button" data-go="board">예약 현황 →</button></h2><div id="dash-today" class="rlist"></div></div>
@@ -81,6 +82,7 @@
         <div><h1>예약 현황</h1><p class="muted small">룸별 시간표로 하루 예약을 봅니다. 빈 칸을 누르면 그 룸 · 시간으로 예약 등록 창이 열리고, 예약을 누르면 상세 내용이 열립니다.</p></div>
         <div class="acts"><div class="seg" id="bd-mode" role="group" aria-label="보기"><button type="button" data-mode="day" class="on">일간</button><button type="button" data-mode="month">월간</button></div><button class="btn btn-primary btn-sm" type="button" data-new-res>+ 예약 등록</button></div>
       </header>
+      <div class="sc-status-bar"><span class="small muted" data-sc-status role="status">스페이스클라우드 일정 확인 중…</span><button class="btn btn-light btn-xs" type="button" data-sc-refresh>외부 일정 새로 불러오기</button></div>
       <div class="bd-bar">
         <button class="btn btn-light btn-sm" type="button" id="bd-prev" aria-label="이전">←</button>
         <input class="input" type="date" id="bd-date" aria-label="날짜">
@@ -92,7 +94,7 @@
       <div class="card bd-card">
         <div id="bd-day"></div>
         <div id="bd-month" hidden></div>
-        <div class="legend small"><span class="lg paid">결제 완료</span><span class="lg unpaid">결제 전</span><span class="lg cancel">취소</span><span class="lg night">심야 · 오전 요금 시간대</span></div>
+        <div class="legend small"><span class="lg paid">결제 완료</span><span class="lg unpaid">결제 전</span><span class="lg cancel">취소</span><span class="lg sc-external">스페이스클라우드 일정</span><span class="lg night">심야 · 오전 요금 시간대</span></div>
       </div>
       <div class="card mt" id="bd-sum-card"><h2 class="ch"><span id="bd-sum-title">이 날 예약</span><span class="small muted" id="bd-sum"></span></h2><div id="bd-list" class="rlist"></div></div>
     </section>
@@ -103,6 +105,7 @@
         <div><h1>일자별 예약</h1><p class="muted small">날짜마다 예약을 모아 봅니다. 줄을 누르면 상세 내용이 열리고, 결제 전 예약은 <b>결제 확인</b>으로 바로 결제 완료 처리할 수 있습니다.</p></div>
         <div class="acts"><button class="btn btn-light btn-sm" type="button" id="ls-csv">CSV 내려받기</button><button class="btn btn-light btn-sm" type="button" id="ls-print">인쇄</button><button class="btn btn-light btn-sm" type="button" id="ls-reload">새로고침</button></div>
       </header>
+      <div class="sc-status-bar"><span class="small muted" data-sc-status role="status">스페이스클라우드 일정 확인 중…</span><button class="btn btn-light btn-xs" type="button" data-sc-refresh>외부 일정 새로 불러오기</button></div>
       <div class="ls-bar">
         <div class="chips" id="ls-range" role="group" aria-label="기간"><button type="button" class="chip" data-range="week">이번 주</button><button type="button" class="chip" data-range="month">이번 달</button><button type="button" class="chip" data-range="next">다음 달</button><button type="button" class="chip on" data-range="upcoming">앞으로 전체</button><button type="button" class="chip" data-range="past">지난 예약</button></div>
         <div class="dates"><input class="input" type="date" id="ls-from" aria-label="시작일"><span>~</span><input class="input" type="date" id="ls-to" aria-label="종료일"></div>
@@ -196,6 +199,19 @@
     <!-- 설정 상태 -->
     <section class="view" id="view-set" hidden>
       <header class="vh"><div><h1>설정 상태</h1><p class="muted small">Cloudflare Pages 설정값과 데이터베이스 표가 준비되었는지 확인합니다. 값 자체는 보이지 않고 있는지 없는지만 봅니다.</p></div></header>
+      <div class="card sc-settings"><h2 class="ch"><span>스페이스클라우드 예약 연결</span></h2>
+        <p class="small muted">각 룸의 캘린더 내보내기 주소를 저장하면 예약 시간표에 자동으로 표시합니다. 비워 둔 룸은 기존 연결을 유지합니다. 연락처 · 인원 · 금액은 제공되지 않으며 외부 일정은 매출에 합산하지 않습니다.</p>
+        <form id="sc-settings" class="form">
+          <div class="f"><label for="sc-feed-r1">1번룸 <small class="muted" data-sc-room="r1"></small></label><input class="input" type="url" id="sc-feed-r1" name="r1" autocomplete="off" spellcheck="false" placeholder="스페이스클라우드 캘린더 내보내기 URL"></div>
+          <div class="f"><label for="sc-feed-r2">2번룸 <small class="muted" data-sc-room="r2"></small></label><input class="input" type="url" id="sc-feed-r2" name="r2" autocomplete="off" spellcheck="false" placeholder="스페이스클라우드 캘린더 내보내기 URL"></div>
+          <div class="f"><label for="sc-feed-r3">3번룸 <small class="muted" data-sc-room="r3"></small></label><input class="input" type="url" id="sc-feed-r3" name="r3" autocomplete="off" spellcheck="false" placeholder="스페이스클라우드 캘린더 내보내기 URL"></div>
+          <div class="f"><label for="sc-feed-r4">4번룸 <small class="muted" data-sc-room="r4"></small></label><input class="input" type="url" id="sc-feed-r4" name="r4" autocomplete="off" spellcheck="false" placeholder="스페이스클라우드 캘린더 내보내기 URL"></div>
+          <div class="f"><label for="sc-feed-r5">5번룸 <small class="muted" data-sc-room="r5"></small></label><input class="input" type="url" id="sc-feed-r5" name="r5" autocomplete="off" spellcheck="false" placeholder="스페이스클라우드 캘린더 내보내기 URL"></div>
+          <div class="acts"><button class="btn btn-primary btn-sm" type="submit" id="sc-save">연결 저장 · 일정 불러오기</button><button class="btn btn-light btn-sm" type="button" data-sc-refresh>외부 일정 새로 불러오기</button></div>
+          <p class="form-note" id="sc-settings-msg" role="status" hidden></p>
+          <p class="small muted" data-sc-status></p>
+        </form>
+      </div>
       <div class="card"><h2 class="ch"><span>필수</span></h2><ul class="setlist" id="set-req"></ul></div>
       <div class="card mt"><h2 class="ch"><span>결제 (KG이니시스)</span></h2><ul class="setlist" id="set-pay"></ul></div>
       <div class="card mt"><h2 class="ch"><span>선택</span></h2><ul class="setlist" id="set-opt"></ul></div>
@@ -273,7 +289,7 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </div>
-<script src="/js/site-config.js?v=08fcae4e"></script>
-<script src="/js/admin.js?v=d69182fc"></script>
+<script src="/js/site-config.js?v=134790d5"></script>
+<script src="/js/admin.js?v=aed8393c"></script>
 </body>
 </html>

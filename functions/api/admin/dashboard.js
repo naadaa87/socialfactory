@@ -5,6 +5,8 @@
 import { json } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, kstToday, addDaysIso } from "../../_lib/admin.js";
 
+import { loadSpacecloud, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
+
 const RES = "code, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, pay_method, pay_status, paid_at, refund_amount, memo, inquiry_ref";
 
 export async function onRequestGet({ request, env }) {
@@ -15,7 +17,8 @@ export async function onRequestGet({ request, env }) {
   const NET = "MAX(amount - refund_amount, 0)";
 
   // 전날 밤에 시작해 오늘 새벽까지 이어지는 예약도 '오늘'에 함께 보여 줍니다.
-  const near = await all(`SELECT ${RES} FROM reservations WHERE status = 'confirmed' AND date BETWEEN ?1 AND ?2 ORDER BY date, start_min`, addDaysIso(today, -1), in7);
+  const external = await loadSpacecloud(env);
+  const near = mergeCalendarRows(await all(`SELECT ${RES} FROM reservations WHERE status = 'confirmed' AND date BETWEEN ?1 AND ?2 ORDER BY date, start_min`, addDaysIso(today, -1), in7), filterExternal(external.results, new URLSearchParams({ from: addDaysIso(today, -1), to: in7 })));
   const todayList = near.filter((r) => r.date === today || (r.date === addDaysIso(today, -1) && r.end_min > 1440));
   const tomorrowList = near.filter((r) => r.date === tomorrow);
   const upcoming = near.filter((r) => r.date > tomorrow);
@@ -35,7 +38,7 @@ export async function onRequestGet({ request, env }) {
   const ordersRecent = await all("SELECT id, oid, created_at, status, product_name, amount, buyer_name, test_mode, paid_at FROM orders WHERE status <> 'pending' ORDER BY id DESC LIMIT 5");
 
   return json({
-    ok: true, today, tomorrow,
+    ok: true, today, tomorrow, spacecloud: external.info,
     counts: { today: todayList.length, tomorrow: tomorrowList.length, upcoming: upcoming.length, unpaid: Number(unpaidSum.n) || 0, unpaidAmount: Number(unpaidSum.s) || 0, newInquiries: Number(newInqN.n) || 0, refundRequests: Number(refundReq.n) || 0 },
     todayList, tomorrowList, upcoming, unpaid, newInquiries: newInq, ordersRecent,
     month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, total: resTotal + (Number(ord.s) || 0), byMethod, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }

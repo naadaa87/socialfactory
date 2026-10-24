@@ -14,6 +14,8 @@
 import { json, clean, formatPhone } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, SPACES, ROOM_KEYS, CHANNELS, kstToday, isIsoDate, addDaysIso, dayIndex, makeResCode, hm } from "../../_lib/admin.js";
 
+import { loadSpacecloud, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
+
 const COLS = "id, code, created_at, updated_at, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, list_amount, amount_note, pay_method, pay_status, paid_at, refund_amount, refunded_at, cancel_reason, cancelled_at, inquiry_ref, memo";
 const int = (v) => { const n = typeof v === "number" ? v : parseInt(String(v == null ? "" : v).replace(/[^0-9-]/g, ""), 10); return Number.isFinite(n) ? Math.round(n) : null; };
 const bad = (field, msg) => json({ ok: false, error: "invalid", field, message: msg }, 400);
@@ -55,7 +57,8 @@ async function conflicts(env, v, exceptCode) {
      WHERE status = 'confirmed' AND space = ?1 AND date BETWEEN ?2 AND ?3 AND code <> ?4`
   ).bind(v.space, addDaysIso(v.date, -1), addDaysIso(v.date, 1), exceptCode || "").all();
   const base = dayIndex(v.date) * 1440, s = base + v.start_min, e = base + v.end_min;
-  return (results || []).filter((r) => { const b0 = dayIndex(r.date) * 1440; return b0 + r.start_min < e && s < b0 + r.end_min; })
+  const external = await loadSpacecloud(env);
+  return (results || []).concat(external.results).filter((r) => r.space === v.space).filter((r) => { const b0 = dayIndex(r.date) * 1440; return b0 + r.start_min < e && s < b0 + r.end_min; })
     .map((r) => ({ code: r.code, date: r.date, time: hm(r.start_min) + "–" + hm(r.end_min), name: r.customer_name, people: r.people }));
 }
 
@@ -79,7 +82,8 @@ export async function onRequestGet({ request, env }) {
   const sql = `SELECT ${COLS} FROM reservations` + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY date ASC, start_min ASC, id ASC LIMIT 3000";
   try {
     const { results } = await env.DB.prepare(sql).bind(...args).all();
-    return json({ ok: true, today: kstToday(), results: results || [] });
+    const external = code ? null : await loadSpacecloud(env);
+    return json({ ok: true, today: kstToday(), results: mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : []), spacecloud: external && external.info });
   } catch (e) { console.error("res-get", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
 }
 
