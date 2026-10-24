@@ -105,3 +105,10 @@ test('live API path merges external schedules but writes no payment/reservation 
   const dash=await(await getDashboard({request:new Request('https://test.invalid/api/admin/dashboard',{headers}),env:e})).json();assert.equal(dash.month.total,0);
  }finally{globalThis.fetch=oldFetch;}
 });
+
+test('uses the Workers-supported manual redirect policy and refuses redirected feeds', async()=>{
+ const e=env();let calls=0;
+ const fetcher=async(u,init)=>{calls++;assert.equal(init.redirect,'manual');return new Response('',{status:302,headers:{location:'https://untrusted.invalid/private'}});};
+ const data=await loadSpacecloud(e,{fetcher,force:true,now:3000000});
+ assert.equal(calls,1);assert.equal(data.results.length,0);assert(data.info.rooms[0].error.includes('HTTP 302'));
+});

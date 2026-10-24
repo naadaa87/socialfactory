@@ -173,17 +173,19 @@ async function refreshRoom(env, feed, force, fetcher, now) {
       let snapshot;
       const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 10000);
       try {
-        const response = await fetcher(feed.url, { redirect: 'error', signal: controller.signal, headers: { Accept: 'text/calendar, text/plain', 'User-Agent': 'SocialFactory-calendar-check' } });
+        const response = await fetcher(feed.url, { redirect: 'manual', signal: controller.signal, headers: { Accept: 'text/calendar, text/plain', 'User-Agent': 'SocialFactory-calendar-check' } });
         const events = parseCalendar(await readBody(response));
         // Validate segmentation and size before replacing a previously good snapshot.
         await calendarRows(events, feed.space, now);
         snapshot = { events_json: JSON.stringify(events), checked_at: now, updated_at: now, error: null };
       } catch (error) {
         // Avoid logging the URL: it contains a bearer-like private feed token.
-        let detail = String(error?.message || error?.name || 'fetch-error').slice(0, 200);
-        detail = detail.replaceAll(feed.url, '[피드 주소]').replaceAll(new URL(feed.url).searchParams.get('ical_uid'), '[비공개]')
-          .replace(/https?:\/\/[^\s]+/g, '[외부 주소]');
-        snapshot = { ...cached, checked_at: now, error: '피드 확인 실패 (' + detail + '). 마지막 정상 일정을 표시합니다.' };
+        const message = String(error?.message || '');
+        const detail = /^HTTP \d{3}$/.test(message) ? '스페이스클라우드 응답 오류 (' + message + ')'
+          : error?.name === 'AbortError' ? '스페이스클라우드 응답 시간이 초과되었습니다'
+          : /^(invalid|missing|unsupported|duplicate|too-many|feed-size)/.test(message) ? '캘린더 데이터 형식을 확인해 주세요'
+          : '스페이스클라우드 피드를 확인하지 못했습니다';
+        snapshot = { ...cached, checked_at: now, error: detail + '. 마지막 정상 일정을 표시합니다.' };
       } finally { clearTimeout(timeout); }
       await env.DB.prepare(`INSERT INTO spacecloud_calendar_cache (space, config_hash, checked_at, updated_at, error, events_json)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(space) DO UPDATE SET config_hash=excluded.config_hash,
