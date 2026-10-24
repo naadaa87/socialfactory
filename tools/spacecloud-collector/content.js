@@ -4,8 +4,15 @@
   const notify=text=>{let box=document.getElementById('sf-collector-status');if(!box){box=document.createElement('div');box.id='sf-collector-status';box.setAttribute('role','status');box.style.cssText='position:fixed;bottom:20px;left:20px;z-index:2147483647;max-width:520px;padding:18px;background:#17326b;color:white;font:16px sans-serif;border-radius:12px';document.body.append(box);}box.textContent=text;};
   async function until(fn){for(let i=0;i<100;i++){const result=fn();if(result)return result;await wait(150);}throw Error('화면을 읽을 수 없습니다. 로그인과 조회 조건을 확인해 주세요.');}
   try{
-    const state=await chrome.runtime.sendMessage({type:'state'});if(!state.ok)return;
+    let state=await chrome.runtime.sendMessage({type:'state'});if(!state.ok)return;
     notify('정산 전 결제내역을 수집 중입니다. 이 탭을 조작하지 말아 주세요.');
+    if(state.firstPage && Number(new URL(location.href).searchParams.get('page')||1)!==1){
+      const first=Array.from(document.querySelectorAll('a[href]')).find(a=>{const u=new URL(a.href,location.href);return u.origin===location.origin&&u.pathname===location.pathname&&Number(u.searchParams.get('page'))===1;});
+      if(!first)throw Error('첫 페이지 버튼을 찾을 수 없습니다. 호스트센터에서 1페이지를 선택해 주세요.');
+      first.click();await until(()=>Number(new URL(location.href).searchParams.get('page')||1)===1);
+    }
+    while(true){
+    state=await chrome.runtime.sendMessage({type:'state'});if(!state.ok)return;
     // Next.js may show the previous page's table while the new page is loading.
     // Read a different, stable list of reservation IDs before opening any details.
     let snapshot,lastSignature='',stableSince=0;
@@ -41,9 +48,15 @@
     }
     const current=new URL(location.href),page=Number(current.searchParams.get('page')||1);
     const next=Array.from(document.querySelectorAll('a[href]')).find(a=>{const u=new URL(a.href,location.href);return u.origin===current.origin&&u.pathname===current.pathname&&Number(u.searchParams.get('page'))===page+1;});
-    const result=await chrome.runtime.sendMessage({type:'page',rows,skipped,signature,next:next?next.href:null});
+    const result=await chrome.runtime.sendMessage({type:'page',pageUrl:location.href,rows,skipped,signature,next:next?next.href:null});
     if(!result.ok)throw Error(result.error||'수집이 중단되었습니다.');
+    if(result.next){
+      if(!next || next.href!==result.next)throw Error('다음 페이지 버튼이 변경되었습니다.');
+      next.click();await until(()=>Number(new URL(location.href).searchParams.get('page'))===page+1);continue;
+    }
     if(result.file){const blob=new Blob([JSON.stringify(result.file,null,2)],{type:'application/json'}),href=URL.createObjectURL(blob),a=document.createElement('a');a.href=href;a.download='spacecloud-payments-'+new Date().toISOString().slice(0,10)+'.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(href),30000);notify('수집 완료: '+result.file.rows.length+'건 ('+result.file.pages+'페이지). 저장된 JSON 파일을 소셜팩토리 관리자 → 매출에서 선택해 주세요.');}
+    break;
+    }
   }catch(e){notify('수집 실패: '+e.message+' 파일을 저장하지 않았습니다.');await chrome.runtime.sendMessage({type:'error'});}
   finally{window.__sfCollecting=false;}
 })();
