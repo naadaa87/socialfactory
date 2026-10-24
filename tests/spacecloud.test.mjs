@@ -112,3 +112,34 @@ test('uses the Workers-supported manual redirect policy and refuses redirected f
  const data=await loadSpacecloud(e,{fetcher,force:true,now:3000000});
  assert.equal(calls,1);assert.equal(data.results.length,0);assert(data.info.rooms[0].error.includes('HTTP 302'));
 });
+
+test('SpaceCloud actual revenue is idempotent and included in totals, channel shares and dashboard', async()=>{
+ const e=env(); const original=globalThis.fetch;
+ globalThis.fetch=async()=>response(calendar(event('revenue','20261024T100000','20261024T120000')));
+ try {
+  const feed=await loadSpacecloud(e); const sourceCode=feed.results[0].code;
+  const post=body=>createReservation({request:new Request('https://test.invalid/api/admin/reservations',{method:'POST',headers,body:JSON.stringify(body)}),env:e});
+  assert.equal((await post({sourceCode,amount:123.5,paid_at:'2026-10-20'})).status,400);
+  assert.equal((await post({sourceCode,amount:100000})).status,400);
+  const first=await post({sourceCode,amount:100000,paid_at:'2026-10-20',space:'r5',channel:'naver'});
+  assert.equal(first.status,200);const data=await first.json();assert.equal(data.item.channel,'spacecloud');assert.equal(data.item.space,'r1');
+  const again=await(await post({sourceCode,amount:900000,paid_at:'2026-10-20'})).json();assert(again.already);assert.equal(again.item.amount,100000);
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,1);
+  e.sqlite.exec("INSERT INTO reservations (code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status,paid_at) VALUES ('NAVER1','confirmed','r2','2026-10-24',600,720,'네이버 고객','naver',50000,'card_online','paid','2026-10-22')");
+  e.sqlite.exec("INSERT INTO orders (oid,status,product_id,product_name,qty,amount,buyer_name,buyer_phone,pay_method,device,test_mode,paid_at) VALUES ('WEB1','paid','cowork-day','이용권',1,10000,'홈페이지','01012345678','card','pc',0,'2026-10-23')");
+  const {onRequestGet:getSales}=await import('../functions/api/admin/sales.js');
+  const query=async tail=>(await getSales({request:new Request('https://test.invalid/api/admin/sales?year=2026'+tail,{headers}),env:e})).json();
+  const sales=await query('');assert.equal(sales.total,160000);assert.equal(sales.byChannel.spacecloud.amount,100000);assert.equal(sales.byChannel.naver.amount,50000);assert.equal(sales.byChannel.web.amount,10000);assert.equal(sales.unrecordedSpacecloud,0);
+  assert.equal(Object.values(sales.byChannel).reduce((n,x)=>n+x.amount,0),sales.total);
+  assert.equal((await query('&orders=0')).total,150000);assert.equal((await query('&basis=paid')).total,160000);
+  const dash=await(await getDashboard({request:new Request('https://test.invalid/api/admin/dashboard',{headers}),env:e})).json();assert.equal(dash.month.byChannel.spacecloud.amount,100000);
+  e.sqlite.exec("UPDATE reservations SET refund_amount=20000,pay_status='refunded' WHERE channel='spacecloud'");
+  assert.equal((await query('')).byChannel.spacecloud.amount,80000);
+ } finally {globalThis.fetch=original;e.sqlite.close();}
+});
+
+test('multi-day calendar slots cannot accidentally book the full payment on every date',async()=>{
+ const e=env();const original=globalThis.fetch;globalThis.fetch=async()=>response(calendar(event()));
+ try {const rows=await loadSpacecloud(e);const result=await createReservation({env:e,request:new Request('https://test.invalid/api/admin/reservations',{method:'POST',headers,body:JSON.stringify({sourceCode:rows.results[0].code,amount:100000,paid_at:'2026-10-20'})})});assert.equal(result.status,400);assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,0);}
+ finally{globalThis.fetch=original;e.sqlite.close();}
+});

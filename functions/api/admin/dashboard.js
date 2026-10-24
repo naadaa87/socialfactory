@@ -34,6 +34,12 @@ export async function onRequestGet({ request, env }) {
     if (r.k in byMethod) { byMethod[r.k] = Number(r.s) || 0; resTotal += byMethod[r.k]; resN += Number(r.n) || 0; }
   }
   const ord = await one("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM orders WHERE status IN ('paid', 'used') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1", ym);
+  const byChannel = {};
+  for (const r of await all(`SELECT COALESCE(NULLIF(channel,''),'none') AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM reservations WHERE pay_status IN ('paid','refunded') AND substr(date,1,7) = ?1 GROUP BY k`, ym)) {
+    byChannel[r.k] = { amount: Number(r.s) || 0, n: Number(r.n) || 0 };
+  }
+  if (!byChannel.web) byChannel.web = { amount: 0, n: 0 };
+  byChannel.web.amount += Number(ord.s) || 0; byChannel.web.n += Number(ord.n) || 0;
   const resMonth = await one("SELECT COUNT(*) AS n, COALESCE(SUM(end_min - start_min), 0) AS mins FROM reservations WHERE status = 'confirmed' AND substr(date, 1, 7) = ?1", ym);
   const ordersRecent = await all("SELECT id, oid, created_at, status, product_name, amount, buyer_name, test_mode, paid_at FROM orders WHERE status <> 'pending' ORDER BY id DESC LIMIT 5");
 
@@ -41,6 +47,6 @@ export async function onRequestGet({ request, env }) {
     ok: true, today, tomorrow, spacecloud: external.info,
     counts: { today: todayList.length, tomorrow: tomorrowList.length, upcoming: upcoming.length, unpaid: Number(unpaidSum.n) || 0, unpaidAmount: Number(unpaidSum.s) || 0, newInquiries: Number(newInqN.n) || 0, refundRequests: Number(refundReq.n) || 0 },
     todayList, tomorrowList, upcoming, unpaid, newInquiries: newInq, ordersRecent,
-    month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, total: resTotal + (Number(ord.s) || 0), byMethod, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }
+    month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, total: resTotal + (Number(ord.s) || 0), byMethod, byChannel, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }
   });
 }

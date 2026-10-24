@@ -262,6 +262,9 @@
       $("#dash-month").innerHTML = '<div class="mrow"><div class="mtotal"><small>' + esc(+String(mo.ym).slice(5, 7)) + "월 매출 합계</small><b>" + won(tot) + "</b><span>예약 " + num(mo.reservationsN) + "건 " + won(mo.reservations) + " · 이용권 " + num(mo.ordersN) + "건 " + won(mo.orders) + "</span><span>이번 달 예약 " + num(mo.booked) + "건 · 이용 " + esc(dur(mo.bookedMinutes || 0)) + "</span></div>"
         + '<div><div class="stack">' + (tot ? parts.filter(function (x) { return x[1] > 0; }).map(function (x) { return '<i style="--c:var(--m-' + x[0] + ');width:' + (x[1] / tot * 100).toFixed(2) + '%" title="' + esc(PAYL[x[0]]) + " " + won(x[1]) + '"></i>'; }).join("") : "") + "</div>"
         + '<div class="mlegend small">' + parts.map(function (x) { return '<span style="--c:var(--m-' + x[0] + ')">' + esc(PAYL[x[0]]) + " <b>" + won(x[1]) + "</b></span>"; }).join("") + "</div></div></div>";
+      if (mo.byChannel) $("#dash-month").innerHTML += '<details class="mt-s"><summary>채널별 매출 상세보기</summary><div class="bars">' + bars(Object.keys(mo.byChannel).map(function (key) {
+        var x = mo.byChannel[key]; return { k: key === "web" ? "홈페이지" : (CHL[key] || "경로 미기록"), v: x.amount, s: num(x.n) + "건" };
+      }).sort(function (a,b) { return b.v-a.v; }), tot) + '</div><p class="tiny muted">스페이스클라우드 등 외부 일정은 실제 결제금액을 등록한 건만 합산합니다.</p></details>';
       var OST = { pending: ["결제 대기", ""], paid: ["결제 완료", "ok"], used: ["이용 완료", "blue"], cancelled: ["취소", "gray"], refund_requested: ["환불 요청", "warn"], refunded: ["환불 완료", "gray"], failed: ["결제 실패", "bad"] };
       $("#dash-orders").innerHTML = (d.ordersRecent || []).length ? d.ordersRecent.map(function (o) {
         var s = OST[o.status] || [o.status, ""];
@@ -470,8 +473,21 @@
     $("#dt-body").innerHTML = '<div class="dt-top"><span class="st sc-tag">외부 일정</span></div>'
       + '<div class="dt-when">' + esc(kdateY(r.date)) + " " + esc(timeText(r)) + '<small>' + esc(spaceName(r)) + '</small></div>'
       + '<div class="sec"><h3>스페이스클라우드</h3>' + kv("일정 제목", esc(r.customer_name)) + kv("마지막 확인", esc(stamp))
-      + '<p class="small muted">캘린더에서 제공하는 예약 시간입니다. 예약자 연락처 · 인원 · 결제금액은 제공되지 않으며 매출에 합산하지 않습니다. 일정 변경과 취소는 스페이스클라우드에서 처리해 주세요.</p>'
-      + (r.source_url ? '<a class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer" href="' + esc(r.source_url) + '">스페이스클라우드에서 확인</a>' : '') + '</div>';
+      + '<p class="small muted">캘린더에서 제공하는 예약 시간입니다. 예약자 연락처 · 인원 · 결제금액은 제공되지 않으며 매출에 합산하지 않습니다. 실제 결제금액을 아래에서 등록하면 총매출과 스페이스클라우드 매출에 포함됩니다. 일정 변경과 취소는 스페이스클라우드에서 처리하고, 등록한 매출의 환불 금액도 별도로 수정해 주세요.</p>'
+      + (r.source_url ? '<a class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer" href="' + esc(r.source_url) + '">스페이스클라우드에서 확인</a>' : '')
+      + '<div class="sub-form"><h3>결제금액 등록</h3><p class="small muted">이 일정의 실제 결제금액을 입력하세요. 예상 요금이나 정산 입금액이 아닌 고객 결제금액 기준입니다. 이미 직접 등록한 예약이 있다면 중복 등록하지 마세요. 여러 날짜에 걸친 예약은 날짜별 배분 금액으로 직접 등록해 주세요.</p>'
+      + '<label for="sc-sales-amount">결제 금액 (원)</label><input class="input" id="sc-sales-amount" type="number" min="0" max="100000000" step="1" inputmode="numeric" placeholder="실제 결제금액">'
+      + '<label for="sc-sales-date">실제 결제일</label><input class="input" id="sc-sales-date" type="date">'
+      + '<button class="btn btn-primary btn-sm mt-s" type="button" id="sc-sales-save">총매출에 등록</button><p class="small" id="sc-sales-status" role="status"></p></div></div>';
+    $("#sc-sales-save").addEventListener("click", function () {
+      var raw = $("#sc-sales-amount").value, amount = Number(raw), paid = $("#sc-sales-date").value;
+      if (raw === "" || !Number.isSafeInteger(amount) || amount < 0 || amount > 100000000 || !paid) { $("#sc-sales-status").textContent = "실제 결제금액과 결제일을 입력해 주세요."; return; }
+      var button = this; button.disabled = true;
+      api("/api/admin/reservations", { method: "POST", body: { sourceCode: r.code, amount: amount, paid_at: paid } }).then(function (j) {
+        RES[j.item.code] = j.item; reloadCurrent(); openDetail(j.item.code); refreshCounts();
+        toast(j.already ? "이미 등록된 매출입니다. 기존 내역을 표시합니다." : "스페이스클라우드 매출을 등록했습니다.");
+      }).catch(function (e) { button.disabled = false; if (!guard(e)) $("#sc-sales-status").textContent = e.message; });
+    });
   }
   function renderDetail(r) {
     var tel = String(r.phone || "").replace(/[^0-9+]/g, ""), room = ROOMS[r.space], c = ROOM_KEYS.indexOf(r.space) >= 0 ? calcPrice(r.space, r.date, r.start_min, r.end_min) : null;
@@ -818,7 +834,11 @@
     var resTotal = d.total - (d.byMethod.orders || 0);
     $("#sl-spaces").innerHTML = bars(SPACE_LIST.filter(function (s) { return (d.bySpace[s[0]] || {}).n; }).map(function (s) { var x = d.bySpace[s[0]]; return { k: s[1], v: x.amount, s: x.n + "건 · " + dur(x.minutes) }; }), resTotal);
     var chs = Object.keys(d.byChannel || {}).map(function (k) { var x = d.byChannel[k]; return { k: x.label, v: x.amount, s: x.n + "건", c: "var(--navy-80)" }; }).sort(function (a, b) { return b.v - a.v; });
-    $("#sl-channels").innerHTML = bars(chs, resTotal);
+    $("#sl-channels").innerHTML = bars(chs, d.channelTotal == null ? d.total : d.channelTotal);
+    $("#sl-channel-details").innerHTML = '<table class="tbl"><thead><tr><th>채널</th><th>결제 건수</th><th>매출액</th><th>총매출 비중</th></tr></thead><tbody>' + chs.map(function (x) {
+      return '<tr><td>' + esc(x.k) + '</td><td>' + esc(x.s) + '</td><td>' + won(x.v) + '</td><td>' + (d.total ? x.v / d.total * 100 : 0).toFixed(1) + '%</td></tr>';
+    }).join('') + '</tbody><tfoot><tr><th>합계</th><td>' + num(d.n) + '건</td><td>' + won(d.total) + '</td><td>' + (d.total ? '100%' : '0%') + '</td></tr></tfoot></table>';
+    $("#sl-channel-note").textContent = '채널별 비중은 선택한 연도 총매출 기준입니다. 홈페이지 이용권 포함 여부도 동일하게 적용합니다. 스페이스클라우드 금액 미등록 일정 ' + num(d.unrecordedSpacecloud || 0) + '건은 합계에서 제외됩니다. 캘린더는 결제금액을 제공하지 않으므로 예약 상세에서 실제 금액을 등록해 주세요.';
   }
   $("#sl-year").addEventListener("change", function () { SL.year = this.value; loadSales(); });
   $("#sl-basis").addEventListener("click", function (e) { var b = e.target.closest("[data-basis]"); if (!b) return; SL.basis = b.dataset.basis; loadSales(); });
