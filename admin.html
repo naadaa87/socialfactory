@@ -132,6 +132,13 @@
           <button class="btn btn-light btn-sm" type="button" id="sl-csv">CSV 내려받기</button>
         </div>
       </header>
+      <div class="card mt"><h2>스페이스클라우드 매출 일괄 가져오기</h2>
+        <p class="small muted">호스트센터 → 정산 완료 → 소셜팩토리 건대 선택 → 엑셀파일로 내려받기. 원본 XLSX 파일을 선택하면 미리보기를 표시합니다. 정산 전 예약은 포함되지 않습니다. 매출은 결제금액 − 취소금액이며, 수수료 차감 후 정산금액과 다릅니다.</p>
+        <label class="small">정산 엑셀 파일 <input type="file" id="sc-import-file" accept=".xlsx"></label>
+        <p id="sc-import-status" role="status" class="small"></p><div id="sc-import-preview" class="tbl-wrap"></div>
+        <button type="button" id="sc-import-commit" class="btn btn-primary" hidden>위 내역을 매출에 반영</button>
+        <p class="tiny muted">예약번호가 같으면 중복 합산하지 않습니다. 기존 기록과 금액이 다른 건은 자동으로 덮어쓰지 않습니다. 엑셀에는 룸과 이용 시각이 없어, 캘린더로 확인되지 않은 건은 공간별 매출에서 ‘기타’로 표시합니다. 여러 날짜 예약은 이용시작일에 매출을 합산합니다.</p>
+      </div>
       <div class="kpis kpis-5" id="sl-kpis"></div>
       <div class="grid2 sl-grid">
         <div class="card"><h2 class="ch"><span>결제수단별 <small id="sl-year-label"></small></span></h2><div id="sl-methods" class="bars"></div></div>
@@ -290,6 +297,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </div>
 <script src="/js/site-config.js?v=134790d5"></script>
-<script src="/js/admin.js?v=channel20261024-34ca7a44"></script>
+<script src="/js/admin.js?v=import20261024-34ca7a44"></script>
+<script src="js/spacecloud-import.js?v=20261024"></script>
 </body>
 </html>

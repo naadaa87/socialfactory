@@ -1,3 +1,4 @@
+import { ensureSpacecloudSales } from "../../_lib/spacecloud-sales.js";
 /**
  * /api/admin/reservations — 관리자 예약 등록 · 조회 · 변경 (로그인 쿠키 또는 Authorization: Bearer ADMIN_KEY)
  *
@@ -109,6 +110,11 @@ export async function onRequestPost({ request, env }) {
   }
   const r = readFields(b || {}); if (r.error) return bad(...r.error);
   const v = r.v;
+  await ensureSpacecloudSales(env);
+  if (v.channel === 'spacecloud') {
+    const imported = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE use_date <= ?1 AND end_date >= ?1 LIMIT 1").bind(v.date).first();
+    if (imported) return bad('amount', '해당 이용일에 엑셀로 가져온 매출이 있습니다. 중복 합산을 막기 위해 먼저 매출 기록을 확인해 주세요.');
+  }
   const clash = await conflicts(env, v, sourceCode);
   if (clash.length && !b.force) return json({ ok: false, error: "conflict", conflicts: clash }, 409);
   for (let i = 0; i < 5; i++) {
@@ -137,11 +143,21 @@ export async function onRequestPatch({ request, env }) {
   const code = clean(b && b.code, 20);
   const prev = code && await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(code).first();
   if (!prev) return json({ ok: false, error: "not-found" }, 404);
+  await ensureSpacecloudSales(env);
+  if (await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE linked_code = ?1").bind(code).first())
+    return bad('amount', '정산 엑셀과 연결된 예약입니다. 결제/환불 변경은 가져오기 기록과 함께 확인해야 합니다.');
   const action = clean(b.action || "update", 12);
   let stmt;
   if (action === "update") {
     const r = readFields(b, prev); if (r.error) return bad(...r.error);
     const v = r.v;
+    await ensureSpacecloudSales(env);
+    const importedLink = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE linked_code = ?1").bind(code).first();
+    if (importedLink) return bad('amount', '이 예약의 매출은 정산 엑셀 기록으로 관리됩니다. 원본 결제/취소 내역을 먼저 확인해 주세요.');
+    if (v.channel === 'spacecloud') {
+      const imported = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE use_date <= ?1 AND end_date >= ?1 LIMIT 1").bind(v.date).first();
+      if (imported) return bad('amount', '해당 이용일에 엑셀 매출이 있어 중복 여부 확인이 필요합니다.');
+    }
     if (prev.status === "confirmed") {
       const clash = await conflicts(env, v, code);
       if (clash.length && !b.force) return json({ ok: false, error: "conflict", conflicts: clash }, 409);
