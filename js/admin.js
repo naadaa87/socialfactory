@@ -838,7 +838,7 @@
     $("#sl-channel-details").innerHTML = '<table class="tbl"><thead><tr><th>채널</th><th>결제 건수</th><th>매출액</th><th>총매출 비중</th></tr></thead><tbody>' + chs.map(function (x) {
       return '<tr><td>' + esc(x.k) + '</td><td>' + esc(x.s) + '</td><td>' + won(x.v) + '</td><td>' + (d.total ? x.v / d.total * 100 : 0).toFixed(1) + '%</td></tr>';
     }).join('') + '</tbody><tfoot><tr><th>합계</th><td>' + num(d.n) + '건</td><td>' + won(d.total) + '</td><td>' + (d.total ? '100%' : '0%') + '</td></tr></tfoot></table>';
-    $("#sl-channel-note").textContent = '채널별 비중은 선택한 연도 총매출 기준입니다. 홈페이지 이용권 포함 여부도 동일하게 적용합니다. 스페이스클라우드 금액 미등록 일정 ' + num(d.unrecordedSpacecloud || 0) + '건은 합계에서 제외됩니다. 캘린더는 결제금액을 제공하지 않으므로 예약 상세에서 실제 금액을 등록해 주세요.';
+    $("#sl-channel-note").textContent = '채널별 비중은 선택한 연도 총매출 기준입니다. 홈페이지 이용권 포함 여부도 동일하게 적용합니다. 스페이스클라우드 금액 미등록 일정 ' + num(d.unrecordedSpacecloud || 0) + '건은 합계에서 제외됩니다. 캘린더는 결제금액을 제공하지 않습니다. 정산 엑셀 일괄 가져오기 또는 예약 상세에서 금액을 등록해 주세요.';
   }
   $("#sl-year").addEventListener("change", function () { SL.year = this.value; loadSales(); });
   $("#sl-basis").addEventListener("click", function (e) { var b = e.target.closest("[data-basis]"); if (!b) return; SL.basis = b.dataset.basis; loadSales(); });

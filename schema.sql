@@ -152,3 +152,16 @@ CREATE TABLE IF NOT EXISTS reservations (
 CREATE INDEX IF NOT EXISTS idx_res_date   ON reservations (date, space);
 CREATE INDEX IF NOT EXISTS idx_res_paid   ON reservations (paid_at);
 CREATE INDEX IF NOT EXISTS idx_res_status ON reservations (status, pay_status);
+
+-- Spacecloud HOST settlement XLSX imports (financial records; calendar occupancy remains separate)
+CREATE TABLE IF NOT EXISTS spacecloud_sales (
+  reservation_id TEXT PRIMARY KEY,
+  use_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  paid_at TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  refund_amount INTEGER NOT NULL,
+  linked_code TEXT,
+  space TEXT NOT NULL,
+  imported_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
+);

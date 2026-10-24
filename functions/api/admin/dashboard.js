@@ -1,3 +1,4 @@
+import { ensureSpacecloudSales, SALES_SOURCE } from "../../_lib/spacecloud-sales.js";
 /**
  * GET /api/admin/dashboard — 관리자 첫 화면 '오늘 확인할 것'
  * 오늘 · 내일 예약, 앞으로 7일 예약, 결제 확인이 필요한 예약(결제 전), 답하지 않은 문의, 환불 요청 주문, 이번 달 매출(결제수단별)
@@ -11,6 +12,7 @@ const RES = "code, status, space, space_note, date, start_min, end_min, customer
 
 export async function onRequestGet({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
+  await ensureSpacecloudSales(env);
   const today = kstToday(), tomorrow = addDaysIso(today, 1), in7 = addDaysIso(today, 7), ym = today.slice(0, 7);
   const all = async (sql, ...a) => { try { return (await env.DB.prepare(sql).bind(...a).all()).results || []; } catch (e) { console.error("dash", e && e.message); return []; } };
   const one = async (sql, ...a) => { try { return (await env.DB.prepare(sql).bind(...a).first()) || {}; } catch (e) { console.error("dash", e && e.message); return {}; } };
@@ -30,12 +32,12 @@ export async function onRequestGet({ request, env }) {
 
   const byMethod = {}; Object.keys(PAY_METHODS).forEach((k) => { byMethod[k] = 0; });
   let resTotal = 0, resN = 0;
-  for (const r of await all(`SELECT pay_method AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM reservations WHERE pay_status IN ('paid', 'refunded') AND substr(date, 1, 7) = ?1 GROUP BY pay_method`, ym)) {
+  for (const r of await all(`SELECT pay_method AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM ${SALES_SOURCE} WHERE pay_status IN ('paid', 'refunded') AND substr(date, 1, 7) = ?1 GROUP BY pay_method`, ym)) {
     if (r.k in byMethod) { byMethod[r.k] = Number(r.s) || 0; resTotal += byMethod[r.k]; resN += Number(r.n) || 0; }
   }
   const ord = await one("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM orders WHERE status IN ('paid', 'used') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1", ym);
   const byChannel = {};
-  for (const r of await all(`SELECT COALESCE(NULLIF(channel,''),'none') AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM reservations WHERE pay_status IN ('paid','refunded') AND substr(date,1,7) = ?1 GROUP BY k`, ym)) {
+  for (const r of await all(`SELECT COALESCE(NULLIF(channel,''),'none') AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM ${SALES_SOURCE} WHERE pay_status IN ('paid','refunded') AND substr(date,1,7) = ?1 GROUP BY k`, ym)) {
     byChannel[r.k] = { amount: Number(r.s) || 0, n: Number(r.n) || 0 };
   }
   if (!byChannel.web) byChannel.web = { amount: 0, n: 0 };

@@ -143,3 +143,36 @@ test('multi-day calendar slots cannot accidentally book the full payment on ever
  try {const rows=await loadSpacecloud(e);const result=await createReservation({env:e,request:new Request('https://test.invalid/api/admin/reservations',{method:'POST',headers,body:JSON.stringify({sourceCode:rows.results[0].code,amount:100000,paid_at:'2026-10-20'})})});assert.equal(result.status,400);assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM reservations').get().n,0);}
  finally{globalThis.fetch=original;e.sqlite.close();}
 });
+
+test('settlement import previews without writes, rejects ambiguity, and totals gross less refund once', async()=>{
+  const {onRequestPost:importSales}=await import('../functions/api/admin/spacecloud-import.js');
+  const {onRequestGet:sales}=await import('../functions/api/admin/sales.js');
+  const e=env(null);const call=async(action,rows)=>importSales({env:e,request:new Request('https://example.test/api/admin/spacecloud-import',{method:'POST',headers,body:JSON.stringify({action,rows})})});
+  const row={reservation_id:'1234',venue:'소셜팩토리 건대 (초특가)',use_date:'2026-10-19',end_date:'2026-10-19',paid_at:'2026-10-18',amount:20000,refund_amount:2000};
+  assert.equal((await (await call('preview',[row])).json()).total,18000);
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sales').get().n,0);
+  await call('commit',[row]);await call('commit',[row]);
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sales').get().n,1);
+  const d=await (await sales({env:e,request:new Request('https://example.test/api/admin/sales?year=2026',{headers})})).json();
+  assert.equal(d.total,18000);assert.equal(d.byChannel.spacecloud.amount,18000);assert.equal(d.thisMonth.total,18000);
+  const dash=await(await getDashboard({env:e,request:new Request('https://example.test/api/admin/dashboard',{headers})})).json();assert.equal(dash.month.total,18000);
+  for(const changed of [{amount:21000},{venue:'다른 지점'},{refund_amount:20001},{paid_at:'2026-02-30'}]) assert.equal((await call('commit',[{...row,...changed}])).status,409);
+  assert.equal((await call('commit',[row,row])).status,409);
+  assert.equal(e.sqlite.prepare('SELECT amount FROM spacecloud_sales').get().amount,20000);
+  const anonymous=await importSales({env:e,request:new Request('https://example.test/',{method:'POST'})});assert.equal(anonymous.status,401);
+});
+
+test('settlement linked to a calendar-backed manual sale does not count twice',async()=>{
+  const {onRequestPost:importSales}=await import('../functions/api/admin/spacecloud-import.js');
+  const {onRequestGet:sales}=await import('../functions/api/admin/sales.js');
+  const e=env();const raw=calendar(event('linked','20261024T100000','20261024T120000'));
+  const originalFetch=globalThis.fetch;globalThis.fetch=async()=>response(raw);
+  try{
+    const [source]= (await loadSpacecloud(e)).results;
+    await createReservation({env:e,request:new Request('https://example.test/',{method:'POST',headers,body:JSON.stringify({sourceCode:source.code,amount:20000,paid_at:'2026-10-23'})})});
+    const row={reservation_id:'123',venue:'소셜팩토리 건대 (초특가)',use_date:'2026-10-24',end_date:'2026-10-24',paid_at:'2026-10-23',amount:20000,refund_amount:0};
+    const r=await importSales({env:e,request:new Request('https://example.test/',{method:'POST',headers,body:JSON.stringify({action:'commit',rows:[row]})})});assert.equal(r.status,200);
+    const d=await(await sales({env:e,request:new Request('https://example.test/?year=2026',{headers})})).json();assert.equal(d.total,20000);assert.equal(d.n,1);assert.equal(d.unrecordedSpacecloud,0);
+    assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM reservations').get().n,1);
+  }finally{globalThis.fetch=originalFetch;}
+});
