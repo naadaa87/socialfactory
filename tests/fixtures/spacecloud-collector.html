@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><title>결제 수집 도구 검증용 모의 화면</title>
+<h1>결제 수집 도구 검증용 모의 화면</h1>
+<table><caption>정산 예정 조회 목록</caption><thead><tr><th>결제일</th><th>예약번호</th><th>공간명</th><th>PG</th><th>예약자명</th><th>정산예정금액</th><th>정산예정일</th><th>상세</th></tr></thead><tbody>
+<tr><td>2026.10.24</td><td>10803267</td><td>소셜팩토리 건대 (초특가)</td><td>NICE</td><td>검증용 고객 010-0000-0000</td><td>36,364 원</td><td>2026.11.10</td><td><button onclick="this.closest('tr').insertAdjacentHTML('afterend',document.getElementById('detail').innerHTML)">상세보기</button></td></tr>
+<tr><td>2026.10.24</td><td>555</td><td>다른 공간</td><td>NICE</td><td>제외 고객</td><td>90,000원</td><td>2026.11.10</td><td><button>상세보기</button></td></tr></tbody></table>
+<template id="detail"><tr><td colspan="8"><ul><li><span>예약공간</span> : 소셜팩토리 건대 (초특가), 1번룸 (최대 30명)</li><li><span>예약내용</span> : 2026.10.30 (금) 19:00~21:00</li><li><span>결제일시</span> : 2026.10.24 (토) 18:26</li><li><span>결제금액</span> : 40,000원 (VAT포함)</li><li><span>취소금액</span> : 0 원</li><li><span>정산예정금액</span> : 36,364원</li></ul></td></tr></template>
+<pre id="result"></pre>
+<script>window.chrome={runtime:{async sendMessage(m){if(m.type==='state')return {ok:true};document.querySelector('#result').textContent=JSON.stringify(m,null,2);return {ok:true,next:true};}}};</script><script src="/tools/spacecloud-collector/content.js"></script>
