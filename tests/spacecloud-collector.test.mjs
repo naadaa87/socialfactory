@@ -21,3 +21,17 @@ test('collector fails closed on page loops, changed filters and conflicting paym
   const r=await h.message(m,kind==='amount'?'https://partner.spacecloud.kr/report/draft?page=2':undefined);assert.equal(r.ok,false);assert.equal(h.saved.job,undefined);
  }
 });
+
+test('equal reservation fields in different property order are not treated as changed payments',async()=>{
+ const h=harness();await h.start({id:7,url:'https://partner.spacecloud.kr/report/draft?page=1'});
+ await h.message({type:'page',rows:[{reservation_id:'1',amount:40000,refund_amount:0}],next:'/report/draft?page=2'});
+ const r=await h.message({type:'page',rows:[{amount:40000,refund_amount:0,reservation_id:'1'}],next:null},'https://partner.spacecloud.kr/report/draft?page=2');
+ assert.equal(r.ok,true);assert.equal(r.file.rows.length,1);
+});
+
+test('collector shares prior page identity and rejects a stale table sent as the next page',async()=>{
+ const h=harness();await h.start({id:7,url:'https://partner.spacecloud.kr/report/draft?page=1'});
+ await h.message({type:'page',rows:[{reservation_id:'1',amount:10}],signature:'1|2',next:'/report/draft?page=2'});
+ const state=await h.message({type:'state'},'https://partner.spacecloud.kr/report/draft?page=2');assert.equal(state.previousSignature,'1|2');
+ const result=await h.message({type:'page',rows:[],signature:'1|2',next:null},'https://partner.spacecloud.kr/report/draft?page=2');assert.equal(result.ok,false);assert.match(result.error,/이전 페이지/);assert.equal(h.saved.job,undefined);
+});
