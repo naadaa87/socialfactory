@@ -1,0 +1,20 @@
+.parking-page .page-hero{padding-bottom:44px}
+.parking-page .page-hero h1{max-width:900px}
+.parking-page .actions{display:flex;flex-wrap:wrap;gap:12px}
+.parking-layout{display:grid;grid-template-columns:1.15fr 1fr;gap:24px;align-items:start}
+.parking-card{padding:36px;border:1px solid var(--line);border-radius:24px;background:#fff;scroll-margin-top:110px}
+.parking-card h2{font-size:clamp(24px,3vw,32px);line-height:1.35;margin:12px 0 16px;letter-spacing:-.04em}
+.parking-address{font-size:16px;line-height:1.8;color:var(--navy-80);word-break:keep-all}
+.parking-price{display:grid;gap:8px;background:var(--blue-25);border-radius:16px;padding:24px;margin:24px 0}
+.parking-price strong{font-size:clamp(25px,3vw,34px);line-height:1.35;color:var(--blue);letter-spacing:-.04em}
+.parking-price span{font-size:16px;color:var(--navy-80)}
+.parking-price-secondary{background:var(--light,#F7F8FA)}
+.parking-price-secondary strong{color:var(--navy)}
+.parking-details{margin:24px 0}.parking-details>div{display:grid;grid-template-columns:84px 1fr;gap:16px;padding:14px 0;border-bottom:1px solid var(--line);line-height:1.65}
+.parking-details dt{color:var(--muted)}.parking-details dd{margin:0;font-weight:600}
+.parking-notice{padding:20px;border-left:3px solid var(--blue);background:var(--blue-25);margin:24px 0}
+.parking-notice strong{font-size:18px}.parking-notice p,.parking-description{font-size:16px;line-height:1.85;margin-top:8px;word-break:keep-all}
+.parking-description{margin-bottom:28px;color:var(--navy-80)}
+.parking-status{min-height:1.6em;margin-top:12px;font-size:15px;color:var(--blue)}
+#parking-share-fallback input{display:block;width:100%;max-width:480px;padding:12px;margin-top:8px;border:1px solid var(--line);border-radius:8px;font:inherit}
+@media(max-width:800px){.parking-layout{grid-template-columns:1fr}.parking-card{padding:24px}.parking-page .actions>*{flex:1 1 190px;text-align:center}.parking-price{padding:20px}}
