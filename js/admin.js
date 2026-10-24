@@ -795,7 +795,7 @@
   });
 
   /* =================== 매출 =================== */
-  var SL = { year: null, basis: "use", data: null };
+  var SL = { year: null, basis: "paid", data: null };
   function loadSales() {
     if (!SL.year) SL.year = todayIso().slice(0, 4);
     $$("#sl-basis [data-basis]").forEach(function (b) { b.classList.toggle("on", b.dataset.basis === SL.basis); });

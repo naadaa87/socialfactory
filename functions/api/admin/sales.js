@@ -4,7 +4,7 @@ import { ensureSpacecloudSales, SALES_SOURCE } from "../../_lib/spacecloud-sales
  *
  * - 예약 매출: 결제 완료 · 환불 건의 (금액 − 환불 금액). 결제 전(미수) 건은 매출에 넣지 않고 미수금으로 따로 셉니다.
  *   취소했어도 환불하지 않은 금액(취소 수수료)은 매출로 남습니다.
- * - basis=use  : 이용일 기준 (기본)  · basis=paid : 결제일 기준
+ * - basis=use  : 이용일 기준  · basis=paid : 결제일 기준 (기본)
  * - orders=1   : 홈페이지에서 KG이니시스로 결제한 이용권 주문도 '이용권 온라인 결제'로 함께 더합니다 (테스트 결제 제외).
  */
 import { loadSpacecloud, mergeCalendarRows } from "../../_lib/spacecloud.js";
@@ -17,7 +17,7 @@ export async function onRequestGet({ request, env }) {
   const u = new URL(request.url);
   const today = kstToday();
   const year = /^\d{4}$/.test(u.searchParams.get("year") || "") ? u.searchParams.get("year") : today.slice(0, 4);
-  const basis = clean(u.searchParams.get("basis") || "", 6) === "paid" ? "paid" : "use";
+  const basis = clean(u.searchParams.get("basis") || "", 6) === "use" ? "use" : "paid";
   const withOrders = u.searchParams.get("orders") !== "0";
   const dcol = basis === "paid" ? "COALESCE(paid_at, date)" : "date";
   const NET = "MAX(amount - refund_amount, 0)";

@@ -32,12 +32,12 @@ export async function onRequestGet({ request, env }) {
 
   const byMethod = {}; Object.keys(PAY_METHODS).forEach((k) => { byMethod[k] = 0; });
   let resTotal = 0, resN = 0;
-  for (const r of await all(`SELECT pay_method AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM ${SALES_SOURCE} WHERE pay_status IN ('paid', 'refunded') AND substr(date, 1, 7) = ?1 GROUP BY pay_method`, ym)) {
+  for (const r of await all(`SELECT pay_method AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM ${SALES_SOURCE} WHERE pay_status IN ('paid', 'refunded') AND substr(COALESCE(paid_at,date), 1, 7) = ?1 GROUP BY pay_method`, ym)) {
     if (r.k in byMethod) { byMethod[r.k] = Number(r.s) || 0; resTotal += byMethod[r.k]; resN += Number(r.n) || 0; }
   }
   const ord = await one("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM orders WHERE status IN ('paid', 'used') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1", ym);
   const byChannel = {};
-  for (const r of await all(`SELECT COALESCE(NULLIF(channel,''),'none') AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM ${SALES_SOURCE} WHERE pay_status IN ('paid','refunded') AND substr(date,1,7) = ?1 GROUP BY k`, ym)) {
+  for (const r of await all(`SELECT COALESCE(NULLIF(channel,''),'none') AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM ${SALES_SOURCE} WHERE pay_status IN ('paid','refunded') AND substr(COALESCE(paid_at,date),1,7) = ?1 GROUP BY k`, ym)) {
     byChannel[r.k] = { amount: Number(r.s) || 0, n: Number(r.n) || 0 };
   }
   if (!byChannel.web) byChannel.web = { amount: 0, n: 0 };

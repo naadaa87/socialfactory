@@ -176,3 +176,17 @@ test('settlement linked to a calendar-backed manual sale does not count twice',a
     assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM reservations').get().n,1);
   }finally{globalThis.fetch=originalFetch;}
 });
+
+test('pre-settlement payment and later settlement share one ID; future use is counted by paid month',async()=>{
+ const {onRequestPost:importSales}=await import('../functions/api/admin/spacecloud-import.js');
+ const {onRequestGet:sales}=await import('../functions/api/admin/sales.js');
+ const e=env(null);const row={reservation_id:'999',venue:'소셜팩토리 건대 (초특가)',use_date:'2026-11-06',end_date:'2026-11-06',paid_at:'2026-10-24',amount:45000,refund_amount:0};
+ const call=(rows,source)=>importSales({env:e,request:new Request('https://example.test/',{method:'POST',headers,body:JSON.stringify({action:'commit',rows,source})})});
+ await call([row],'host-draft');await call([row],'settlement-xlsx');
+ const get=async basis=>(await(await sales({env:e,request:new Request('https://example.test/?year=2026'+(basis?'&basis='+basis:''),{headers})})).json());
+ const paid=await get();assert.equal(paid.basis,'paid');assert.equal(paid.total,45000);assert.equal(paid.n,1);assert.equal(paid.months[9].total,45000);assert.equal(paid.months[10].total,0);
+ const use=await get('use');assert.equal(use.months[9].total,0);assert.equal(use.months[10].total,45000);
+ const d=await(await getDashboard({env:e,request:new Request('https://example.test/',{headers})})).json();assert.equal(d.month.total,45000);
+ assert.equal((await call([{...row,refund_amount:45000}],'host-draft')).status,409);
+ assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sales').get().n,1);
+});

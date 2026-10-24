@@ -35,6 +35,12 @@
   function day(value){var s=String(value||'').trim();if(/^\d{8}$/.test(s))return s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6);if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);throw Error('날짜 형식이 다릅니다. 원본 엑셀을 그대로 선택해 주세요.');}
   function money(value){var s=String(value==null?'':value).trim();if(!/^\d+$/.test(s))throw Error('결제/취소금액이 비어 있거나 숫자가 아닙니다.');return Number(s);}
   async function parse(file){
+    if(/\.json$/i.test(file.name)) {
+      if(file.size>2000000)throw Error('2MB 이하의 수집 파일을 선택해 주세요.');
+      var data=JSON.parse(await file.text());
+      if(data.format!=='socialfactory-spacecloud-payments'||data.version!==1||data.source!=='host-draft'||!Array.isArray(data.rows))throw Error('스페이스클라우드 결제 수집 도구의 원본 JSON 파일을 선택해 주세요.');
+      return data.rows;
+    }
     var files=await unzip(file),shared=files['xl/sharedStrings.xml'];var strings=shared?Array.from(shared.querySelectorAll('si')).map(function(si){return Array.from(si.querySelectorAll('t')).map(function(t){return t.textContent;}).join('');}):[];
     var sheet=files['xl/worksheets/sheet1.xml'];if(!sheet)throw Error('첫 시트를 찾지 못했습니다.');
     var data=Array.from(sheet.querySelectorAll('sheetData > row')).map(function(row){var out={};row.querySelectorAll('c').forEach(function(c){var col=(c.getAttribute('r')||'').replace(/\d/g,''),t=c.getAttribute('t'),value=c.querySelector('v');out[col]=t==='s'?strings[Number(value&&value.textContent)]:t==='inlineStr'?Array.from(c.querySelectorAll('t')).map(function(n){return n.textContent;}).join(''):value?value.textContent:'';});return out;});
@@ -47,9 +53,9 @@
       return {reservation_id:String(r[cols['예약번호']]),venue:r[cols['예약공간']],use_date:day(r[cols['이용시작일']]),end_date:day(r[cols['이용종료일']]),paid_at:day(r[cols['결제일시']]),amount:money(r[cols['결제금액']]),refund_amount:money(r[cols['취소금액']])};
     });
   }
-  input.addEventListener('change',async function(){rows=null;commit.hidden=true;preview.innerHTML='';if(!input.files[0])return;message('엑셀 확인 중…');try{
+  input.addEventListener('change',async function(){rows=null;commit.hidden=true;preview.innerHTML='';if(!input.files[0])return;message('결제내역 확인 중…');try{
     rows=await parse(input.files[0]);var j=await api('preview'),labels={new:'가져오기 가능',unchanged:'이미 반영됨',blocked:'확인 필요'};
-    preview.innerHTML='<table class="tbl"><thead><tr><th>예약번호</th><th>이용일</th><th>결제금액</th><th>취소금액</th><th>상태</th></tr></thead><tbody>'+j.rows.map(function(r){return '<tr><td>'+esc(r.reservation_id)+'</td><td>'+esc(r.use_date)+'</td><td>'+r.amount.toLocaleString('ko-KR')+'원</td><td>'+r.refund_amount.toLocaleString('ko-KR')+'원</td><td>'+esc(r.reason||labels[r.state])+'</td></tr>';}).join('')+'</tbody></table>';
+    preview.innerHTML='<table class="tbl"><thead><tr><th>예약번호</th><th>결제일</th><th>이용일</th><th>결제금액</th><th>취소금액</th><th>상태</th></tr></thead><tbody>'+j.rows.map(function(r){return '<tr><td>'+esc(r.reservation_id)+'</td><td>'+esc(r.paid_at)+'</td><td>'+esc(r.use_date)+'</td><td>'+esc(Number.isSafeInteger(r.amount)?r.amount.toLocaleString('ko-KR'):'오류')+'원</td><td>'+esc(Number.isSafeInteger(r.refund_amount)?r.refund_amount.toLocaleString('ko-KR'):'오류')+'원</td><td>'+esc(r.reason||labels[r.state])+'</td></tr>';}).join('')+'</tbody></table>';
     var ready=j.rows.filter(function(r){return r.state==='new';}).length,blocked=j.rows.some(function(r){return r.state==='blocked';});
     message('새로 반영할 '+ready+'건 · 순매출 '+j.total.toLocaleString('ko-KR')+'원'+(blocked?' · 확인이 필요한 행은 아래 사유를 확인해 주세요.':''));commit.hidden=blocked||!ready;
   }catch(e){rows=null;message(e.message);}});
