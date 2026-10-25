@@ -3,7 +3,7 @@ export async function ensureSpacecloudSales(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS spacecloud_sales (
     reservation_id TEXT PRIMARY KEY, use_date TEXT NOT NULL, end_date TEXT NOT NULL,
     paid_at TEXT NOT NULL, amount INTEGER NOT NULL, refund_amount INTEGER NOT NULL,
-    linked_code TEXT, space TEXT NOT NULL, imported_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
+    linked_code TEXT, space TEXT NOT NULL, sync_seen INTEGER NOT NULL DEFAULT 0, imported_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
   )`).run();
 }
 // A linked manual reservation is counted once, using the imported payment/refund amounts.

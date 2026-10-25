@@ -163,5 +163,15 @@ CREATE TABLE IF NOT EXISTS spacecloud_sales (
   refund_amount INTEGER NOT NULL,
   linked_code TEXT,
   space TEXT NOT NULL,
+  sync_seen INTEGER NOT NULL DEFAULT 0,
   imported_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
+);
+
+CREATE TABLE IF NOT EXISTS spacecloud_sync_device (
+ id INTEGER PRIMARY KEY CHECK(id=1),code_hash TEXT,code_until INTEGER,token_hash TEXT,token_until INTEGER,
+ enabled INTEGER NOT NULL DEFAULT 0,last_attempt INTEGER,last_success INTEGER,status TEXT,message TEXT,counts TEXT
+);
+CREATE TABLE IF NOT EXISTS spacecloud_sync_audit (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,reservation_id TEXT NOT NULL,observed_at INTEGER NOT NULL,
+ before_refund INTEGER,after_refund INTEGER,action TEXT NOT NULL,reason TEXT,created_at TEXT DEFAULT (datetime('now','+9 hours'))
 );

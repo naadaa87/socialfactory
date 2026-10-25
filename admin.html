@@ -10,7 +10,7 @@
   <title>관리자 | 소셜팩토리</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=05ba6263">
+  <link rel="stylesheet" href="/css/admin.css?v=20261025-3">
 </head>
 <body class="adm">
 <div id="admin-root">
@@ -132,13 +132,6 @@
           <button class="btn btn-light btn-sm" type="button" id="sl-csv">CSV 내려받기</button>
         </div>
       </header>
-      <div class="card mt"><h2>스페이스클라우드 결제내역 일괄 가져오기</h2>
-        <p class="small muted">정산 전 결제는 크롬 수집 도구로 저장한 JSON, 정산 완료 건은 호스트센터의 원본 XLSX를 선택하세요. <a href="/spacecloud-import-help.html" target="_blank" rel="noopener">정산 전 결제 수집 방법</a>. 파일 선택 후 미리보기를 표시하며, 같은 예약번호는 한 번만 합산합니다. 매출은 결제금액 − 취소금액이며, 수수료 차감 후 정산금액과 다릅니다.</p>
-        <label class="small">엑셀 또는 결제 수집 파일 <input type="file" id="sc-import-file" accept=".xlsx,.json"></label>
-        <p id="sc-import-status" role="status" class="small"></p><div id="sc-import-preview" class="tbl-wrap"></div>
-        <button type="button" id="sc-import-commit" class="btn btn-primary" hidden>위 내역을 매출에 반영</button>
-        <p class="tiny muted">예약번호가 같으면 중복 합산하지 않습니다. 기존 기록과 금액이 다른 건은 자동으로 덮어쓰지 않습니다. 엑셀에는 룸과 이용 시각이 없어, 캘린더로 확인되지 않은 건은 공간별 매출에서 ‘기타’로 표시합니다. 여러 날짜 예약은 이용시작일에 매출을 합산합니다.</p>
-      </div>
       <div class="kpis kpis-5" id="sl-kpis"></div>
       <div class="grid2 sl-grid">
         <div class="card"><h2 class="ch"><span>결제수단별 <small id="sl-year-label"></small></span></h2><div id="sl-methods" class="bars"></div></div>
@@ -150,6 +143,25 @@
         <div class="card"><h2 class="ch"><span>채널별 매출 · 비중</span></h2><div id="sl-channels" class="bars"></div><details class="mt-s"><summary>채널별 상세보기</summary><div class="tbl-wrap" id="sl-channel-details"></div></details><p class="tiny muted mt" id="sl-channel-note"></p></div>
       </div>
       <p class="tiny muted mt">매출 = 결제 완료 · 환불 예약의 (결제 금액 − 환불 금액). 취소했어도 환불하지 않은 금액은 매출로 남습니다. 결제일 기준은 결제일을 적지 않은 예약을 이용일로 셉니다. 홈페이지 이용권은 KG이니시스 결제일 기준이며 테스트 결제와 환불 · 취소 주문은 빠집니다.</p>
+      <div class="card mt"><h2>스페이스클라우드 자동 매출 동기화</h2>
+        <p class="small muted">연결된 PC의 크롬에서 15분마다 수집합니다. 매출은 로그인한 모든 관리자에게 동일하게 표시됩니다. PC 절전·크롬 종료·호스트센터 로그인 만료 시 수집이 멈춥니다.</p>
+        <p id="sc-auto-status" role="status">연결 상태 확인 중…</p><p id="sc-auto-times" class="small muted"></p><p id="sc-auto-counts" class="small"></p>
+        <button id="sc-auto-pair" class="btn btn-primary" type="button">크롬 연결 코드 발급</button>
+        <button id="sc-auto-revoke" class="btn btn-light" type="button">자동 동기화 연결 해제</button>
+        <p id="sc-auto-code" class="small"></p><div id="sc-auto-review" class="small"></div>
+        <p class="tiny muted">연결 코드는 크롬 도구 설정 화면에 한 번 입력합니다. 로그인 비밀번호를 입력하지 마세요. 환불 증가분은 자동 갱신되며, 상충 자료와 정산 후 별도 취소금액은 확인 대상으로 남습니다.</p>
+      </div>
+      <details class="mt sc-import-fallback">
+        <summary>파일로 가져오기</summary>
+        <div class="card mt-s">
+        <h2>스페이스클라우드 결제내역 일괄 가져오기</h2>
+        <p class="small muted">자동 동기화가 멈추거나 이전 내역을 보충할 때 사용하는 수동 가져오기입니다. 정산 전 결제는 크롬 수집 도구로 저장한 JSON, 정산 완료 건은 호스트센터의 원본 XLSX를 선택하세요. <a href="/spacecloud-import-help.html" target="_blank" rel="noopener">정산 전 결제 수집 방법</a>. 파일 선택 후 미리보기를 표시하며, 같은 예약번호는 한 번만 합산합니다. 매출은 결제금액 − 취소금액이며, 수수료 차감 후 정산금액과 다릅니다.</p>
+        <label class="small">엑셀 또는 결제 수집 파일 <input type="file" id="sc-import-file" accept=".xlsx,.json"></label>
+        <p id="sc-import-status" role="status" class="small"></p><div id="sc-import-preview" class="tbl-wrap"></div>
+        <button type="button" id="sc-import-commit" class="btn btn-primary" hidden>위 내역을 매출에 반영</button>
+        <p class="tiny muted">예약번호가 같으면 중복 합산하지 않습니다. 기존 기록과 금액이 다른 건은 자동으로 덮어쓰지 않습니다. 엑셀에는 룸과 이용 시각이 없어, 캘린더로 확인되지 않은 건은 공간별 매출에서 ‘기타’로 표시합니다. 여러 날짜 예약은 이용시작일에 매출을 합산합니다.</p>
+        </div>
+      </details>
     </section>
 
     <!-- 문의 -->
@@ -299,5 +311,6 @@
 <script src="/js/site-config.js?v=134790d5"></script>
 <script src="/js/admin.js?v=paid20261024-34ca7a44"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>
+<script src="js/spacecloud-auto.js?v=20261025-2"></script>
 </body>
 </html>
