@@ -8,6 +8,7 @@ import { onRequestGet as getReservations, onRequestPost as createReservation } f
 import { onRequestGet as getDashboard } from '../functions/api/admin/dashboard.js';
 import { onRequestGet as getSettings, onRequestPost as configure } from '../functions/api/admin/spacecloud.js';
 import { calendarReservationId, attachCalendarPayments } from '../functions/_lib/spacecloud-sales.js';
+import { onRequestPost as importHistory } from '../functions/api/admin/spacecloud-history.js';
 
 const url = id => `https://api.spacecloud.kr/partner/reservations/ical?product_id=${id}&ical_uid=exampletoken`;
 const event = (uid = 'one', start = '20261024T230000', end = '20261025T010000', extra = '') =>
@@ -128,6 +129,47 @@ test('calendar booking links display imported payments once without changing rev
   const mismatch=await attachCalendarPayments(e,[{...calendarRow,date:'2026-10-25'}]);
   assert.equal(mismatch[0].payment_conflict,true);assert.equal(mismatch[0].payment,undefined);
  }finally{globalThis.fetch=original;e.sqlite.close();}
+});
+
+test('verified completed HOST bookings restore missing past slots without adding revenue twice', async()=>{
+ const e=env(), original=globalThis.fetch;
+ globalThis.fetch=async()=>response(calendar());
+ try {
+  e.sqlite.exec("INSERT INTO spacecloud_sales(reservation_id,use_date,end_date,paid_at,amount,refund_amount,space) VALUES('987654321','2026-10-24','2026-10-24','2026-10-18',54321,0,'r1')");
+  const item={reservation_id:'987654321',venue:'소셜팩토리 건대 (초특가)',status:'USEDC',space:'r1',date:'2026-10-24',start_min:540,end_min:960};
+  const call=(action,rows=[item])=>importHistory({env:e,request:new Request('https://test.invalid/api/admin/spacecloud-history',{method:'POST',headers,body:JSON.stringify({action,rows})})});
+  assert.equal((await (await call('preview')).json()).new_count,1);
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_calendar_history').get().n,0);
+  assert.equal((await call('commit')).status,200);
+  assert.equal((await (await call('commit')).json()).new_count,0);
+  const r=await(await getReservations({env:e,request:new Request('https://test.invalid/api/admin/reservations?from=2026-10-24&to=2026-10-24',{headers})})).json();
+  assert.equal(r.results.length,1);assert.equal(r.results[0].start_min,540);assert.equal(r.results[0].end_min,960);
+  assert.equal(r.results[0].payment.amount,54321);assert.equal(r.results[0].historical,true);
+  globalThis.fetch=async()=>response(calendar(event('same-id','20261024T090000','20261024T160000').replace('/reservation/123','/reservation/987654321')));
+  await loadSpacecloud(e,{force:true});
+  const live=await(await getReservations({env:e,request:new Request('https://test.invalid/api/admin/reservations?from=2026-10-24&to=2026-10-24',{headers})})).json();
+  assert.equal(live.results.length,1);assert.equal(live.results[0].historical,undefined);
+  const {onRequestGet:getSales}=await import('../functions/api/admin/sales.js');
+  const sales=await(await getSales({env:e,request:new Request('https://test.invalid/api/admin/sales?year=2026',{headers})})).json();
+  assert.equal(sales.total,54321);assert.equal(sales.n,1);
+  assert.equal((await call('commit',[{...item,reservation_id:'999'}])).status,409);
+  assert.equal((await call('commit',[{...item,venue:'다른 매장'}])).status,409);
+ } finally {globalThis.fetch=original;e.sqlite.close();}
+});
+
+test('a previously seen paid calendar booking remains after the feed drops it; vanished future slots do not',async()=>{
+ const e=env();let body=calendar(event('keep','20261024T100000','20261024T120000'));
+ const fetcher=async()=>response(body),before=Date.parse('2026-10-23T00:00:00Z'),after=Date.parse('2026-10-25T00:00:00Z');
+ e.sqlite.exec("INSERT INTO spacecloud_sales(reservation_id,use_date,end_date,paid_at,amount,refund_amount,space) VALUES('123','2026-10-24','2026-10-24','2026-10-20',40000,0,'r1')");
+ await loadSpacecloud(e,{fetcher,force:true,now:before});body=calendar();
+ const past=await loadSpacecloud(e,{fetcher,force:true,now:after});
+ assert.equal(past.results.length,1);assert.equal(past.results[0].historical,true);
+ const e2=env();body=calendar(event('cancelled-before-use','20261024T100000','20261024T120000'));
+ await loadSpacecloud(e2,{fetcher,force:true,now:before});body=calendar();
+ const removed=await loadSpacecloud(e2,{fetcher,force:true,now:before+600000});
+ assert.equal(removed.results.length,0);
+ assert.equal(e2.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_calendar_history').get().n,0);
+ e.sqlite.close();e2.sqlite.close();
 });
 
 test('uses the Workers-supported manual redirect policy and refuses redirected feeds', async()=>{

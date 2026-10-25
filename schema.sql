@@ -167,6 +167,22 @@ CREATE TABLE IF NOT EXISTS spacecloud_sales (
   imported_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
 );
 
+-- Historical occupancy from SpaceCloud iCal or verified HOST completed bookings.
+-- Financial amounts stay exclusively in spacecloud_sales.
+CREATE TABLE IF NOT EXISTS spacecloud_calendar_history (
+  space TEXT NOT NULL,
+  uid TEXT NOT NULL,
+  reservation_id TEXT NOT NULL,
+  config_hash TEXT NOT NULL,
+  start_ms INTEGER NOT NULL,
+  end_ms INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  source TEXT NOT NULL,
+  recorded_at INTEGER NOT NULL,
+  PRIMARY KEY (space, uid)
+);
+CREATE INDEX IF NOT EXISTS idx_spacecloud_history_reservation ON spacecloud_calendar_history (reservation_id, space);
+
 CREATE TABLE IF NOT EXISTS spacecloud_sync_device (
  id INTEGER PRIMARY KEY CHECK(id=1),code_hash TEXT,code_until INTEGER,token_hash TEXT,token_until INTEGER,
  enabled INTEGER NOT NULL DEFAULT 0,last_attempt INTEGER,last_success INTEGER,status TEXT,message TEXT,counts TEXT
