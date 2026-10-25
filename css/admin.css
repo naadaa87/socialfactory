@@ -293,6 +293,10 @@ td .memo { min-width: 160px; width: 100%; min-height: 36px; resize: vertical; fo
 .temp b { font-family: monospace; font-size: 16px; letter-spacing: .04em; }
 details.help summary { cursor: pointer; font-weight: 700; color: var(--muted); }
 details.help ol { padding-left: 20px; margin-bottom: 0; }
+.sc-import-fallback summary { cursor: pointer; font-size: 16px; font-weight: 700; }
+.sc-import-fallback summary small { font-size: 12px; font-weight: 500; margin-left: 8px; }
+.sc-import-fallback[open] summary { margin-bottom: 16px; }
+.sc-import-fallback summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 4px; }
 
 /* ===== 매출 ===== */
 .bars { display: grid; gap: 10px; }
