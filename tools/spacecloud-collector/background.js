@@ -5,6 +5,19 @@ const settings=async()=>(await chrome.storage.local.get('settings')).settings||{
 async function api(body,token){const response=await fetch(SERVER+'/api/spacecloud-sync',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body)});const j=await response.json();if(!response.ok)throw Error(j.message||'서버 연결 실패');return j;}
 async function badge(tabId,text){try{await chrome.action.setBadgeText({...(tabId?{tabId}:{}),text});}catch{}}
 async function inject(tabId){await chrome.scripting.executeScript({target:{tabId},files:['content.js']});}
+// A full navigation can remove the old main frame after the tab reports
+// "complete". Retry only that transient race; other script errors still stop
+// the collection so an incomplete snapshot is never submitted.
+async function injectAfterNavigation(tabId,attempt=0){
+ try{await inject(tabId);}catch(e){
+  if(!/Frame with ID \d+ was removed/i.test(String(e?.message))||attempt>=4)throw e;
+  await new Promise(resolve=>setTimeout(resolve,350));
+  const j=await job();if(!j||j.tabId!==tabId)return;
+  const tab=await chrome.tabs.get(tabId);
+  if(tab.status==='complete'&&validUrl(tab.url))await injectAfterNavigation(tabId,attempt+1);
+  // A loading tab will produce another onUpdated("complete") event.
+ }
+}
 async function fail(status,message){
  const j=await job(),s=await settings();await chrome.storage.session.remove('job');await badge(j?.tabId,'오류');
  await chrome.storage.local.set({lastResult:{status,message,at:Date.now()}});
@@ -19,7 +32,7 @@ async function runAuto(){
  const old=await job();if(old){if(Date.now()-old.started<12*60000)return;await fail('collection_error','수집 시간이 초과됐습니다. 다음 주기에 재시도합니다.');}
  const tab=await chrome.tabs.create({url:HOST+'/report/draft?page=1',active:false});
  await chrome.storage.session.set({job:{tabId:tab.id,owned:true,auto:true,started:Date.now(),source:'draft',rows:[],visited:[],skipped:0,configured:[],since:s.since||'2020-01-01'}});
- if(tab.status==='complete')await inject(tab.id);
+ if(tab.status==='complete')await injectAfterNavigation(tab.id);
  }finally{starting=false;}
 }
 async function initialize(){
@@ -39,7 +52,7 @@ chrome.tabs.onUpdated.addListener(async(tabId,change,tab)=>{
  if(change.status!=='complete')return;const j=await job();if(!j||j.tabId!==tabId)return;
  if(tab.url?.startsWith(HOST+'/auth/')){await fail('login_required','호스트센터 로그인 만료');return;}
  if(!validUrl(tab.url)){await fail('collection_error','호스트센터 수집 화면을 벗어났습니다.');return;}
- try{await inject(tabId);}catch(e){await fail('collection_error',e.message);}
+ try{await injectAfterNavigation(tabId);}catch(e){await fail('collection_error',e.message);}
 });
 chrome.runtime.onMessage.addListener((m,sender,reply)=>{
  (async()=>{

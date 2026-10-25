@@ -1,6 +1,6 @@
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>스페이스클라우드 결제 수집 | 소셜팩토리</title><style>body{font:17px/1.8 system-ui,sans-serif;color:#243047;background:#f5f7fa;margin:0}main{max-width:780px;margin:48px auto;padding:32px;background:white;border-radius:20px}h1{line-height:1.4}li{margin:14px 0}a{color:#3154de}code{background:#eef1f6;padding:3px 6px}@media(max-width:600px){main{margin:12px;padding:22px}}</style></head><body><main><a href="/admin#sales">← 관리자 매출</a><h1>스페이스클라우드 자동 매출 동기화</h1><p>크롬 도구 2.0을 관리자에 한 번 연결하면, PC와 크롬이 실행되는 동안 15분마다 정산 전·완료 내역을 읽고 매출에 직접 전송합니다. 매번 파일을 올릴 필요가 없습니다.</p>
 <h2>최초 한 번 연결</h2><ol>
-<li><a href="/tools/spacecloud-collector.zip?v=2.0.0" download>크롬 도구 2.0 내려받기</a> 후 압축을 풉니다. 크롬의 <code>chrome://extensions</code>에서 기존 도구를 삭제하고 개발자 모드 → ‘압축해제된 확장 프로그램을 로드합니다’에서 새 폴더를 선택합니다.</li>
+<li><a href="/tools/spacecloud-collector.zip?v=2.0.1" download>크롬 도구 2.0.1 내려받기</a> 후 압축을 풉니다. 크롬의 <code>chrome://extensions</code>에서 기존 도구를 삭제하고 개발자 모드 → ‘압축해제된 확장 프로그램을 로드합니다’에서 새 폴더를 선택합니다. 기존 2.0.0 도구를 삭제하면 연결 키도 지워지므로 관리자에서 새 연결 코드를 발급해 다시 연결해야 합니다.</li>
 <li>이 버전은 호스트센터·소셜팩토리 두 사이트 접근, 15분 주기 실행, 알림 권한을 사용합니다. 다른 사이트에 대한 접근 권한은 요청하지 않습니다.</li>
 <li>소셜팩토리 관리자 → 매출 → <strong>크롬 연결 코드 발급</strong>을 누릅니다. 이 코드는 10분간 유효하며 한 번만 사용할 수 있습니다.</li>
 <li>관리자 페이지를 연 상태에서 크롬 도구 아이콘을 누르면 설정이 열립니다. 연결 코드와 결제 조회 시작일을 입력한 뒤 ‘연결하고 자동 동기화 시작’을 누릅니다. 기본 조회 시작일은 2020-01-01이며 이전 결제는 제외됩니다. 최대 200페이지·5,000건입니다.</li>

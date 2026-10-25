@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "소셜팩토리 스페이스클라우드 결제 수집",
-  "version": "2.0.0",
-  "description": "열린 호스트센터 정산 예정 화면의 실제 결제내역을 파일로 저장합니다.",
+  "version": "2.0.1",
+  "description": "스페이스클라우드 결제내역을 15분마다 소셜팩토리 매출에 동기화합니다.",
   "permissions": [
     "activeTab",
     "scripting",
