@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8"><title>자동 동기화 모의 검증</title><h1>자동 동기화 모의 검증</h1>
+<label>정산기간<select id="period_select"><option value="settlement">정산일</option><option value="paid">결제일</option></select></label>
+<input title="이용시작일" readonly value="2026-09-01"><input title="이용종료일" readonly>
+<select id="space_select"><option value="all">전체</option><option value="social">소셜팩토리 건대 (초특가)</option></select><button id="query">조회</button>
+<p><em id="period">-</em> 기간에 결제된 내역입니다.</p><div id="total"></div><div id="table"></div><div id="links"></div><pre id="result"></pre>
+<script>
+var src='draft',page=1,seen=[],signature=null,configured=[],all=[],events=[],empty=new URL(location.href).searchParams.has('empty');
+var today=new Date(Date.now()+9*3600000).toISOString().slice(0,10);document.querySelector('input[title="이용종료일"]').value=today;
+function table(){
+ var account=src==='account',other=page===2;document.querySelector('#total').textContent='총 '+(empty?0:1)+'건';
+ document.querySelector('#table').innerHTML=empty?'':'<table><caption>'+(account?'정산 조회 목록':'정산 예정 조회 목록')+'</caption><thead><tr><th>결제일</th><th>예약번호</th><th>공간명</th><th>상세</th></tr></thead><tbody><tr><td>'+today+'</td><td>'+(other?'999':'123')+'</td><td>'+(other?'다른 공간':'소셜팩토리 건대 (초특가)')+'</td><td><button id="detail">상세보기</button></td></tr></tbody></table>';
+ var b=document.querySelector('#detail');if(b)b.onclick=function(){this.closest('tr').insertAdjacentHTML('afterend','<tr><td colspan="4"><ul><li><span>예약내용</span> : 2026.11.06 (금) 14:00~17:00</li><li><span>결제일시</span> : '+today.replaceAll('-','.')+' (일) 14:00</li><li><span>결제금액</span> : 45,000원 (VAT포함)</li><li><span>취소금액</span> : '+(account?'10,000':'0')+' 원</li>'+(account?'<li><span>정산후 취소금액</span> : 0 원</li>':'')+'</ul></td></tr>');};
+ document.querySelector('#links').innerHTML=(!account&&page===1&&!empty?'<a id="next" href="?page=2">2</a>':'')+'<a id="account" href="/report/account">정산 완료</a>';
+ var next=document.querySelector('#next');if(next)next.onclick=function(e){e.preventDefault();history.pushState({},'',this.href);page=2;table();};
+ document.querySelector('#account').onclick=function(e){e.preventDefault();history.pushState({},'',this.href);src='account';page=1;table();};
+}
+document.querySelector('#query').onclick=function(){if(document.querySelector('#period_select').value!=='paid'||document.querySelector('#space_select').value!=='social')throw Error('조회 조건 미설정');events.push('query-'+src);document.querySelector('#period').textContent='2026.09.01 ~ '+today.replaceAll('-','.');table();};
+window.chrome={runtime:{async sendMessage(m){
+ if(m.type==='state')return {ok:true,auto:true,source:src,configure:!configured.includes(src),since:'2026-09-01',firstPage:!seen.length,previousSignature:signature};
+ if(m.type==='configured'){configured.push(src);return {ok:true};}
+ if(m.type==='error'){document.querySelector('#result').textContent='ERROR: '+m.message;return {ok:false};}
+ seen.push(src+':'+page);all.push(...m.rows);signature=m.signature;if(m.next)return {ok:true,next:m.next};
+ if(src==='draft'){signature=null;return {ok:true,switchTo:location.origin+'/report/account'};}
+ document.querySelector('#result').textContent=JSON.stringify({pages:seen,configured,events,rows:all,complete:true},null,2);return {ok:true,synced:{added:1,refunded:1}};
+}}};table();
+</script><script src="/tools/spacecloud-collector/content.js"></script>
