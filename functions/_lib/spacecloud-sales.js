@@ -6,6 +6,39 @@ export async function ensureSpacecloudSales(env) {
     linked_code TEXT, space TEXT NOT NULL, sync_seen INTEGER NOT NULL DEFAULT 0, imported_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
   )`).run();
 }
+
+// Calendar links are the only shared key with the host payment report.
+export function calendarReservationId(sourceUrl) {
+  try {
+    const url = new URL(sourceUrl);
+    if (url.protocol !== 'https:' || url.hostname !== 'partner.spacecloud.kr' || url.port || url.username || url.password || url.search || url.hash) return null;
+    return /^\/reservation\/(\d{1,16})\/?$/.exec(url.pathname)?.[1] || null;
+  } catch { return null; }
+}
+
+// Enrich occupancy rows for display only. Sales aggregation continues to read
+// spacecloud_sales once, so multi-room/day calendar rows cannot multiply revenue.
+export async function attachCalendarPayments(env, rows) {
+  const ids = [...new Set(rows.filter(row => row.external).map(row => calendarReservationId(row.source_url)).filter(Boolean))];
+  if (!ids.length) return rows;
+  await ensureSpacecloudSales(env);
+  const payments = new Map();
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const found = (await env.DB.prepare(`SELECT reservation_id,use_date,end_date,paid_at,amount,refund_amount FROM spacecloud_sales WHERE reservation_id IN (${chunk.map((_, n) => '?' + (n + 1)).join(',')})`).bind(...chunk).all()).results || [];
+    found.forEach(payment => payments.set(payment.reservation_id, payment));
+  }
+  return rows.map(row => {
+    if (!row.external) return row;
+    const id = calendarReservationId(row.source_url), payment = payments.get(id);
+    if (!payment) return row;
+    if (row.date < payment.use_date || row.date > payment.end_date) return { ...row, payment_conflict: true };
+    return { ...row, payment: {
+      reservation_id: id, amount: payment.amount, refund_amount: payment.refund_amount,
+      paid_at: payment.paid_at, use_date: payment.use_date, end_date: payment.end_date
+    } };
+  });
+}
 // A linked manual reservation is counted once, using the imported payment/refund amounts.
 export const SALES_SOURCE = `(SELECT code, date, paid_at, amount, refund_amount, pay_method, pay_status, channel, space, start_min, end_min, status
   FROM reservations WHERE code NOT IN (SELECT linked_code FROM spacecloud_sales WHERE linked_code IS NOT NULL)

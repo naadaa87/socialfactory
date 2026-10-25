@@ -123,7 +123,8 @@
   /* ---------- 공통 표시 ---------- */
   var spaceName = function (r) { return r.space === "other" && r.space_note ? r.space_note : (SPL[r.space] || r.space) + (r.space !== "other" && r.space_note ? " · " + r.space_note : ""); };
   var pmTag = function (k) { return '<span class="pm" style="--pm:var(--m-' + esc(k) + ')">' + esc(PAYL[k] || k || "—") + "</span>"; };
-  function pstTag(r) { if (r.external) return '<span class="st sc-tag">금액 미제공</span>'; var p = PST[r.pay_status] || [r.pay_status, ""]; var t = r.pay_status === "refunded" && r.refund_amount < r.amount ? "부분 환불" : p[0]; return '<span class="st ' + p[1] + '">' + esc(t) + "</span>"; }
+  function externalAmount(r) { return r.payment ? won(r.payment.amount) : (r.payment_conflict ? '결제일정 확인 필요' : '금액 확인 필요'); }
+  function pstTag(r) { if (r.external) return r.payment ? '<span class="st ' + (r.payment.refund_amount ? 'gray' : 'ok') + '">' + (r.payment.refund_amount ? (r.payment.refund_amount < r.payment.amount ? '부분 환불' : '환불') : '결제 완료') + '</span>' : '<span class="st sc-tag">' + (r.payment_conflict ? '일정 확인 필요' : '금액 확인 필요') + '</span>'; var p = PST[r.pay_status] || [r.pay_status, ""]; var t = r.pay_status === "refunded" && r.refund_amount < r.amount ? "부분 환불" : p[0]; return '<span class="st ' + p[1] + '">' + esc(t) + "</span>"; }
   function resStTag(r) {
     if (r.external) return '<span class="st sc-tag">외부 일정</span>';
     if (r.status === "cancelled") return '<span class="st bad">취소</span>';
@@ -141,7 +142,7 @@
     return '<div class="rrow' + (r.status === "cancelled" ? " cancelled" : "") + '" data-code="' + esc(r.code) + '" tabindex="0">'
       + '<div class="t">' + t + "</div>"
       + '<div class="w"><span class="room-tag">' + esc(spaceName(r)) + "</span><b>" + esc(r.customer_name) + "</b>" + (sub ? '<span class="sub">' + sub + "</span>" : "") + "</div>"
-      + '<div class="a"><b>' + (r.external ? '금액 미제공' : won(r.amount)) + "</b><span>" + pmTag(r.pay_method) + " " + pstTag(r) + "</span>" + btn + "</div></div>";
+      + '<div class="a"><b>' + (r.external ? externalAmount(r) : won(r.amount)) + "</b><span>" + pmTag(r.pay_method) + " " + pstTag(r) + "</span>" + btn + "</div></div>";
   }
 
   /* =================== 로그인 =================== */
@@ -469,16 +470,19 @@
   var kv = function (k, v) { return v === "" || v == null ? "" : '<div class="kv"><span>' + esc(k) + "</span><b>" + v + "</b></div>"; };
   function renderExternalDetail(r) {
     var stamp = r.synced_at ? new Date(r.synced_at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) : "확인 중";
+    var p = r.payment;
     $("#dt-title").textContent = "스페이스클라우드 일정";
     $("#dt-body").innerHTML = '<div class="dt-top"><span class="st sc-tag">외부 일정</span></div>'
       + '<div class="dt-when">' + esc(kdateY(r.date)) + " " + esc(timeText(r)) + '<small>' + esc(spaceName(r)) + '</small></div>'
       + '<div class="sec"><h3>스페이스클라우드</h3>' + kv("일정 제목", esc(r.customer_name)) + kv("마지막 확인", esc(stamp))
-      + '<p class="small muted">캘린더에서 제공하는 예약 시간입니다. 예약자 연락처 · 인원 · 결제금액은 제공되지 않으며 매출에 합산하지 않습니다. 실제 결제금액을 아래에서 등록하면 총매출과 스페이스클라우드 매출에 포함됩니다. 일정 변경과 취소는 스페이스클라우드에서 처리하고, 등록한 매출의 환불 금액도 별도로 수정해 주세요.</p>'
+      + (p ? '<div class="sec"><h3>수집된 결제내역</h3>' + kv('스페이스클라우드 예약번호', esc(p.reservation_id)) + kv('결제금액 (예약 전체)', won(p.amount)) + kv('환불금액', won(p.refund_amount)) + kv('순결제금액', won(Math.max(0, p.amount - p.refund_amount))) + kv('실제 결제일', esc(p.paid_at)) + '<p class="small muted">예약 전체의 결제금액입니다. 여러 날짜·공간에 표시돼도 매출에는 한 번만 합산됩니다. 환불 변경은 다음 자동 동기화 후 반영됩니다.</p></div>'
+        : '<p class="small muted">' + (r.payment_conflict ? '같은 예약번호의 결제내역이 있지만 이용일이 달라 자동 연결하지 않았습니다. 호스트센터에서 일정 변경 여부를 확인해 주세요.' : '캘린더에는 결제금액이 없습니다. 아직 연결된 결제내역이 없어 금액을 확인할 수 없습니다.') + '</p>')
       + (r.source_url ? '<a class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer" href="' + esc(r.source_url) + '">스페이스클라우드에서 확인</a>' : '')
-      + '<div class="sub-form"><h3>결제금액 등록</h3><p class="small muted">이 일정의 실제 결제금액을 입력하세요. 예상 요금이나 정산 입금액이 아닌 고객 결제금액 기준입니다. 이미 직접 등록한 예약이 있다면 중복 등록하지 마세요. 여러 날짜에 걸친 예약은 날짜별 배분 금액으로 직접 등록해 주세요.</p>'
+      + (p || r.payment_conflict ? '' : '<div class="sub-form"><h3>결제금액 등록</h3><p class="small muted">자동 수집된 결제내역이 없는 경우에만 사용합니다. 이미 직접 등록한 예약이 있다면 중복 등록하지 마세요. 여러 날짜에 걸친 예약은 날짜별 배분 금액으로 직접 등록해 주세요.</p>'
       + '<label for="sc-sales-amount">결제 금액 (원)</label><input class="input" id="sc-sales-amount" type="number" min="0" max="100000000" step="1" inputmode="numeric" placeholder="실제 결제금액">'
       + '<label for="sc-sales-date">실제 결제일</label><input class="input" id="sc-sales-date" type="date">'
-      + '<button class="btn btn-primary btn-sm mt-s" type="button" id="sc-sales-save">총매출에 등록</button><p class="small" id="sc-sales-status" role="status"></p></div></div>';
+      + '<button class="btn btn-primary btn-sm mt-s" type="button" id="sc-sales-save">총매출에 등록</button><p class="small" id="sc-sales-status" role="status"></p></div>') + '</div>';
+    if (p || r.payment_conflict) return;
     $("#sc-sales-save").addEventListener("click", function () {
       var raw = $("#sc-sales-amount").value, amount = Number(raw), paid = $("#sc-sales-date").value;
       if (raw === "" || !Number.isSafeInteger(amount) || amount < 0 || amount > 100000000 || !paid) { $("#sc-sales-status").textContent = "실제 결제금액과 결제일을 입력해 주세요."; return; }
@@ -587,7 +591,7 @@
       "스페이스클라우드 " + rooms.length + "개 룸 연결 · " + rooms.reduce(function (a, r) { return a + r.count; }, 0) + "개 일정 · "
       + (last ? new Date(last).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) + " 확인" : "확인 대기")
       + (failures.length ? " · " + failures.map(function (r) { return SPL[r.space] + (r.error ? " (" + r.error + ")" : " 재확인 필요"); }).join(", ") : " · 열려 있는 동안 5분마다 확인")
-      + " · 외부 일정은 매출 제외");
+      + " · 자동 수집 금액은 매출 화면에서 한 번만 집계");
     targets.forEach(function (el) { el.textContent = text; el.classList.toggle("sc-warning", !!info.error || failures.length > 0); });
   }
   document.addEventListener("click", function (event) {
@@ -641,8 +645,8 @@
         + blocks.map(function (r) {
           var x = rel(r), s = Math.max(0, x.s), e = Math.min(1440, x.e);
           var cls = "blk" + (r.external ? " sc-external" : "") + (r.status === "cancelled" ? " cancelled" : r.pay_status === "unpaid" ? " unpaid" : "") + (x.s < 0 ? " cont-l" : "") + (x.e > 1440 ? " cont-r" : "");
-          return '<button type="button" class="' + cls + '" data-blk="' + esc(r.code) + '" style="left:' + (s / 1440 * 100).toFixed(3) + "%;width:" + ((e - s) / 1440 * 100).toFixed(3) + '%" title="' + esc(r.customer_name + " · " + timeText(r) + " · " + (r.external ? "외부 일정 · 금액 미제공" : won(r.amount)) + " · " + (PAYL[r.pay_method] || "") + " · " + (PST[r.pay_status] || [""])[0]) + '">'
-            + "<b>" + esc(r.customer_name) + (r.people ? " · " + r.people + "명" : "") + "</b><span>" + esc((x.s < 0 ? "← " : "") + timeText(r) + (x.e > 1440 ? " →" : "")) + "</span><span>" + esc((r.external ? "금액 미제공" : won(r.amount)) + " · " + (r.pay_status === "unpaid" ? "결제 전" : PAYL[r.pay_method] || "")) + "</span></button>";
+          return '<button type="button" class="' + cls + '" data-blk="' + esc(r.code) + '" style="left:' + (s / 1440 * 100).toFixed(3) + "%;width:" + ((e - s) / 1440 * 100).toFixed(3) + '%" title="' + esc(r.customer_name + " · " + timeText(r) + " · " + (r.external ? "외부 일정 · " + externalAmount(r) : won(r.amount)) + " · " + (PAYL[r.pay_method] || "") + " · " + (PST[r.pay_status] || [""])[0]) + '">'
+            + "<b>" + esc(r.customer_name) + (r.people ? " · " + r.people + "명" : "") + "</b><span>" + esc((x.s < 0 ? "← " : "") + timeText(r) + (x.e > 1440 ? " →" : "")) + "</span><span>" + esc((r.external ? externalAmount(r) : won(r.amount)) + " · " + (r.pay_status === "unpaid" ? "결제 전" : PAYL[r.pay_method] || "")) + "</span></button>";
         }).join("")
         + (isToday ? '<div class="tl-now" style="left:' + (nm / 1440 * 100).toFixed(3) + '%"></div>' : "") + "</div></div>";
     });
@@ -747,7 +751,7 @@
     var unpaid = act.filter(function (r) { return r.pay_status === "unpaid"; }), unpaidSum = unpaid.reduce(function (a, r) { return a + r.amount; }, 0);
     $("#ls-kpis").innerHTML = '<div class="kpi"><small>예약</small><b>' + num(act.length) + "<em>건</em></b><span>" + (list.length - act.length ? "취소 " + (list.length - act.length) + "건 별도" : "취소 제외") + "</span></div>"
       + '<div class="kpi"><small>이용 시간 합계</small><b>' + esc(dur(mins)) + "</b></div>"
-      + '<div class="kpi accent"><small>매출 (결제 완료)</small><b>' + num(sales) + "<em>원</em></b></div>"
+      + '<div class="kpi accent"><small>직접 등록 매출</small><b>' + num(sales) + "<em>원</em></b><span>자동 수집 매출은 매출 화면에서 확인</span></div>"
       + '<div class="kpi' + (unpaid.length ? " warn" : "") + '"><small>결제 전 (미수금)</small><b>' + num(unpaidSum) + "<em>원</em></b><span>" + unpaid.length + "건</span></div>";
     if (!list.length) { box.innerHTML = emptyMsg("조건에 맞는 예약이 없습니다."); return; }
     var months = {}, order = [];
@@ -756,13 +760,13 @@
     box.innerHTML = order.map(function (mk) {
       var mo = months[mk], all = []; mo.order.forEach(function (dk) { all = all.concat(mo.days[dk]); });
       var ma = all.filter(function (r) { return r.status !== "cancelled"; });
-      return '<div class="mgroup"><div class="mhead"><b>' + mk.slice(0, 4) + "년 " + (+mk.slice(5, 7)) + "월</b><span>예약 " + ma.length + "건 · 매출 " + won(all.reduce(function (a, r) { return a + net(r); }, 0)) + (ma.some(function (r) { return r.pay_status === "unpaid"; }) ? " · 결제 전 " + won(ma.filter(function (r) { return r.pay_status === "unpaid"; }).reduce(function (a, r) { return a + r.amount; }, 0)) : "") + "</span></div>"
+      return '<div class="mgroup"><div class="mhead"><b>' + mk.slice(0, 4) + "년 " + (+mk.slice(5, 7)) + "월</b><span>예약 " + ma.length + "건 · 직접 등록 매출 " + won(all.reduce(function (a, r) { return a + net(r); }, 0)) + (ma.some(function (r) { return r.pay_status === "unpaid"; }) ? " · 결제 전 " + won(ma.filter(function (r) { return r.pay_status === "unpaid"; }).reduce(function (a, r) { return a + r.amount; }, 0)) : "") + "</span></div>"
         + mo.order.map(function (dk) {
           var rows = mo.days[dk].slice().sort(function (a, b) { return a.start_min - b.start_min || (a.space < b.space ? -1 : 1); }), n = diffDays(t, dk), w = dow(dk);
           var da = rows.filter(function (r) { return r.status !== "cancelled"; });
           var dd = n === 0 ? '<em class="dd">오늘</em>' : n === 1 ? '<em class="dd soon">내일</em>' : (n > 1 && n <= 7 ? '<em class="dd soon">D-' + n + "</em>" : "");
           return '<div class="day' + (n === 0 ? " today" : "") + '"><div class="dhead"><span class="dt' + (isOff(dk) && w !== 6 ? " off" : "") + (w === 6 ? " sat" : "") + '">' + (+dk.slice(5, 7)) + "." + (+dk.slice(8, 10)) + " (" + DOW[w] + ")" + (HOL[dk] ? " 공휴일" : "") + "</span>" + dd
-            + '<span class="dsum">예약 <b>' + da.length + "</b>건 · <b>" + won(rows.reduce(function (a, r) { return a + net(r); }, 0)) + "</b>" + (da.some(function (r) { return r.pay_status === "unpaid"; }) ? " · 결제 전 " + won(da.filter(function (r) { return r.pay_status === "unpaid"; }).reduce(function (a, r) { return a + r.amount; }, 0)) : "") + "</span></div>"
+            + '<span class="dsum">예약 <b>' + da.length + "</b>건 · 직접 등록 <b>" + won(rows.reduce(function (a, r) { return a + net(r); }, 0)) + "</b>" + (da.some(function (r) { return r.pay_status === "unpaid"; }) ? " · 결제 전 " + won(da.filter(function (r) { return r.pay_status === "unpaid"; }).reduce(function (a, r) { return a + r.amount; }, 0)) : "") + "</span></div>"
             + '<div class="tbl-wrap"><table class="tbl ls-table">' + head + "<tbody>" + rows.map(function (r) {
               var tel = String(r.phone || "").replace(/[^0-9+]/g, "");
               return '<tr class="click' + (r.status === "cancelled" ? " cancelled" : "") + '" data-code="' + esc(r.code) + '">'
@@ -770,7 +774,7 @@
                 + "<td>" + esc(spaceName(r)) + "</td>"
                 + '<td><b class="nm">' + esc(r.customer_name) + "</b><small>" + esc([r.phone, r.purpose].filter(Boolean).join(" · ")) + "</small></td>"
                 + "<td>" + (r.people != null ? esc(r.people) + "명" : "—") + "</td>"
-                + '<td class="r"><b>' + (r.external ? '금액 미제공' : won(r.amount)) + "</b>" + (r.refund_amount ? "<small>환불 " + won(r.refund_amount) + "</small>" : "") + "</td>"
+                + '<td class="r"><b>' + (r.external ? externalAmount(r) : won(r.amount)) + "</b>" + (r.external && r.payment ? '<small>예약 전체' + (r.payment.refund_amount ? ' · 환불 ' + won(r.payment.refund_amount) : '') + '</small>' : r.refund_amount ? "<small>환불 " + won(r.refund_amount) + "</small>" : "") + "</td>"
                 + "<td>" + pmTag(r.pay_method) + "<br>" + pstTag(r) + (r.status === "cancelled" ? ' <span class="st bad">취소</span>' : "") + "</td>"
                 + "<td>" + esc(CHL[r.channel] || "—") + "</td>"
                 + '<td class="mono nw">' + esc(r.code) + (r.inquiry_ref ? "<small>" + esc(r.inquiry_ref) + "</small>" : "") + "</td>"

@@ -219,7 +219,7 @@
     <section class="view" id="view-set" hidden>
       <header class="vh"><div><h1>설정 상태</h1><p class="muted small">Cloudflare Pages 설정값과 데이터베이스 표가 준비되었는지 확인합니다. 값 자체는 보이지 않고 있는지 없는지만 봅니다.</p></div></header>
       <div class="card sc-settings"><h2 class="ch"><span>스페이스클라우드 예약 연결</span></h2>
-        <p class="small muted">각 룸의 캘린더 내보내기 주소를 저장하면 예약 시간표에 자동으로 표시합니다. 비워 둔 룸은 기존 연결을 유지합니다. 연락처 · 인원 · 금액은 제공되지 않으며 외부 일정은 매출에 합산하지 않습니다.</p>
+        <p class="small muted">각 룸의 캘린더 내보내기 주소를 저장하면 예약 시간표에 자동으로 표시합니다. 비워 둔 룸은 기존 연결을 유지합니다. 캘린더에는 연락처 · 인원 · 금액이 없지만, 같은 예약번호의 결제내역이 자동 수집되면 예약 상세에 금액을 표시합니다. 매출은 결제내역에서 한 번만 합산합니다.</p>
         <form id="sc-settings" class="form">
           <div class="f"><label for="sc-feed-r1">1번룸 <small class="muted" data-sc-room="r1"></small></label><input class="input" type="url" id="sc-feed-r1" name="r1" autocomplete="off" spellcheck="false" placeholder="스페이스클라우드 캘린더 내보내기 URL"></div>
           <div class="f"><label for="sc-feed-r2">2번룸 <small class="muted" data-sc-room="r2"></small></label><input class="input" type="url" id="sc-feed-r2" name="r2" autocomplete="off" spellcheck="false" placeholder="스페이스클라우드 캘린더 내보내기 URL"></div>
@@ -309,7 +309,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </div>
 <script src="/js/site-config.js?v=134790d5"></script>
-<script src="/js/admin.js?v=paid20261024-34ca7a44"></script>
+<script src="/js/admin.js?v=calendar-payment-20261025"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 </body>
