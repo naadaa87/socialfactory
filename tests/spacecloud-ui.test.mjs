@@ -32,22 +32,29 @@ const slot={external:true,code:'SC1-123',status:'confirmed',space:'r1',date:'202
  customer_name:'<img src=x onerror=alert(1)>',phone:'',people:null,purpose:'',channel:'spacecloud',amount:null,
  refund_amount:0,pay_method:'spacecloud',pay_status:'unknown',synced_at:Date.parse('2026-10-24T00:00:00Z'),source_url:'https://partner.spacecloud.kr/'};
 
-test('external detail allows explicit revenue entry while preserving escaped and unknown amounts',()=>{
+test('unknown external detail retains manual fallback and escapes untrusted titles',()=>{
  const {hooks,nodes}=harness();const row=hooks.resRow(slot,{payBtn:true});
- assert(row.includes('금액 미제공'));assert(!row.includes('0원'));assert(!row.includes('data-pay-now'));
+ assert(row.includes('금액 확인 필요'));assert(!row.includes('0원'));assert(!row.includes('data-pay-now'));
  assert(!row.includes('<img'));assert(row.includes('&lt;img'));
  hooks.renderExternalDetail(slot);const detail=nodes.get('#dt-body').innerHTML;
  assert(detail.includes('sc-sales-save'));assert(detail.includes('실제 결제금액'));assert(detail.includes('type="date"'));assert(!detail.includes('id="dt-edit"'));assert(!detail.includes('id="dt-cancel"'));assert(!detail.includes('id="dt-pay"'));assert(!detail.includes('<img'));
  assert.equal(hooks.net({...slot,amount:123456}),0);assert.equal(hooks.net({amount:100000,refund_amount:10000,pay_status:'paid'}),90000);
 });
+test('matched external detail shows gross, refund and net but no duplicate registration button',()=>{
+ const {hooks,nodes}=harness();const matched={...slot,payment:{reservation_id:'123',amount:40000,refund_amount:10000,paid_at:'2026-10-20',use_date:'2026-10-24',end_date:'2026-10-24'}};
+ assert(hooks.resRow(matched).includes('40,000원'));
+ hooks.renderExternalDetail(matched);const detail=nodes.get('#dt-body').innerHTML;
+ assert(detail.includes('40,000원'));assert(detail.includes('10,000원'));assert(detail.includes('30,000원'));
+ assert(detail.includes('2026-10-20'));assert(!detail.includes('sc-sales-save'));assert.equal(hooks.net(matched),0);
+});
 test('day and month views render the separate external color and unknown payment label',()=>{
  const {hooks,nodes}=harness();hooks.BD.date='2026-10-24';hooks.BD.items=[slot];hooks.drawDay();
- assert(nodes.get('#bd-day').innerHTML.includes('sc-external'));assert(nodes.get('#bd-day').innerHTML.includes('금액 미제공'));
+ assert(nodes.get('#bd-day').innerHTML.includes('sc-external'));assert(nodes.get('#bd-day').innerHTML.includes('금액 확인 필요'));
  hooks.drawMonth();assert(nodes.get('#bd-month').innerHTML.includes('sc-external'));
 });
 test('source errors show stale-data warnings in every visible status line without exposing feed tokens',()=>{
  const {hooks,statuses}=harness();hooks.renderSpacecloudStatus({configured:true,rooms:[{space:'r1',count:1,updated_at:1,error:'offline',stale:true}]});
- assert(statuses.every(n=>n.textContent.includes('1번룸') && n.textContent.includes('offline')));assert(statuses.every(n=>n.textContent.includes('외부 일정은 매출 제외')));
+ assert(statuses.every(n=>n.textContent.includes('1번룸') && n.textContent.includes('offline')));assert(statuses.every(n=>n.textContent.includes('자동 수집 금액은 매출 화면에서 한 번만 집계')));
 });
 
 test('channel detail uses total sales including website orders as denominator',()=>{

@@ -7,6 +7,7 @@ import { parseCalendar, calendarRows, validateFeedConfig, loadSpacecloud, readFe
 import { onRequestGet as getReservations, onRequestPost as createReservation } from '../functions/api/admin/reservations.js';
 import { onRequestGet as getDashboard } from '../functions/api/admin/dashboard.js';
 import { onRequestGet as getSettings, onRequestPost as configure } from '../functions/api/admin/spacecloud.js';
+import { calendarReservationId, attachCalendarPayments } from '../functions/_lib/spacecloud-sales.js';
 
 const url = id => `https://api.spacecloud.kr/partner/reservations/ical?product_id=${id}&ical_uid=exampletoken`;
 const event = (uid = 'one', start = '20261024T230000', end = '20261025T010000', extra = '') =>
@@ -104,6 +105,29 @@ test('live API path merges external schedules but writes no payment/reservation 
   const clash=await createReservation({request:new Request('https://test.invalid/api/admin/reservations',{method:'POST',headers,body:JSON.stringify({space:'r1',date:'2026-10-24',start_min:660,end_min:720,customer_name:'테스트',channel:'phone',amount:10000,pay_method:'bank_blank'})}),env:e});assert.equal(clash.status,409);
   const dash=await(await getDashboard({request:new Request('https://test.invalid/api/admin/dashboard',{headers}),env:e})).json();assert.equal(dash.month.total,0);
  }finally{globalThis.fetch=oldFetch;}
+});
+
+test('calendar booking links display imported payments once without changing revenue or allowing duplicate manual entry', async()=>{
+ const e=env();const original=globalThis.fetch;
+ globalThis.fetch=async()=>response(calendar(event('linked','20261024T100000','20261024T120000')));
+ try{
+  e.sqlite.exec("INSERT INTO spacecloud_sales(reservation_id,use_date,end_date,paid_at,amount,refund_amount,space) VALUES('123','2026-10-24','2026-10-24','2026-10-20',40000,10000,'r1')");
+  const req=new Request('https://test.invalid/api/admin/reservations?from=2026-10-24&to=2026-10-24',{headers});
+  const data=await(await getReservations({request:req,env:e})).json();
+  assert.equal(data.results.length,1);assert.equal(data.results[0].amount,null);
+  assert.deepEqual(data.results[0].payment,{reservation_id:'123',amount:40000,refund_amount:10000,paid_at:'2026-10-20',use_date:'2026-10-24',end_date:'2026-10-24'});
+  const sourceCode=data.results[0].code;
+  const denied=await createReservation({env:e,request:new Request('https://test.invalid/api/admin/reservations',{method:'POST',headers,body:JSON.stringify({sourceCode,amount:40000,paid_at:'2026-10-20'})})});
+  assert.equal(denied.status,400);assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM reservations').get().n,0);
+  const {onRequestGet:sales}=await import('../functions/api/admin/sales.js');
+  const total=await(await sales({env:e,request:new Request('https://test.invalid/api/admin/sales?year=2026',{headers})})).json();
+  assert.equal(total.total,30000);assert.equal(total.n,1);
+  assert.equal(calendarReservationId('https://partner.spacecloud.kr/reservation/123'),'123');
+  for(const bad of ['https://evil.test/reservation/123','https://partner.spacecloud.kr/reservation/123?other=1','https://partner.spacecloud.kr/reservation/nope'])assert.equal(calendarReservationId(bad),null);
+  const {payment, ...calendarRow}=data.results[0];
+  const mismatch=await attachCalendarPayments(e,[{...calendarRow,date:'2026-10-25'}]);
+  assert.equal(mismatch[0].payment_conflict,true);assert.equal(mismatch[0].payment,undefined);
+ }finally{globalThis.fetch=original;e.sqlite.close();}
 });
 
 test('uses the Workers-supported manual redirect policy and refuses redirected feeds', async()=>{

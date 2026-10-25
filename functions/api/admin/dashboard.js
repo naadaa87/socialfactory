@@ -1,4 +1,4 @@
-import { ensureSpacecloudSales, SALES_SOURCE } from "../../_lib/spacecloud-sales.js";
+import { ensureSpacecloudSales, SALES_SOURCE, attachCalendarPayments } from "../../_lib/spacecloud-sales.js";
 /**
  * GET /api/admin/dashboard — 관리자 첫 화면 '오늘 확인할 것'
  * 오늘 · 내일 예약, 앞으로 7일 예약, 결제 확인이 필요한 예약(결제 전), 답하지 않은 문의, 환불 요청 주문, 이번 달 매출(결제수단별)
@@ -20,7 +20,7 @@ export async function onRequestGet({ request, env }) {
 
   // 전날 밤에 시작해 오늘 새벽까지 이어지는 예약도 '오늘'에 함께 보여 줍니다.
   const external = await loadSpacecloud(env);
-  const near = mergeCalendarRows(await all(`SELECT ${RES} FROM reservations WHERE status = 'confirmed' AND date BETWEEN ?1 AND ?2 ORDER BY date, start_min`, addDaysIso(today, -1), in7), filterExternal(external.results, new URLSearchParams({ from: addDaysIso(today, -1), to: in7 })));
+  const near = await attachCalendarPayments(env, mergeCalendarRows(await all(`SELECT ${RES} FROM reservations WHERE status = 'confirmed' AND date BETWEEN ?1 AND ?2 ORDER BY date, start_min`, addDaysIso(today, -1), in7), filterExternal(external.results, new URLSearchParams({ from: addDaysIso(today, -1), to: in7 }))));
   const todayList = near.filter((r) => r.date === today || (r.date === addDaysIso(today, -1) && r.end_min > 1440));
   const tomorrowList = near.filter((r) => r.date === tomorrow);
   const upcoming = near.filter((r) => r.date > tomorrow);

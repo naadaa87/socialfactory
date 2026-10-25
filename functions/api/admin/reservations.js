@@ -1,4 +1,4 @@
-import { ensureSpacecloudSales } from "../../_lib/spacecloud-sales.js";
+import { ensureSpacecloudSales, attachCalendarPayments, calendarReservationId } from "../../_lib/spacecloud-sales.js";
 /**
  * /api/admin/reservations — 관리자 예약 등록 · 조회 · 변경 (로그인 쿠키 또는 Authorization: Bearer ADMIN_KEY)
  *
@@ -84,7 +84,8 @@ export async function onRequestGet({ request, env }) {
   try {
     const { results } = await env.DB.prepare(sql).bind(...args).all();
     const external = code ? null : await loadSpacecloud(env);
-    return json({ ok: true, today: kstToday(), results: mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : []), spacecloud: external && external.info });
+    const rows = mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : []);
+    return json({ ok: true, today: kstToday(), results: await attachCalendarPayments(env, rows), spacecloud: external && external.info });
   } catch (e) { console.error("res-get", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
 }
 
@@ -100,6 +101,12 @@ export async function onRequestPost({ request, env }) {
     const external = await loadSpacecloud(env);
     source = external.results.find(x => x.code === sourceCode);
     if (!source) return bad("sourceCode", "외부 일정을 찾지 못했습니다. 일정을 새로고침해 주세요.");
+    const reservationId = calendarReservationId(source.source_url);
+    if (reservationId) {
+      await ensureSpacecloudSales(env);
+      if (await env.DB.prepare('SELECT reservation_id FROM spacecloud_sales WHERE reservation_id = ?1').bind(reservationId).first())
+        return bad('amount', '이미 자동 수집된 결제내역입니다. 예약 상세에서 금액을 확인해 주세요.');
+    }
     if (source.source_start + 9 * 3600e3 < Date.parse(source.date + "T00:00:00Z") || source.source_end + 9 * 3600e3 > Date.parse(source.date + "T00:00:00Z") + 864e5)
       return bad("sourceCode", "여러 날짜에 걸친 예약은 날짜별 배분 금액을 확인해 직접 예약으로 등록해 주세요.");
     if (typeof b.amount !== "number" || !Number.isSafeInteger(b.amount) || b.amount < 0) return bad("amount", "실제 결제 금액을 정수로 입력해 주세요.");
