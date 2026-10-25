@@ -3,6 +3,7 @@
  * Refresh on authenticated reads (5 minute cache) or explicit admin refresh.
  */
 import { sha256Hex } from './auth.js';
+import { historicalCalendarRows, rememberFeedEvents } from './spacecloud-history.js';
 
 const TTL = 5 * 60 * 1000;
 const DAY = 86400000, KST = 9 * 3600000;
@@ -177,6 +178,7 @@ async function refreshRoom(env, feed, force, fetcher, now) {
         const events = parseCalendar(await readBody(response));
         // Validate segmentation and size before replacing a previously good snapshot.
         await calendarRows(events, feed.space, now);
+        await rememberFeedEvents(env, feed.space, hash, events, now);
         snapshot = { events_json: JSON.stringify(events), checked_at: now, updated_at: now, error: null };
       } catch (error) {
         // Avoid logging the URL: it contains a bearer-like private feed token.
@@ -213,7 +215,10 @@ export async function loadSpacecloud(env, { force = false, fetcher = fetch, now 
         space: feed.space, count: events.length, checked_at: cached.checked_at, updated_at: cached.updated_at,
         error: cached.error || null, stale: !!cached.error || !cached.updated_at || now - cached.updated_at >= TTL * 2 } };
     }));
-    return { results: snapshots.flatMap(x => x.rows), info: { configured: true, rooms: snapshots.map(x => x.room), refresh_minutes: TTL / 60000 } };
+    const current = snapshots.flatMap(x => x.rows);
+    const history = await historicalCalendarRows(env,
+      await Promise.all(feeds.map(async f => ({ space:f.space, hash:await sha256Hex(f.url) }))), current, now);
+    return { results: current.concat(history), info: { configured: true, rooms: snapshots.map(x => x.room), refresh_minutes: TTL / 60000 } };
   } catch { return { results: [], info: { configured: true, error: '외부 일정을 읽지 못했습니다. 다시 불러와 주세요.', rooms: [] } }; }
 }
 

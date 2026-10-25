@@ -126,7 +126,7 @@
   function externalAmount(r) { return r.payment ? won(r.payment.amount) : (r.payment_conflict ? '결제일정 확인 필요' : '금액 확인 필요'); }
   function pstTag(r) { if (r.external) return r.payment ? '<span class="st ' + (r.payment.refund_amount ? 'gray' : 'ok') + '">' + (r.payment.refund_amount ? (r.payment.refund_amount < r.payment.amount ? '부분 환불' : '환불') : '결제 완료') + '</span>' : '<span class="st sc-tag">' + (r.payment_conflict ? '일정 확인 필요' : '금액 확인 필요') + '</span>'; var p = PST[r.pay_status] || [r.pay_status, ""]; var t = r.pay_status === "refunded" && r.refund_amount < r.amount ? "부분 환불" : p[0]; return '<span class="st ' + p[1] + '">' + esc(t) + "</span>"; }
   function resStTag(r) {
-    if (r.external) return '<span class="st sc-tag">외부 일정</span>';
+    if (r.external) return '<span class="st sc-tag">' + (r.history_source === 'host_verified' ? '이용완료 확인' : r.historical ? '지난 외부 일정' : '외부 일정') + '</span>';
     if (r.status === "cancelled") return '<span class="st bad">취소</span>';
     var ph = phase(r); return ph === "done" ? '<span class="st gray">이용 완료</span>' : ph === "now" ? '<span class="st blue">이용 중</span>' : '<span class="st blue">예약 확정</span>';
   }
@@ -472,7 +472,7 @@
     var stamp = r.synced_at ? new Date(r.synced_at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) : "확인 중";
     var p = r.payment;
     $("#dt-title").textContent = "스페이스클라우드 일정";
-    $("#dt-body").innerHTML = '<div class="dt-top"><span class="st sc-tag">외부 일정</span></div>'
+    $("#dt-body").innerHTML = '<div class="dt-top"><span class="st sc-tag">' + (r.history_source === 'host_verified' ? '호스트센터 이용완료' : r.historical ? '보관된 외부 일정' : '외부 일정') + '</span></div>'
       + '<div class="dt-when">' + esc(kdateY(r.date)) + " " + esc(timeText(r)) + '<small>' + esc(spaceName(r)) + '</small></div>'
       + '<div class="sec"><h3>스페이스클라우드</h3>' + kv("일정 제목", esc(r.customer_name)) + kv("마지막 확인", esc(stamp))
       + (p ? '<div class="sec"><h3>수집된 결제내역</h3>' + kv('스페이스클라우드 예약번호', esc(p.reservation_id)) + kv('결제금액 (예약 전체)', won(p.amount)) + kv('환불금액', won(p.refund_amount)) + kv('순결제금액', won(Math.max(0, p.amount - p.refund_amount))) + kv('실제 결제일', esc(p.paid_at)) + '<p class="small muted">예약 전체의 결제금액입니다. 여러 날짜·공간에 표시돼도 매출에는 한 번만 합산됩니다. 환불 변경은 다음 자동 동기화 후 반영됩니다.</p></div>'
