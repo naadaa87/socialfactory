@@ -10,7 +10,7 @@
   <title>관리자 | 소셜팩토리</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=20261025-3">
+  <link rel="stylesheet" href="/css/admin.css?v=20261026-tf">
 </head>
 <body class="adm">
 <div id="admin-root">
@@ -45,6 +45,7 @@
       <button type="button" data-view="sales">매출</button>
       <span class="nav-cap">고객</span>
       <button type="button" data-view="inq">문의<em data-count="inq" hidden></em></button>
+      <button type="button" data-view="pass">고객 · 이용권<em data-count="pass" title="알림 발송 실패" hidden></em></button>
       <button type="button" data-view="ord">주문 · 결제<em data-count="ord" hidden></em></button>
       <button type="button" data-view="mem">회원</button>
       <span class="nav-cap">설정</span>
@@ -63,7 +64,7 @@
         <div class="acts"><button class="btn btn-primary btn-sm" type="button" data-new-res>+ 예약 등록</button><button class="btn btn-light btn-sm" type="button" id="dash-reload">새로고침</button></div>
       </header>
       <div class="sc-status-bar"><span class="small muted" data-sc-status role="status">스페이스클라우드 일정 확인 중…</span><button class="btn btn-light btn-xs" type="button" data-sc-refresh>외부 일정 새로 불러오기</button></div>
-      <div class="kpis" id="dash-kpis"></div>
+      <div class="kpis kpis-7" id="dash-kpis"></div>
       <div class="grid2">
         <div class="card"><h2 class="ch"><span>오늘 예약</span><button class="btn btn-light btn-xs" type="button" data-go="board">예약 현황 →</button></h2><div id="dash-today" class="rlist"></div></div>
         <div class="card"><h2 class="ch"><span>내일 예약</span></h2><div id="dash-tomorrow" class="rlist"></div></div>
@@ -178,6 +179,63 @@
         <div class="acts"><select class="select select-sm" id="inq-filter" aria-label="상태"><option value="">전체 상태</option><option value="new">새 문의</option><option value="in_progress">진행 중</option><option value="done">처리 완료</option></select><button class="btn btn-light btn-sm" type="button" id="inq-reload">새로고침</button><button class="btn btn-light btn-sm" type="button" id="inq-csv">CSV 내려받기</button></div></header>
       <p class="small muted" id="inq-count"></p>
       <div class="card flush"><div class="tbl-wrap"><table class="tbl" id="inq-table"><thead><tr><th>접수번호</th><th>접수 시각</th><th>상태</th><th>목적 · 공간</th><th>이름 · 연락처</th><th>일정 · 인원</th><th>내용</th><th></th></tr></thead><tbody id="inq-rows"></tbody></table></div></div>
+    </section>
+
+    <!-- 고객 · 이용권 (토스프론트) -->
+    <section class="view" id="view-pass" hidden>
+      <header class="vh">
+        <div><h1>고객 · 이용권</h1><p class="muted small">토스프론트에서 결제하면 휴대폰 번호로 고객이 만들어지고 이용권이 자동으로 발급됩니다. 이용 중에 또 사면 지금 이용권이 끝나는 시각부터 이어 붙습니다.</p></div>
+        <div class="acts"><button class="btn btn-primary btn-sm" type="button" id="ps-new">+ 이용권 직접 발급</button></div>
+      </header>
+      <div class="kpis kpis-4" id="ps-kpis"></div>
+      <div class="seg mt-s" id="ps-tabs" role="group" aria-label="보기"><button type="button" data-tab="passes" class="on">이용권</button><button type="button" data-tab="customers">고객</button><button type="button" data-tab="payments">결제</button><button type="button" data-tab="jobs">알림톡</button><button type="button" data-tab="devices">단말기</button></div>
+
+      <div class="ps-pane" data-pane="passes">
+        <div class="filters">
+          <select class="select" id="ps-state" aria-label="상태"><option value="active">지금 이용 중</option><option value="upcoming">시작 전 (이어 붙은 것)</option><option value="expiring">3일 안에 만료</option><option value="expired">만료</option><option value="cancelled">취소</option><option value="all">전체</option></select>
+          <input class="input" id="ps-q" type="search" placeholder="전화번호 · 이름 · 이용권 번호" aria-label="검색">
+          <button class="btn btn-light btn-sm" type="button" id="ps-reload">검색 · 새로고침</button>
+          <button class="btn btn-light btn-sm" type="button" id="ps-csv">CSV 내려받기</button>
+        </div>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>이용권</th><th>고객</th><th>이용 기간</th><th>결제</th><th>관리</th></tr></thead><tbody id="ps-rows"></tbody></table></div></div>
+      </div>
+
+      <div class="ps-pane" data-pane="customers" hidden>
+        <div class="filters">
+          <input class="input" id="pc-q" type="search" placeholder="전화번호 · 이름 · 메모" aria-label="검색">
+          <button class="btn btn-light btn-sm" type="button" id="pc-reload">검색 · 새로고침</button>
+          <button class="btn btn-light btn-sm" type="button" id="pc-csv">CSV 내려받기</button>
+        </div>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>고객</th><th>이용 만료</th><th>이용권</th><th>누적 결제</th><th>최근 결제</th><th></th></tr></thead><tbody id="pc-rows"></tbody></table></div></div>
+      </div>
+
+      <div class="ps-pane" data-pane="payments" hidden>
+        <div class="filters">
+          <select class="select" id="pp-status" aria-label="상태"><option value="">전체 상태</option><option value="paid">결제 완료</option><option value="pending">결제 대기</option><option value="canceled">고객 취소</option><option value="timeout">시간 초과</option><option value="failed">실패</option><option value="refunded">환불</option></select>
+          <input class="input" id="pp-q" type="search" placeholder="전화번호 · 승인번호 · 결제 식별자" aria-label="검색">
+          <button class="btn btn-light btn-sm" type="button" id="pp-reload">검색 · 새로고침</button>
+          <button class="btn btn-light btn-sm" type="button" id="pp-csv">CSV 내려받기</button>
+        </div>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>시각 · 식별자</th><th>상태</th><th>고객</th><th>상품 · 금액</th><th>카드 · 승인</th><th>이용권</th></tr></thead><tbody id="pp-rows"></tbody></table></div></div>
+        <p class="tiny muted mt">'고객 취소'는 결제창에서 고객이 닫은 건, '시간 초과'는 카드를 대지 않아 끝난 건입니다. 카드 결제 취소(환불)는 토스 단말기에서 한 뒤, 이용권 목록의 '취소'로 환불 금액을 기록해 주세요.</p>
+      </div>
+
+      <div class="ps-pane" data-pane="jobs" hidden>
+        <div class="note" id="pj-status"></div>
+        <div class="filters">
+          <select class="select" id="pj-filter" aria-label="상태"><option value="">전체</option><option value="queued">보낼 예정</option><option value="sent">보냄</option><option value="logged">기록만 (업체 연결 전)</option><option value="failed">실패</option><option value="cancelled">취소</option></select>
+          <button class="btn btn-light btn-sm" type="button" id="pj-reload">새로고침</button>
+          <button class="btn btn-light btn-sm" type="button" id="pj-run">보낼 때가 된 알림 지금 보내기</button>
+        </div>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>보낼 시각</th><th>종류 · 상태</th><th>받는 사람</th><th>문구</th><th></th></tr></thead><tbody id="pj-rows"></tbody></table></div></div>
+      </div>
+
+      <div class="ps-pane" data-pane="devices" hidden>
+        <div class="filters"><button class="btn btn-primary btn-sm" type="button" id="pd-new">+ 단말기 연결 코드 만들기</button><button class="btn btn-light btn-sm" type="button" id="pd-reload">새로고침</button></div>
+        <div class="temp" id="pd-code" hidden></div>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>단말기</th><th>상태</th><th>시리얼</th><th>연결 · 최근 접속</th><th>관리</th></tr></thead><tbody id="pd-rows"></tbody></table></div></div>
+        <p class="tiny muted mt">토스프론트에서 플러그인을 처음 켜면 '단말기 연결' 화면이 나옵니다. 여기서 만든 8자리 코드를 30분 안에 입력하면 연결됩니다. 단말기를 바꾸거나 잃어버렸으면 '연결 해제' 후 새 코드를 만들어 주세요.</p>
+      </div>
     </section>
 
     <!-- 주문 · 결제 -->
@@ -314,12 +372,49 @@
   </div>
 </div>
 
+<!-- ===== 이용권 직접 발급 ===== -->
+<div class="drawer" id="dr-pass" hidden>
+  <div class="drawer-bg" data-close></div>
+  <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="pf-title">
+    <div class="drawer-head"><h2 id="pf-title">이용권 직접 발급</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+    <form class="drawer-body form" id="pf" novalidate>
+      <p class="small muted">토스 POS · 계좌이체 · 현금 등 프론트 밖에서 판 이용권을 같은 장부에 넣습니다. 시작 시각을 비우면 지금(이용 중이면 이어서)부터입니다.</p>
+      <div class="frow">
+        <div class="f"><label for="pf-phone">휴대폰 번호 <span class="req">*</span></label><input class="input" type="tel" id="pf-phone" placeholder="010-0000-0000" required></div>
+        <div class="f"><label for="pf-name">이름 <small class="muted">(선택)</small></label><input class="input" id="pf-name" maxlength="40"></div>
+      </div>
+      <div class="frow">
+        <div class="f"><label for="pf-product">이용권 <span class="req">*</span></label><select class="select" id="pf-product"></select></div>
+        <div class="f"><label for="pf-amount">받은 금액 (원) <span class="req">*</span></label><input class="input" type="number" min="0" step="50" inputmode="numeric" id="pf-amount"></div>
+      </div>
+      <div class="frow">
+        <div class="f"><label for="pf-pay">결제수단 <span class="req">*</span></label><select class="select" id="pf-pay"></select></div>
+        <div class="f"><label for="pf-start">시작 시각 <small class="muted">(비우면 자동)</small></label><input class="input" type="datetime-local" id="pf-start"></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="pf-notify"> <span>구매 완료 알림톡 보내기</span></label>
+      <div class="f"><label for="pf-memo">메모</label><input class="input" id="pf-memo" maxlength="300" placeholder="예: POS 카드 결제, 승인번호 12345678"></div>
+      <div class="drawer-actions"><button class="btn btn-primary" type="submit" id="pf-submit">발급</button><button class="btn btn-light" type="button" data-close>취소</button></div>
+      <div class="form-note" id="pf-msg" hidden></div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== 고객 상세 ===== -->
+<div class="drawer" id="dr-cust" hidden>
+  <div class="drawer-bg" data-close></div>
+  <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="pc-title">
+    <div class="drawer-head"><h2 id="pc-title">고객</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+    <div class="drawer-body" id="pc-body"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </div>
 <script src="/js/site-config.js?v=134790d5"></script>
-<script src="/js/admin.js?v=calendar-history-20261025"></script>
+<script src="/js/admin.js?v=20261026-tf"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
+<script src="/js/admin-passes.js?v=20261026-tf"></script>
 </body>
 </html>

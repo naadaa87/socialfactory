@@ -1,4 +1,5 @@
 /* 소셜팩토리 관리자 화면 — 로그인 · 대시보드 · 예약 현황 · 일자별 예약 · 예약 등록 · 매출 · 문의 · 주문 · 회원 · 상품 · 설정
+   (고객 · 이용권 화면은 js/admin-passes.js)
    요금 · 공휴일 · 연락처는 js/site-config.js 를 그대로 씁니다. */
 (function () {
   "use strict";
@@ -20,7 +21,7 @@
     ["card_offline", "카드결제(오프라인)", "현장 단말기 · 수기 결제"],
     ["card_online", "카드결제(온라인)", "결제 링크 등 온라인 카드 결제"]
   ];
-  var PAYL = { orders: "이용권 온라인 결제" }; PAY.forEach(function (p) { PAYL[p[0]] = p[1]; });
+  var PAYL = { orders: "이용권 온라인 결제", kiosk: "토스프론트 이용권" }; PAY.forEach(function (p) { PAYL[p[0]] = p[1]; });
   var PST = { paid: ["결제 완료", "ok"], unpaid: ["결제 전", "warn"], refunded: ["환불", "gray"] };
   var SPACE_LIST = [["r1", "1번룸"], ["r2", "2번룸"], ["r3", "3번룸"], ["r4", "4번룸"], ["r5", "5번룸"], ["coworking", "코워킹 라운지"], ["office", "독립사무실"], ["other", "기타"]];
   var SPL = {}; SPACE_LIST.forEach(function (s) { SPL[s[0]] = s[1]; });
@@ -194,7 +195,7 @@
     clearTimeout(countT);
     countT = setTimeout(function () { api("/api/admin/dashboard").then(function (d) { applyCounts(d.counts || {}); }).catch(function () {}); }, 150);
   }
-  function applyCounts(c) { setCount("unpaid", c.unpaid, true); setCount("inq", c.newInquiries); setCount("ord", c.refundRequests, true); }
+  function applyCounts(c) { setCount("unpaid", c.unpaid, true); setCount("inq", c.newInquiries); setCount("ord", c.refundRequests, true); setCount("pass", c.notifyFailed, true); }
 
   /* ---------- 패널 공통 ---------- */
   function openDrawer(id) { $(id).hidden = false; document.body.classList.add("lock"); }
@@ -247,8 +248,9 @@
         + '<button type="button" class="kpi" data-go="board" data-board-date="' + esc(d.tomorrow) + '"><small>내일 예약</small><b>' + num(c.tomorrow) + "<em>건</em></b></button>"
         + '<button type="button" class="kpi' + (c.unpaid ? " warn" : "") + '" data-go-unpaid><small>결제 확인 필요</small><b>' + num(c.unpaid) + "<em>건</em></b><span>" + (c.unpaid ? won(c.unpaidAmount) + " 입금 대기" : "모두 결제 완료") + "</span></button>"
         + '<button type="button" class="kpi' + (c.newInquiries ? " hot" : "") + '" data-go="inq"><small>답하지 않은 문의</small><b>' + num(c.newInquiries) + "<em>건</em></b></button>"
-        + '<button type="button" class="kpi accent" data-go="sales"><small>이번 달 매출</small><b>' + num(mo.total) + "<em>원</em></b><span>예약 " + num(mo.reservationsN) + "건 · 이용권 " + num(mo.ordersN) + "건</span></button>"
-        + '<button type="button" class="kpi' + (c.refundRequests ? " warn" : "") + '" data-go="ord"><small>이용권 환불 요청</small><b>' + num(c.refundRequests) + "<em>건</em></b></button>";
+        + '<button type="button" class="kpi accent" data-go="sales"><small>이번 달 매출</small><b>' + num(mo.total) + "<em>원</em></b><span>예약 " + num(mo.reservationsN) + "건 · 이용권 " + num((mo.ordersN || 0) + (mo.kioskN || 0)) + "건</span></button>"
+        + '<button type="button" class="kpi' + (c.refundRequests ? " warn" : "") + '" data-go="ord"><small>이용권 환불 요청</small><b>' + num(c.refundRequests) + "<em>건</em></b></button>"
+        + '<button type="button" class="kpi' + (c.notifyFailed ? " warn" : "") + '" data-go="pass"><small>코워킹 지금 이용 중</small><b>' + num(c.passInUse) + "<em>명</em></b><span>오늘 만료 " + num(c.passEndsToday) + "명" + (c.notifyFailed ? " · 알림 실패 " + num(c.notifyFailed) + "건" : "") + "</span></button>";
       var today = d.today;
       $("#dash-today").innerHTML = (d.todayList || []).length ? d.todayList.map(function (r) { return resRow(r, { day: today, payBtn: true }); }).join("") : emptyMsg("오늘 잡힌 예약이 없습니다.");
       $("#dash-tomorrow").innerHTML = (d.tomorrowList || []).length ? d.tomorrowList.map(function (r) { return resRow(r, { payBtn: true }); }).join("") : emptyMsg("내일 잡힌 예약이 없습니다.");
@@ -259,12 +261,12 @@
         INQ_CACHE[q.id] = q;
         return '<div class="irow"><div><b>' + esc(q.name) + "</b> <small class=\"muted\">" + esc(INQP[q.purpose] || q.purpose) + " · " + esc(INQS[q.space] || q.space || "-") + '</small><span class="sub">' + esc([q.when_text, q.people, q.phone].filter(Boolean).join(" · ")) + '</span><span class="sub ' + (late ? "late" : "") + '">' + esc(q.receipt) + " · " + esc(ago(q.created_at)) + '</span></div><div><button class="btn btn-light btn-xs" type="button" data-inq-res="' + q.id + '">예약 등록</button></div></div>';
       }).join("") + (c.newInquiries > 6 ? '<div class="irow"><span class="small muted">외 ' + (c.newInquiries - 6) + '건 더 있습니다.</span><button class="btn btn-light btn-xs" type="button" data-go="inq">모두 보기</button></div>' : "") : emptyMsg("새로 들어온 문의가 없습니다.");
-      var tot = mo.total || 0, parts = PAY.map(function (p) { return [p[0], (mo.byMethod || {})[p[0]] || 0]; }).concat([["orders", mo.orders || 0]]);
-      $("#dash-month").innerHTML = '<div class="mrow"><div class="mtotal"><small>' + esc(+String(mo.ym).slice(5, 7)) + "월 매출 합계</small><b>" + won(tot) + "</b><span>예약 " + num(mo.reservationsN) + "건 " + won(mo.reservations) + " · 이용권 " + num(mo.ordersN) + "건 " + won(mo.orders) + "</span><span>이번 달 예약 " + num(mo.booked) + "건 · 이용 " + esc(dur(mo.bookedMinutes || 0)) + "</span></div>"
+      var tot = mo.total || 0, parts = PAY.map(function (p) { return [p[0], (mo.byMethod || {})[p[0]] || 0]; }).concat([["orders", mo.orders || 0], ["kiosk", mo.kiosk || 0]]);
+      $("#dash-month").innerHTML = '<div class="mrow"><div class="mtotal"><small>' + esc(+String(mo.ym).slice(5, 7)) + "월 매출 합계</small><b>" + won(tot) + "</b><span>예약 " + num(mo.reservationsN) + "건 " + won(mo.reservations) + " · 이용권 " + num((mo.ordersN || 0) + (mo.kioskN || 0)) + "건 " + won((mo.orders || 0) + (mo.kiosk || 0)) + "</span><span>이번 달 예약 " + num(mo.booked) + "건 · 이용 " + esc(dur(mo.bookedMinutes || 0)) + "</span></div>"
         + '<div><div class="stack">' + (tot ? parts.filter(function (x) { return x[1] > 0; }).map(function (x) { return '<i style="--c:var(--m-' + x[0] + ');width:' + (x[1] / tot * 100).toFixed(2) + '%" title="' + esc(PAYL[x[0]]) + " " + won(x[1]) + '"></i>'; }).join("") : "") + "</div>"
         + '<div class="mlegend small">' + parts.map(function (x) { return '<span style="--c:var(--m-' + x[0] + ')">' + esc(PAYL[x[0]]) + " <b>" + won(x[1]) + "</b></span>"; }).join("") + "</div></div></div>";
       if (mo.byChannel) $("#dash-month").innerHTML += '<details class="mt-s"><summary>채널별 매출 상세보기</summary><div class="bars">' + bars(Object.keys(mo.byChannel).map(function (key) {
-        var x = mo.byChannel[key]; return { k: key === "web" ? "홈페이지" : (CHL[key] || "경로 미기록"), v: x.amount, s: num(x.n) + "건" };
+        var x = mo.byChannel[key]; return { k: key === "web" ? "홈페이지" : key === "kiosk" ? "토스프론트" : (CHL[key] || "경로 미기록"), v: x.amount, s: num(x.n) + "건" };
       }).sort(function (a,b) { return b.v-a.v; }), tot) + '</div><p class="tiny muted">스페이스클라우드 등 외부 일정은 실제 결제금액을 등록한 건만 합산합니다.</p></details>';
       var OST = { pending: ["결제 대기", ""], paid: ["결제 완료", "ok"], used: ["이용 완료", "blue"], cancelled: ["취소", "gray"], refund_requested: ["환불 요청", "warn"], refunded: ["환불 완료", "gray"], failed: ["결제 실패", "bad"] };
       $("#dash-orders").innerHTML = (d.ordersRecent || []).length ? d.ordersRecent.map(function (o) {
@@ -989,6 +991,10 @@
         + li(st.webhook, "알림 웹훅 (<code>NOTIFY_WEBHOOK</code>)", st.webhook ? "새 문의 · 결제 완료가 웹훅으로 전달됩니다." : "슬랙 · 디스코드 웹훅 주소를 넣으면 새 문의와 결제 완료를 바로 받을 수 있습니다.", true);
     }).catch(fail($("#prod")));
   }
+
+  /* =================== 다른 화면 파일에서 쓰는 공통 도구 (js/admin-passes.js) =================== */
+  window.SF_ADMIN = { $: $, $$: $$, esc: esc, num: num, won: won, api: api, toast: toast, guard: guard, fail: fail, emptyMsg: emptyMsg, csvDownload: csvDownload, ago: ago, kdate: kdate,
+    LOAD: LOAD, go: go, refreshCounts: refreshCounts, openDrawer: openDrawer, closeDrawer: closeDrawer, fmtPhone: fmtPhone, note: note };
 
   /* =================== 시작 =================== */
   LOAD.dash = loadDash; LOAD.board = loadBoard; LOAD.list = loadList; LOAD.sales = loadSales;
