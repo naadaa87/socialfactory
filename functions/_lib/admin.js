@@ -67,7 +67,7 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS kiosk_devices (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pairing', token_hash TEXT UNIQUE, pair_hash TEXT, pair_expires_at TEXT, serial TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), paired_at TEXT, last_seen_at TEXT)`
 ];
 // 예전에 만든 표에 나중에 추가한 칸 — 이미 있으면 오류가 나므로 하나씩 실행하고 오류는 무시합니다.
-const MIGRATIONS = ["ALTER TABLE inquiries ADD COLUMN member_id INTEGER"];
+const MIGRATIONS = ["ALTER TABLE inquiries ADD COLUMN member_id INTEGER", "ALTER TABLE customers ADD COLUMN notify_off INTEGER NOT NULL DEFAULT 0"];
 let schemaReady = false;
 export async function ensureSchema(env) {
   if (schemaReady || !env.DB) return;

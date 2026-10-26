@@ -56,6 +56,9 @@ export async function runQueue(env, { limit = 30 } = {}) {
   const now = kstNow();
   // 'sending' 에서 10분 넘게 멈춘 건은 다시 대기열로 (발송 중 오류로 끊긴 경우)
   await env.DB.prepare("UPDATE notification_jobs SET status = 'queued' WHERE status = 'sending' AND updated_at < datetime('now', '+9 hours', '-10 minutes')").run().catch(() => {});
+  // 알림 수신을 거부한 고객의 대기 알림은 보내지 않습니다
+  await env.DB.prepare("UPDATE notification_jobs SET status = 'cancelled', last_error = '수신 거부', updated_at = datetime('now', '+9 hours') WHERE status = 'queued' AND customer_id IN (SELECT id FROM customers WHERE notify_off = 1)").run().catch(() => {});
+  await cleanup(env).catch((e) => console.error("cleanup", e && e.message));
   const { results } = await env.DB.prepare("SELECT * FROM notification_jobs WHERE status = 'queued' AND send_after <= ?1 ORDER BY send_after LIMIT ?2").bind(now, limit).all();
   const provider = String(env.ALIMTALK_PROVIDER || "").trim();
   const out = { ok: true, picked: results.length, sent: 0, logged: 0, failed: 0, retry: 0, provider: provider || "log" };
@@ -89,4 +92,29 @@ export async function runQueue(env, { limit = 30 } = {}) {
     }
   }
   return out;
+}
+
+/**
+ * 개인정보 처리방침의 보유 기간대로 지웁니다 (발송기가 돌 때마다 조금씩).
+ * - 알림 발송 기록: 6개월 지난 것 삭제
+ * - 현장 이용권 고객: 마지막 이용권이 끝난 지 1년 지났고 최근 1년 결제가 없으면 휴대폰 번호 · 이용권 내역 삭제.
+ *   결제 · 취소 기록(pass_payments)은 법정 기간 동안 남기되 고객과의 연결만 끊깁니다 (전화번호는 customers 에만 있음).
+ */
+export async function cleanup(env) {
+  await env.DB.prepare("DELETE FROM notification_jobs WHERE status <> 'queued' AND created_at < datetime('now', '+9 hours', '-6 months')").run();
+  const { results } = await env.DB.prepare(
+    `SELECT c.id FROM customers c
+     WHERE c.created_at < datetime('now', '+9 hours', '-1 year')
+       AND NOT EXISTS (SELECT 1 FROM passes p WHERE p.customer_id = c.id AND p.ends_at > datetime('now', '+9 hours', '-1 year'))
+       AND NOT EXISTS (SELECT 1 FROM pass_payments pp WHERE pp.customer_id = c.id AND pp.created_at > datetime('now', '+9 hours', '-1 year'))
+     LIMIT 50`
+  ).all();
+  for (const r of results) {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM passes WHERE customer_id = ?1").bind(r.id),
+      env.DB.prepare("DELETE FROM notification_jobs WHERE customer_id = ?1").bind(r.id),
+      env.DB.prepare("DELETE FROM customers WHERE id = ?1").bind(r.id)
+    ]);
+  }
+  return results.length;
 }

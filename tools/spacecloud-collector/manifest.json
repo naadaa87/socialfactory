@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "소셜팩토리 스페이스클라우드 결제 수집",
+  "version": "2.0.1",
+  "description": "스페이스클라우드 결제내역을 15분마다 소셜팩토리 매출에 동기화합니다.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "alarms",
+    "notifications"
+  ],
+  "action": {
+    "default_title": "현재 조회 조건의 정산 전 결제 수집"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://partner.spacecloud.kr/*",
+    "https://socialfactory.co.kr/*"
+  ],
+  "options_page": "options.html",
+  "minimum_chrome_version": "111"
+}

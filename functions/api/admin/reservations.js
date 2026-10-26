@@ -1,3 +1,4 @@
+import { ensureSpacecloudSales, attachCalendarPayments, calendarReservationId } from "../../_lib/spacecloud-sales.js";
 /**
  * /api/admin/reservations — 관리자 예약 등록 · 조회 · 변경 (로그인 쿠키 또는 Authorization: Bearer ADMIN_KEY)
  *
@@ -13,6 +14,8 @@
  */
 import { json, clean, formatPhone } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, SPACES, ROOM_KEYS, CHANNELS, kstToday, isIsoDate, addDaysIso, dayIndex, makeResCode, hm } from "../../_lib/admin.js";
+
+import { loadSpacecloud, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
 
 const COLS = "id, code, created_at, updated_at, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, list_amount, amount_note, pay_method, pay_status, paid_at, refund_amount, refunded_at, cancel_reason, cancelled_at, inquiry_ref, memo";
 const int = (v) => { const n = typeof v === "number" ? v : parseInt(String(v == null ? "" : v).replace(/[^0-9-]/g, ""), 10); return Number.isFinite(n) ? Math.round(n) : null; };
@@ -55,7 +58,8 @@ async function conflicts(env, v, exceptCode) {
      WHERE status = 'confirmed' AND space = ?1 AND date BETWEEN ?2 AND ?3 AND code <> ?4`
   ).bind(v.space, addDaysIso(v.date, -1), addDaysIso(v.date, 1), exceptCode || "").all();
   const base = dayIndex(v.date) * 1440, s = base + v.start_min, e = base + v.end_min;
-  return (results || []).filter((r) => { const b0 = dayIndex(r.date) * 1440; return b0 + r.start_min < e && s < b0 + r.end_min; })
+  const external = await loadSpacecloud(env);
+  return (results || []).concat(external.results).filter((r) => r.code !== exceptCode && r.space === v.space).filter((r) => { const b0 = dayIndex(r.date) * 1440; return b0 + r.start_min < e && s < b0 + r.end_min; })
     .map((r) => ({ code: r.code, date: r.date, time: hm(r.start_min) + "–" + hm(r.end_min), name: r.customer_name, people: r.people }));
 }
 
@@ -79,19 +83,49 @@ export async function onRequestGet({ request, env }) {
   const sql = `SELECT ${COLS} FROM reservations` + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY date ASC, start_min ASC, id ASC LIMIT 3000";
   try {
     const { results } = await env.DB.prepare(sql).bind(...args).all();
-    return json({ ok: true, today: kstToday(), results: results || [] });
+    const external = code ? null : await loadSpacecloud(env);
+    const rows = mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : []);
+    return json({ ok: true, today: kstToday(), results: await attachCalendarPayments(env, rows), spacecloud: external && external.info });
   } catch (e) { console.error("res-get", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
 }
 
 export async function onRequestPost({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
   let b; try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
+  let source = null;
+  const sourceCode = clean(b && b.sourceCode, 20);
+  if (sourceCode) {
+    if (!/^SC[1-5]-[a-f0-9]{16}$/.test(sourceCode)) return bad("sourceCode", "외부 일정 번호를 확인해 주세요.");
+    const existing = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(sourceCode).first();
+    if (existing) return json({ ok: true, code: existing.code, item: existing, already: true });
+    const external = await loadSpacecloud(env);
+    source = external.results.find(x => x.code === sourceCode);
+    if (!source) return bad("sourceCode", "외부 일정을 찾지 못했습니다. 일정을 새로고침해 주세요.");
+    const reservationId = calendarReservationId(source.source_url);
+    if (reservationId) {
+      await ensureSpacecloudSales(env);
+      if (await env.DB.prepare('SELECT reservation_id FROM spacecloud_sales WHERE reservation_id = ?1').bind(reservationId).first())
+        return bad('amount', '이미 자동 수집된 결제내역입니다. 예약 상세에서 금액을 확인해 주세요.');
+    }
+    if (source.source_start + 9 * 3600e3 < Date.parse(source.date + "T00:00:00Z") || source.source_end + 9 * 3600e3 > Date.parse(source.date + "T00:00:00Z") + 864e5)
+      return bad("sourceCode", "여러 날짜에 걸친 예약은 날짜별 배분 금액을 확인해 직접 예약으로 등록해 주세요.");
+    if (typeof b.amount !== "number" || !Number.isSafeInteger(b.amount) || b.amount < 0) return bad("amount", "실제 결제 금액을 정수로 입력해 주세요.");
+    if (!isIsoDate(b.paid_at)) return bad("paid_at", "실제 결제일을 입력해 주세요.");
+    b = { ...b, space: source.space, date: source.date, start_min: source.start_min, end_min: source.end_min,
+      customer_name: source.customer_name || "스페이스클라우드 예약", channel: "spacecloud", pay_method: "spacecloud", pay_status: "paid",
+      amount_note: "스페이스클라우드 실제 결제금액 수기 확인", memo: "외부 일정 연결: " + sourceCode, force: false };
+  }
   const r = readFields(b || {}); if (r.error) return bad(...r.error);
   const v = r.v;
-  const clash = await conflicts(env, v, "");
+  await ensureSpacecloudSales(env);
+  if (v.channel === 'spacecloud') {
+    const imported = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE use_date <= ?1 AND end_date >= ?1 LIMIT 1").bind(v.date).first();
+    if (imported) return bad('amount', '해당 이용일에 엑셀로 가져온 매출이 있습니다. 중복 합산을 막기 위해 먼저 매출 기록을 확인해 주세요.');
+  }
+  const clash = await conflicts(env, v, sourceCode);
   if (clash.length && !b.force) return json({ ok: false, error: "conflict", conflicts: clash }, 409);
   for (let i = 0; i < 5; i++) {
-    const code = makeResCode(v.date);
+    const code = sourceCode || makeResCode(v.date);
     try {
       await env.DB.prepare(
         `INSERT INTO reservations (code, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, list_amount, amount_note, pay_method, pay_status, paid_at, memo, inquiry_ref)
@@ -100,6 +134,10 @@ export async function onRequestPost({ request, env }) {
       const row = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(code).first();
       return json({ ok: true, code, item: row, overlapped: clash.length });
     } catch (e) {
+      if (sourceCode && /UNIQUE/i.test(String(e && e.message))) {
+        const row = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(sourceCode).first();
+        if (row) return json({ ok: true, code: row.code, item: row, already: true });
+      }
       if (!/UNIQUE/i.test(String(e && e.message))) { console.error("res-post", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
     }
   }
@@ -112,11 +150,21 @@ export async function onRequestPatch({ request, env }) {
   const code = clean(b && b.code, 20);
   const prev = code && await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(code).first();
   if (!prev) return json({ ok: false, error: "not-found" }, 404);
+  await ensureSpacecloudSales(env);
+  if (await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE linked_code = ?1").bind(code).first())
+    return bad('amount', '정산 엑셀과 연결된 예약입니다. 결제/환불 변경은 가져오기 기록과 함께 확인해야 합니다.');
   const action = clean(b.action || "update", 12);
   let stmt;
   if (action === "update") {
     const r = readFields(b, prev); if (r.error) return bad(...r.error);
     const v = r.v;
+    await ensureSpacecloudSales(env);
+    const importedLink = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE linked_code = ?1").bind(code).first();
+    if (importedLink) return bad('amount', '이 예약의 매출은 정산 엑셀 기록으로 관리됩니다. 원본 결제/취소 내역을 먼저 확인해 주세요.');
+    if (v.channel === 'spacecloud') {
+      const imported = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE use_date <= ?1 AND end_date >= ?1 LIMIT 1").bind(v.date).first();
+      if (imported) return bad('amount', '해당 이용일에 엑셀 매출이 있어 중복 여부 확인이 필요합니다.');
+    }
     if (prev.status === "confirmed") {
       const clash = await conflicts(env, v, code);
       if (clash.length && !b.force) return json({ ok: false, error: "conflict", conflicts: clash }, 409);

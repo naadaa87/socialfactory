@@ -176,7 +176,8 @@
       var ords = (d.orders || []).map(function (o) { return line(esc(o.product_name) + "<small>" + esc(o.oid) + " · " + esc(o.created_at) + "</small>", won(o.amount)); }).join("");
       $("#pc-body").innerHTML =
         '<div class="frow"><div class="f"><label for="pc-name">이름</label><input class="input" id="pc-name" maxlength="40" value="' + esc(c.name || "") + '"></div><div class="f"><label for="pc-memo">메모</label><input class="input" id="pc-memo" maxlength="500" value="' + esc(c.memo || "") + '"></div></div>'
-        + '<div class="row-actions"><button class="btn btn-light btn-sm" type="button" id="pc-save">이름 · 메모 저장</button><button class="btn btn-primary btn-sm" type="button" id="pc-issue">+ 이 고객에게 이용권 발급</button>' + tel(c.phone_fmt).replace("<a ", '<a class="btn btn-light btn-sm" ') + "</div>"
+        + '<label class="chk"><input type="checkbox" id="pc-notify-off"' + (c.notify_off ? " checked" : "") + '> <span>알림톡 받지 않음 <small class="muted">(고객이 거부를 요청한 경우)</small></span></label>'
+        + '<div class="row-actions"><button class="btn btn-light btn-sm" type="button" id="pc-save">저장</button><button class="btn btn-primary btn-sm" type="button" id="pc-issue">+ 이 고객에게 이용권 발급</button>' + tel(c.phone_fmt).replace("<a ", '<a class="btn btn-light btn-sm" ') + "</div>"
         + '<p class="tiny muted">등록 ' + esc(c.created_at) + (c.privacy_agreed_at ? " · 개인정보 안내 동의 " + esc(c.privacy_agreed_at) : "") + "</p>"
         + '<div class="pc-sec"><h3>이용권</h3>' + passes + "</div>"
         + '<div class="pc-sec"><h3>결제</h3>' + pays + "</div>"
@@ -189,7 +190,7 @@
     var c = e.target.closest("[data-cust]"); if (c && c.closest("#view-pass")) { openCustomer(+c.dataset.cust); return; }
     var a = e.target.closest("[data-pca]"); if (a) { passAction(+a.dataset.id, a.dataset.pca, function () { openCustomer(CUST.customer.id); }); return; }
     if (e.target.closest("#pc-save")) {
-      api("/api/admin/customers", { method: "PATCH", body: { id: CUST.customer.id, name: $("#pc-name").value, memo: $("#pc-memo").value } }).then(function () { toast("저장했습니다."); if (TAB === "customers") loadCustomers(); else loadPasses(); }).catch(onErr);
+      api("/api/admin/customers", { method: "PATCH", body: { id: CUST.customer.id, name: $("#pc-name").value, memo: $("#pc-memo").value, notifyOff: $("#pc-notify-off").checked } }).then(function () { toast("저장했습니다."); if (TAB === "customers") loadCustomers(); else loadPasses(); }).catch(onErr);
       return;
     }
     if (e.target.closest("#pc-issue")) { openIssue({ phone: CUST.customer.phone_fmt, name: CUST.customer.name }); }

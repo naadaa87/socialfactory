@@ -2,7 +2,7 @@
  * /api/admin/customers — 이용권 고객 (전화번호 기준, 관리자 로그인)
  * GET   ?q=검색어             : 고객 목록 (최근 500명) — 지금 이용권 만료 시각 · 누적 결제
  * GET   ?id=고객번호           : 고객 상세 — 이용권 · 결제 · 알림 · 같은 번호의 룸 예약 · 홈페이지 주문
- * PATCH { id, name, memo }    : 이름 · 메모
+ * PATCH { id, name, memo, notifyOff } : 이름 · 메모 · 알림톡 수신 거부
  */
 import { json, clean, phoneDigits } from "../../_lib/auth.js";
 import { adminGate, kstNow } from "../../_lib/admin.js";
@@ -51,6 +51,6 @@ export async function onRequestPatch({ request, env }) {
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
   const id = parseInt(b && b.id, 10);
   if (!id) return json({ ok: false, error: "invalid" }, 400);
-  await env.DB.prepare("UPDATE customers SET name = ?1, memo = ?2, updated_at = datetime('now', '+9 hours') WHERE id = ?3").bind(clean(b.name, 40) || null, clean(b.memo, 500) || null, id).run();
+  await env.DB.prepare("UPDATE customers SET name = ?1, memo = ?2, notify_off = ?3, updated_at = datetime('now', '+9 hours') WHERE id = ?4").bind(clean(b.name, 40) || null, clean(b.memo, 500) || null, b.notifyOff === true ? 1 : 0, id).run();
   return json({ ok: true });
 }

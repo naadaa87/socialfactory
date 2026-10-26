@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS customers (
   memo              TEXT,
   member_id         INTEGER,                                         -- (예비) 홈페이지 회원과 연결
   privacy_agreed_at TEXT,                                            -- 프론트에서 개인정보 수집 · 이용 안내에 동의한 마지막 시각
+  notify_off        INTEGER NOT NULL DEFAULT 0,                      -- 1 이면 알림톡을 보내지 않음 (고객 요청)
   created_at        TEXT    NOT NULL DEFAULT (datetime('now', '+9 hours')),
   updated_at        TEXT
 );
@@ -257,4 +258,43 @@ CREATE TABLE IF NOT EXISTS kiosk_devices (
   created_at      TEXT    NOT NULL DEFAULT (datetime('now', '+9 hours')),
   paired_at       TEXT,
   last_seen_at    TEXT
+);
+
+-- Spacecloud HOST settlement XLSX imports (financial records; calendar occupancy remains separate)
+CREATE TABLE IF NOT EXISTS spacecloud_sales (
+  reservation_id TEXT PRIMARY KEY,
+  use_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  paid_at TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  refund_amount INTEGER NOT NULL,
+  linked_code TEXT,
+  space TEXT NOT NULL,
+  sync_seen INTEGER NOT NULL DEFAULT 0,
+  imported_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
+);
+
+-- Historical occupancy from SpaceCloud iCal or verified HOST completed bookings.
+-- Financial amounts stay exclusively in spacecloud_sales.
+CREATE TABLE IF NOT EXISTS spacecloud_calendar_history (
+  space TEXT NOT NULL,
+  uid TEXT NOT NULL,
+  reservation_id TEXT NOT NULL,
+  config_hash TEXT NOT NULL,
+  start_ms INTEGER NOT NULL,
+  end_ms INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  source TEXT NOT NULL,
+  recorded_at INTEGER NOT NULL,
+  PRIMARY KEY (space, uid)
+);
+CREATE INDEX IF NOT EXISTS idx_spacecloud_history_reservation ON spacecloud_calendar_history (reservation_id, space);
+
+CREATE TABLE IF NOT EXISTS spacecloud_sync_device (
+ id INTEGER PRIMARY KEY CHECK(id=1),code_hash TEXT,code_until INTEGER,token_hash TEXT,token_until INTEGER,
+ enabled INTEGER NOT NULL DEFAULT 0,last_attempt INTEGER,last_success INTEGER,status TEXT,message TEXT,counts TEXT
+);
+CREATE TABLE IF NOT EXISTS spacecloud_sync_audit (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,reservation_id TEXT NOT NULL,observed_at INTEGER NOT NULL,
+ before_refund INTEGER,after_refund INTEGER,action TEXT NOT NULL,reason TEXT,created_at TEXT DEFAULT (datetime('now','+9 hours'))
 );

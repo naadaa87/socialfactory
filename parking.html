@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ko" class="no-js">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<script>document.documentElement.className=document.documentElement.className.replace('no-js','js');</script>
+<title>주차 안내 | 소셜팩토리 건대</title>
+<meta name="description" content="소셜팩토리 건대 건물 주차장과 화양동 공영주차장 안내. 건물 최초 1시간 무료, 차량번호 등록 필수. 위치·요금·지도와 안내 링크를 확인하세요.">
+<link rel="canonical" href="https://socialfactory.co.kr/parking">
+<meta property="og:type" content="website"><meta property="og:locale" content="ko_KR">
+<meta property="og:title" content="소셜팩토리 건대 주차 안내">
+<meta property="og:description" content="건물 최초 1시간 무료 · 차량번호 등록 필수. 건물 및 인근 공영주차장 위치와 요금을 확인하세요.">
+<meta property="og:url" content="https://socialfactory.co.kr/parking">
+<meta property="og:image" content="https://socialfactory.co.kr/images/og-image.jpg">
+<meta name="theme-color" content="#2855E8"><link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="/css/style.css?v=nav20261024"><link rel="stylesheet" href="/css/parking.css?v=20261024">
+</head>
+<body>
+<a class="skip-link" href="#main">본문으로 바로가기</a>
+<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="/" aria-label="소셜팩토리 홈">
+      <img class="mark" src="images/logo-mark.svg" alt="" width="36" height="36">
+      <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
+    </a>
+    <nav class="nav-links" id="nav-links" aria-label="주요 메뉴">
+      <a href="/space#rooms">공간 대관</a><a href="/space#coworking">코워킹</a><a href="/space#office">독립사무실</a><a href="/pricing">이용 요금</a><a href="/shop">이용권 구매</a><a href="/guide">이용 안내</a><a href="/parking">주차 안내</a><a href="/about">소개</a>
+      <a class="nav-member" href="/login" data-member-link hidden>로그인</a>
+      <span class="nav-cta"><a class="btn btn-outline btn-sm" href="/contact">대관 문의</a><a class="btn btn-sm nav-kk btn-kakao" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg>카카오톡 문의</a></span>
+    </nav>
+    <a class="nav-kakao" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener" aria-label="카카오톡으로 문의하기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span class="nk-l">카톡 문의</span><span class="nk-s">문의</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="메뉴 열기"><span></span></button>
+  </div>
+</header>
+<main id="main" class="parking-page">
+<section class="page-hero"><div class="container">
+<div class="crumbs"><a href="/">홈</a> / <a href="/guide">이용 안내</a> / 주차 안내</div>
+<span class="eyebrow">Parking guide</span>
+<h1 class="mt-16">소셜팩토리 건대<br>주차 안내</h1>
+<p class="lead">차량으로 오시나요?<br>주차 위치와 요금, 무료주차 등록을 미리 확인해 주세요.</p>
+<div class="actions"><button class="btn" type="button" id="parking-share">주차 안내 링크 공유</button><a class="btn btn-outline" href="#building">건물 주차장 확인 ↓</a></div>
+<p class="parking-status" id="parking-status" role="status" aria-live="polite"></p>
+<div id="parking-share-fallback" hidden><label for="parking-share-url">아래 링크를 길게 눌러 복사해 주세요.</label><input id="parking-share-url" type="text" readonly value="https://socialfactory.co.kr/parking"></div>
+</div></section>
+<section class="section"><div class="container parking-layout">
+<article class="parking-card" id="building" aria-labelledby="building-title">
+<span class="eyebrow">01 · Building</span><h2 id="building-title">건물 주차장</h2>
+<p class="parking-address">서울 광진구 능동로13길 39, 한아름건물 4층</p>
+<div class="parking-price"><strong>최초 1시간 무료</strong><span>이후 30분당 3,000원</span></div>
+<dl class="parking-details"><div><dt>주차 위치</dt><dd>건물 1층 및 4층</dd></div><div><dt>주차 규모</dt><dd>최대 140대</dd></div><div><dt>방문 위치</dt><dd>한아름건물 4층 · 소셜팩토리 건대</dd></div></dl>
+<aside class="parking-notice"><strong>차량번호 등록이 꼭 필요해요</strong><p>차량번호를 등록해야 무료주차가 적용됩니다. 방문 시 등록 방법과 등록 여부를 꼭 확인해 주세요.</p></aside>
+<div class="actions"><a class="btn" href="https://map.naver.com/p/search/%EC%84%9C%EC%9A%B8%20%EA%B4%91%EC%A7%84%EA%B5%AC%20%EB%8A%A5%EB%8F%99%EB%A1%9C13%EA%B8%B8%2039" target="_blank" rel="noopener noreferrer">건물 지도 보기 ↗</a><button class="btn btn-outline" type="button" data-copy-address="서울 광진구 능동로13길 39, 한아름건물 4층">건물 주소 복사</button></div>
+</article>
+<article class="parking-card" id="public" aria-labelledby="public-title"><span class="eyebrow">02 · Public parking</span><h2 id="public-title">화양동 공영주차장</h2>
+<p class="parking-address">서울 광진구 군자로 22, 화양공영주차장</p>
+<div class="parking-price parking-price-secondary"><strong>5분당 200원</strong><span>인근 공영주차장</span></div>
+<p class="parking-description">장시간 주차하거나 건물 주차장 이용이 어려운 경우, 인근 공영주차장 또는 공유주차장 이용을 권장드립니다.</p>
+<div class="actions"><a class="btn btn-outline" href="https://map.naver.com/p/search/%ED%99%94%EC%96%91%EA%B3%B5%EC%98%81%EC%A3%BC%EC%B0%A8%EC%9E%A5%20%EC%84%9C%EC%9A%B8%20%EA%B4%91%EC%A7%84%EA%B5%AC%20%EA%B5%B0%EC%9E%90%EB%A1%9C%2022" target="_blank" rel="noopener noreferrer">공영주차장 지도 보기 ↗</a><button class="btn btn-outline" type="button" data-copy-address="서울 광진구 군자로 22, 화양공영주차장">공영주차장 주소 복사</button></div>
+</article>
+</div></section>
+</main>
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="/" aria-label="소셜팩토리 홈">
+          <img class="mark" src="images/logo-mark.svg" alt="" width="40" height="40">
+          <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
+        </a>
+        <p class="tagline">모이면 만들어진다. 2015년 홍대에서 시작한 모임공간 소셜팩토리의 건대 공간입니다. 룸 5개, 코워킹, 독립사무실을 안내합니다.</p>
+      </div>
+      <div>
+        <h4>Menu</h4>
+        <ul>
+          <li><a href="/space#rooms">공간 대관 (룸 1~5)</a></li>
+          <li><a href="/space#coworking">코워킹</a></li>
+          <li><a href="/space#office">독립사무실</a></li>
+          <li><a href="/pricing">이용 요금</a></li>
+          <li><a href="/pricing#estimate">예상 금액 계산</a></li>
+          <li><a href="/shop">이용권 구매</a></li>
+          <li><a href="/guide">이용 안내 · FAQ</a></li>
+          <li><a href="/tour">3D로 공간 살펴보기</a></li>
+          <li><a href="/about">소셜팩토리 소개</a></li>
+          <li><a href="/program">프로그램 · 호스트 모집</a></li>
+          <li><a href="/history">지난 기록 2015–2021</a></li>
+          <li><a href="/family">패밀리 브랜드</a></li>
+          <li><a href="/contact">대관과 이용 문의</a></li>
+          <li><a href="/login" data-member-link hidden>로그인 · 회원가입</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Space</h4>
+        <ul>
+          <li><strong>소셜팩토리 건대</strong></li>
+          <li data-sf="address">서울 광진구 화양동 10-1 한아름건물 4층</li>
+          <li>룸 5개 · 코워킹 · 독립사무실 4실</li>
+          <li>룸 <span data-sf="hours.rooms">24시간 · 예약제</span></li>
+          <li>코워킹 <span data-sf="hours.coworking">24시간</span></li>
+          <li>룸 시간당 <span data-sf="pricing.from">10,000</span>원부터 · 부가세 포함</li>
+          <li>4층 전체 약 250평 · 코워킹 50석</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contact</h4>
+        <a class="btn btn-sm foot-kk btn-kakao" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg>카카오톡 문의</a>
+        <p class="foot-kk-note" data-if-kakao>대관 · 이용 문의는 카카오톡 문의채널에서 가장 빠르게 답해 드립니다.</p>
+        <ul>
+          <li><a data-channel="naver" hidden>네이버 예약</a></li>
+          <li><a data-channel="spacecloud" hidden>스페이스클라우드</a></li>
+          <li><a data-channel="instagram" hidden>인스타그램</a></li>
+          <li><a data-channel="phone" hidden><span data-channel-value>전화</span></a></li>
+          <li><a data-channel="email" href="mailto:spaceblank0100@gmail.com"><span data-channel-value>spaceblank0100@gmail.com</span></a></li>
+          <li class="channels-empty" hidden>상담 채널을 준비하고 있습니다. 그 전까지는 <a href="/contact">문의 폼</a>으로 남겨 주세요.</li>
+        </ul>
+      </div>
+    </div>
+    <nav class="footer-family" aria-label="패밀리 사이트">
+      <div class="ff-head"><h4>Family Sites</h4><a href="/family">패밀리 브랜드 한눈에 보기 →</a></div>
+      <ul class="ff-list"><li data-family="megaspot"><a data-family-link="megaspot" href="https://megaspot.kr" target="_blank" rel="noopener"><b data-ff="name">메가스팟</b><span data-ff="tag">대형 행사장 대관</span></a></li><li data-family="mingle"><a data-family-link="mingle" href="https://hellomingle.kr" target="_blank" rel="noopener"><b data-ff="name">밍글</b><span data-ff="tag">24시간 무인디저트카페 · 동네 커뮤니티</span></a></li><li data-family="ssople"><a data-family-link="ssople" href="https://ssople.com" target="_blank" rel="noopener"><b data-ff="name">쏘플파티룸</b><span data-ff="tag">무인 프라이빗 파티룸</span></a></li><li data-family="playtion"><a data-family-link="playtion" href="https://playtion.kr" target="_blank" rel="noopener"><b data-ff="name">플레이션</b><span data-ff="tag">게임파티룸 · 가챠샵</span></a></li><li data-family="gongbaek"><a data-family-link="gongbaek" href="https://vacancy.co.kr" target="_blank" rel="noopener"><b data-ff="name">공백 공간백서</b><span data-ff="tag">공실개발 솔루션</span></a></li><li data-family="coremood"><a data-family-link="coremood" href="https://coremood.kr" target="_blank" rel="noopener"><b data-ff="name">코어무드</b><span data-ff="tag">공간 브랜딩 · 인테리어 스튜디오</span></a></li><li data-family="orbis"><a data-family-link="orbis" href="https://orbis-estate.com" target="_blank" rel="noopener"><b data-ff="name">오르비스 부동산 중개법인</b><span data-ff="tag">빌딩 매매 · 상가 임대 · 상권분석</span></a></li><li data-family="choisijun"><a data-family-link="choisijun" href="https://choisijun.com" target="_blank" rel="noopener"><b data-ff="name">최시준</b><span data-ff="tag">소셜팩토리 대표 · 공실개발 전문가</span></a></li><li data-family="yeodeol"><a data-family-link="yeodeol" href="https://yeodeol.kr" target="_blank" rel="noopener"><b data-ff="name">여덟글자</b><span data-ff="tag">사주로 읽는 하루 기록</span></a></li></ul>
+    </nav>
+    <div class="footer-biz" aria-label="사업자 정보">
+      <span><b>상호</b> <span data-sf="company.name">주식회사 블랭크</span></span>
+      <span><b>대표자</b> <span data-sf="company.ceo">최시준</span></span>
+      <span><b>사업자등록번호</b> <span data-sf="company.regNo">161-86-03494</span></span>
+      <span data-hide-if-empty hidden><b>통신판매업 신고번호</b> <span data-sf="company.mailOrderNo">—</span></span>
+      <span><b>주소</b> <span data-sf="company.address">서울특별시 강남구 영동대로 602, 6층 제트71 (삼성동, 삼성동 미켈란 107)</span></span>
+      <span><b>연락처</b> <a data-tel-link href="tel:01023849580"><span data-sf="company.phone">010-2384-9580</span></a> · <a data-channel="email" href="mailto:spaceblank0100@gmail.com"><span data-channel-value>spaceblank0100@gmail.com</span></a></span>
+      <span><b>개인정보 보호책임자</b> <span data-sf="company.privacyOfficer">최시준</span></span>
+    </div>
+    <div class="footer-bottom">
+      <span>© <span data-year>2026</span> SOCIAL FACTORY. All rights reserved.</span>
+      <span class="legal-links"><a href="/terms">이용약관</a><a href="/privacy"><strong>개인정보 처리방침</strong></a><a href="/shop#policy">이용권 환불 규정</a></span>
+      <span class="en">EST. 2015 · TALK. PLAY. BOOK. STUDY.</span>
+    </div>
+  </div>
+</footer>
+<a class="kakao-fab" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener" aria-label="카카오톡으로 문의하기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span class="kf-t">카카오톡 문의</span></a>
+<script src="js/site-config.js?v=134790d5"></script>
+<script src="js/main.js?v=c2b1a1ef"></script>
+<script src="js/parking.js?v=20261024"></script>
+</body>
+</html>

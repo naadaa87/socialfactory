@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS customers (
   memo              TEXT,
   member_id         INTEGER,                                         -- (예비) 홈페이지 회원과 연결
   privacy_agreed_at TEXT,                                            -- 프론트에서 개인정보 수집 · 이용 안내에 동의한 마지막 시각
+  notify_off        INTEGER NOT NULL DEFAULT 0,                      -- 1 이면 알림톡을 보내지 않음 (고객 요청)
   created_at        TEXT    NOT NULL DEFAULT (datetime('now', '+9 hours')),
   updated_at        TEXT
 );
