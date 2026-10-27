@@ -27,6 +27,49 @@
   var imageUrl = function (name) { return name ? new URL("images/" + name, location.href).href : undefined; };
   var toast = function (message, icon) { try { sdk.template.openToast(icon ? { message: message, icon: icon } : { message: message }); } catch (e) { console.log(message); } };
 
+  /* ---------- 터치 피드백 ---------- */
+  var touchFeedbackReady = false, idleTapAction = null, idleTapTimer = null;
+  function finishIdleTap() {
+    var action = idleTapAction;
+    idleTapAction = null; clearTimeout(idleTapTimer); idleTapTimer = null;
+    if (action) action();
+  }
+  function afterIdleTap(action) {
+    return function () {
+      if (!touchFeedbackReady) return action();
+      if (idleTapAction) return;
+      // 대기 화면은 pointerup에서 콜백을 부릅니다. 뒤따르는 click이 끝난 뒤
+      // 화면을 바꿔 같은 터치가 새 전화번호 키패드의 0으로 이어지지 않게 합니다.
+      idleTapAction = action;
+      idleTapTimer = setTimeout(finishIdleTap, 400);
+    };
+  }
+  function installTouchFeedback() {
+    if (typeof document === "undefined" || !document.addEventListener) return;
+    var app = document.getElementById("app"), lastControl = null, lastSoundAt = 0;
+    if (!app) return;
+    touchFeedbackReady = true;
+    document.addEventListener("click", function (event) {
+      var target = event.target && (event.target.closest ? event.target : event.target.parentElement);
+      if (!target || !app.contains(target)) return;
+      if (idleTapAction) {
+        clearTimeout(idleTapTimer);
+        idleTapTimer = setTimeout(finishIdleTap, 0);
+      }
+      var control = target.closest("button, [role='button'], [role='checkbox'], input[type='checkbox']");
+      if (!control || control.disabled || control.getAttribute("aria-disabled") === "true") return;
+      // 기본 전화번호·숫자 키패드는 숫자 키에서 이미 SDK 터치음을 냅니다.
+      // 지우기·화면 이동·선택·확인 등 소리가 없는 버튼만 보완합니다.
+      if (control.tagName === "TD" && /^\d$/.test(control.getAttribute("aria-label") || "")) return;
+      var now = Date.now();
+      if (control === lastControl && now - lastSoundAt < 30) return;
+      lastControl = control; lastSoundAt = now;
+      if (sdk.app && typeof sdk.app.playTouchSound === "function") {
+        try { Promise.resolve(sdk.app.playTouchSound()).catch(function () {}); } catch (_) {}
+      }
+    }, true);
+  }
+
   /* ---------- 저장소 (sdk.storage: 문자열만 저장) ---------- */
   function sget(key) { return sdk.storage.get({ key: key }).then(function (r) { return r && r.value != null ? r.value : null; }).catch(function () { return null; }); }
   function sset(key, value) { return sdk.storage.set({ key: key, value: value }).catch(function (e) { console.error("storage.set", e); }); }
@@ -130,8 +173,8 @@
       type: "twoButton",
       title: { text1: CFG.storeName || "소셜팩토리", text2: "오늘도, 편하게" },
       description: { text: "24시간 코워킹 · 스터디 라운지", subText: "첫 이용권은 바로 시작해요" },
-      primaryButton: { text: "이용권 구매", onClick: startPurchase },
-      secondaryButton: { text: "내 이용권 확인", onClick: startLookup }
+      primaryButton: { text: "이용권 구매", onClick: afterIdleTap(startPurchase) },
+      secondaryButton: { text: "내 이용권 확인", onClick: afterIdleTap(startLookup) }
     });
     recoverPending();
   }
@@ -176,7 +219,7 @@
     sdk.template.renderInputPage({
       type: "phone",
       top: { title: "휴대폰 번호를 입력해 주세요", subtitle: productLabel(p) + " · " + won(p.price) },
-      input: { placeholder: "010-0000-0000" },
+      input: { placeholder: "010-" },
       disclaimer: "이 번호로 이용권을 등록해요",
       onSubmit: function (value) {
         var d = digits(value);
@@ -382,7 +425,7 @@
     sdk.template.renderInputPage({
       type: "phone",
       top: { title: "휴대폰 번호를 입력해 주세요", subtitle: "이용 종료 시각을 확인해요" },
-      input: { placeholder: "010-0000-0000" },
+      input: { placeholder: "010-" },
       onSubmit: function (value) {
         var d = digits(value);
         if (!/^01[016789]\d{7,8}$/.test(d)) { toast("휴대폰 번호를 다시 확인해 주세요.", "error"); return; }
@@ -397,5 +440,6 @@
 
   /* ---------- 시작 ---------- */
   if (!sdk || !UI) { document.getElementById("app").textContent = "화면을 불러오지 못했어요. 플러그인 파일을 확인해 주세요."; return; }
+  installTouchFeedback();
   sget(K_TOKEN).then(function (t) { token = t; if (token) renderIdle(); else renderPair(); });
 })();
