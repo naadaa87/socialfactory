@@ -309,8 +309,11 @@
       </div>
       <div class="filters mt"><button class="btn btn-light btn-sm" type="button" id="kp-reload">새로고침</button></div>
       <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>상품</th><th>프론트 분류</th><th>가격</th><th>이용 기간</th><th>노출</th><th>관리</th></tr></thead><tbody id="kp-rows"></tbody></table></div></div>
-      <form class="form card mt" id="kp-form" hidden>
-        <h2 id="kp-form-title">상품 등록</h2>
+      <div class="drawer" id="dr-kprod" hidden>
+        <div class="drawer-bg" data-close></div>
+        <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="kp-form-title">
+          <div class="drawer-head"><h2 id="kp-form-title">상품 등록</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+      <form class="drawer-body form" id="kp-form">
         <input type="hidden" id="kp-id">
         <div class="frow">
           <div class="f"><label for="kp-name">상품명</label><input class="input" id="kp-name" maxlength="60" required></div>
@@ -341,9 +344,11 @@
           </div>
         </div>
         <label class="chk"><input type="checkbox" id="kp-active" checked> 프론트에 노출 · 신규 구매 허용</label>
-        <div class="acts"><button class="btn btn-primary btn-sm" type="submit" id="kp-save">저장</button><button class="btn btn-light btn-sm" type="button" id="kp-cancel">닫기</button></div>
         <p class="form-note" id="kp-msg" role="status" hidden></p>
+        <div class="drawer-actions"><button class="btn btn-primary" type="submit" id="kp-save">저장</button><button class="btn btn-light" type="button" id="kp-cancel">취소</button></div>
       </form>
+        </div>
+      </div>
     </section>
 
     <!-- 설정 상태 -->
@@ -481,6 +486,6 @@
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
 <script src="/js/admin-passes.js?v=20261026-tf"></script>
-<script src="/js/admin-kiosk-products.js?v=20261027-2"></script>
+<script src="/js/admin-kiosk-products.js?v=20261027-drawer"></script>
 </body>
 </html>

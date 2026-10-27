@@ -2,6 +2,8 @@
 (function () {
   "use strict";
   var A = window.SF_ADMIN; if (!A) return;
+  // 예약 패널처럼 화면 영역 밖으로 옮겨, 다른 관리자 화면으로 이동해도 패널이 숨은 화면에 갇히지 않게 합니다.
+  document.body.appendChild(document.getElementById("dr-kprod"));
   var $ = A.$, esc = A.esc, won = A.won, api = A.api, toast = A.toast, guard = A.guard, emptyMsg = A.emptyMsg;
   var items = [], categoryItems = [], busy = false;
   function categoryName(id) { var c = categoryItems.find(function (x) { return x.id === id; }); return c ? c.name : id; }
@@ -70,7 +72,7 @@
     }).catch(function (e) { if (!guard(e)) { box.innerHTML = '<tr><td colspan="6">' + emptyMsg(e.message) + "</td></tr>"; $("#kc-rows").innerHTML = '<tr><td colspan="4">' + emptyMsg(e.message) + '</td></tr>'; } });
   }
   function open(p) {
-    var form = $("#kp-form"); form.hidden = false; form.reset(); $("#kp-msg").hidden = true;
+    var form = $("#kp-form"); form.reset(); $("#kp-msg").hidden = true;
     $("#kp-id").value = p ? p.id : "";
     $("#kp-form-title").textContent = p ? "상품 수정 · " + p.name : "새 토스프론트 상품 등록";
     $("#kp-name").value = p ? p.name : "";
@@ -89,7 +91,8 @@
     $("#kp-file").value = "";
     $("#kp-preview").src = picture(p);
     $("#kp-reset-image").hidden = !(p && p.imageVersion);
-    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    A.openDrawer("#dr-kprod");
+    $("#kp-name").focus();
   }
   $("#kp-base-price").addEventListener("input", updatePrice);
   $("#kp-discount").addEventListener("input", updatePrice);
@@ -141,7 +144,7 @@
     }).finally(function () { busy = false; $("#kc-save").disabled = false; });
   });
   $("#kp-reload").addEventListener("click", load);
-  $("#kp-cancel").addEventListener("click", function () { $("#kp-form").hidden = true; });
+  $("#kp-cancel").addEventListener("click", function () { A.closeDrawer($("#dr-kprod")); });
   $("#kp-rows").addEventListener("click", function (e) {
     var b = e.target.closest("[data-kp-edit]");
     if (b) open(items.filter(function (p) { return p.id === b.dataset.kpEdit; })[0] || null);
@@ -163,7 +166,7 @@
         return api("/api/admin/kiosk-product-images", { method: "POST", body: { productId: j.id, base64: base64 } });
       }) : null;
     }).then(function () {
-      $("#kp-form").hidden = true; toast("토스프론트 상품을 저장했습니다."); load();
+      A.closeDrawer($("#dr-kprod")); toast("토스프론트 상품을 저장했습니다."); load();
     }).catch(function (err) {
       if (!guard(err)) {
         $("#kp-msg").textContent = (productSaved ? "상품은 저장됐습니다. 이미지 업로드 실패: " : "") + (err.message || "상품을 저장하지 못했습니다.");
