@@ -83,7 +83,7 @@ export async function onRequestGet({ request, env }) {
   const sql = `SELECT ${COLS} FROM reservations` + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY date ASC, start_min ASC, id ASC LIMIT 3000";
   try {
     const { results } = await env.DB.prepare(sql).bind(...args).all();
-    const external = code ? null : await loadSpacecloud(env);
+    const external = code ? null : await loadSpacecloud(env, { from: isIsoDate(from) ? from : undefined, to: isIsoDate(to) ? to : undefined });
     const rows = mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : []);
     return json({ ok: true, today: kstToday(), results: await attachCalendarPayments(env, rows), spacecloud: external && external.info });
   } catch (e) { console.error("res-get", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
