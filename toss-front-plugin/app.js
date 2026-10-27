@@ -27,6 +27,19 @@
   var imageUrl = function (name) { return name ? new URL("images/" + name, location.href).href : undefined; };
   var toast = function (message, icon) { try { sdk.template.openToast(icon ? { message: message, icon: icon } : { message: message }); } catch (e) { console.log(message); } };
 
+  var screenVersion = 0, selectedGroup = null;
+  function render(method, params) {
+    var version = ++screenVersion;
+    sdk.template[method](params);
+    return version;
+  }
+  function waiting(title, subtitle, onBack) {
+    return render("renderSelectPage", { title: title, subtitle: subtitle, options: [], onBack: onBack });
+  }
+  function returnToCategories() {
+    if (PRODUCTS.length) showCategories(PRODUCTS); else startPurchase();
+  }
+
   /* ---------- 터치 피드백 ---------- */
   var touchFeedbackReady = false, idleTapAction = null, idleTapTimer = null;
   function finishIdleTap() {
@@ -41,7 +54,7 @@
       // 대기 화면은 pointerup에서 콜백을 부릅니다. 뒤따르는 click이 끝난 뒤
       // 화면을 바꿔 같은 터치가 새 전화번호 키패드의 0으로 이어지지 않게 합니다.
       idleTapAction = action;
-      idleTapTimer = setTimeout(finishIdleTap, fallbackMs || 400);
+      idleTapTimer = setTimeout(finishIdleTap, fallbackMs || 40);
     };
   }
   function installTouchFeedback() {
@@ -49,9 +62,21 @@
     var app = document.getElementById("app"), lastControl = null, lastSoundAt = 0;
     if (!app) return;
     touchFeedbackReady = true;
+    var gestureControl = null;
+    document.addEventListener("pointerdown", function (event) {
+      var target = event.target && event.target.closest ? event.target : null;
+      gestureControl = target && app.contains(target) ? target.closest("button, [role='button']") : null;
+    }, true);
+    document.addEventListener("pointercancel", function () { gestureControl = null; }, true);
     document.addEventListener("click", function (event) {
       var target = event.target && (event.target.closest ? event.target : event.target.parentElement);
-      if (!target || !app.contains(target)) return;
+      if (!target || !app.contains(target)) { gestureControl = null; return; }
+      var clickedControl = target.closest("button, [role='button']");
+      if (event.detail > 0 && gestureControl && gestureControl.isConnected === false && clickedControl !== gestureControl) {
+        // 이전 화면에서 시작한 터치가 새 키패드에 숫자를 넣는 것을 막습니다.
+        gestureControl = null; event.preventDefault(); event.stopPropagation(); return;
+      }
+      gestureControl = null;
       if (idleTapAction) {
         clearTimeout(idleTapTimer);
         idleTapTimer = setTimeout(finishIdleTap, 0);
@@ -71,9 +96,33 @@
   }
 
   /* ---------- 저장소 (sdk.storage: 문자열만 저장) ---------- */
-  function sget(key) { return sdk.storage.get({ key: key }).then(function (r) { return r && r.value != null ? r.value : null; }).catch(function () { return null; }); }
-  function sset(key, value) { return sdk.storage.set({ key: key, value: value }).catch(function (e) { console.error("storage.set", e); }); }
-  function sdel(key) { return sdk.storage.remove({ key: key }).catch(function () {}); }
+  var storedValues = {}, storageReads = {}, storageVersions = {};
+  function cacheStorage(key) { return key === K_PENDING || key === K_CANCEL || key === K_LOGS; }
+  function sget(key) {
+    if (cacheStorage(key) && Object.prototype.hasOwnProperty.call(storedValues, key)) return Promise.resolve(storedValues[key]);
+    if (cacheStorage(key) && storageReads[key]) return storageReads[key];
+    var version = storageVersions[key] || 0;
+    var read = sdk.storage.get({ key: key }).then(function (r) {
+      var value = r && r.value != null ? r.value : null;
+      if (cacheStorage(key) && version === (storageVersions[key] || 0)) storedValues[key] = value;
+      return value;
+    }).catch(function () { return null; }).finally(function () { if (storageReads[key] === read) delete storageReads[key]; });
+    if (cacheStorage(key)) storageReads[key] = read;
+    return read;
+  }
+  function changeStored(key, value, remove) {
+    var version = storageVersions[key] = (storageVersions[key] || 0) + 1;
+    delete storedValues[key]; delete storageReads[key];
+    var write = remove ? sdk.storage.remove({ key: key }) : sdk.storage.set({ key: key, value: value });
+    return write.then(function () {
+      if (cacheStorage(key) && version === storageVersions[key]) storedValues[key] = value;
+    }).catch(function (e) {
+      if (version === storageVersions[key]) delete storedValues[key];
+      if (!remove) console.error("storage.set", e);
+    });
+  }
+  function sset(key, value) { return changeStored(key, value, false); }
+  function sdel(key) { return changeStored(key, null, true); }
 
   /* ---------- 서버 ---------- */
   var token = null;
@@ -149,7 +198,7 @@
 
   /* ---------- 단말기 연결 (처음 한 번) ---------- */
   function renderPair() {
-    sdk.template.renderOnboardingPage({
+    render("renderOnboardingPage", {
       title: "단말기를 연결해 주세요",
       inputs: { code: { label: "연결 코드 (8자리)", type: "text", placeholder: "관리자에서 만든 연결 코드" } },
       onSubmit: function (values) {
@@ -168,9 +217,8 @@
 
   /* ---------- 대기 화면 ---------- */
   function renderIdle() {
-    purchaseScreenVersion++;
     flushLogs();
-    sdk.template.renderIdlePage({
+    render("renderIdlePage", {
       type: "twoButton",
       title: { text1: CFG.storeName || "소셜팩토리", text2: "오늘도, 편하게" },
       description: { text: "24시간 코워킹 · 스터디 라운지", subText: "첫 이용권은 바로 시작해요" },
@@ -188,16 +236,14 @@
   }
   function supportedLayout(layout) { return layout === "grid" && typeof sdk.template.renderSelectGridPage === "function" ? "grid" : "list"; }
   // 상품 종류부터 고르면 한 화면에서 비교하는 항목이 2~3개로 줄어듭니다.
-  var purchaseScreenVersion = 0;
   function startPurchase() {
-    var version = ++purchaseScreenVersion;
     // 최신 설정을 읽는 동안에도 버튼이 눌렸음을 즉시 보여 줍니다.
-    sdk.template.renderSelectPage({
+    var version = render("renderSelectPage", {
       title: "이용권을 불러오고 있어요", subtitle: "잠시만 기다려 주세요",
       options: [], onBack: renderIdle
     });
     loadProducts().then(function (j) {
-      if (version !== purchaseScreenVersion) return;
+      if (version !== screenVersion) return;
       PRIVACY_URL = j.privacyUrl || "";
       CATEGORIES = j.categories || null;
       LAYOUT = UI.normalize(j.layout);
@@ -205,28 +251,30 @@
       if (!PRODUCTS.length) { toast("현재 판매 중인 이용권이 없어요.", "error"); renderIdle(); return; }
       showCategories(PRODUCTS);
     }).catch(function (e) {
-      if (version !== purchaseScreenVersion) return;
+      if (version !== screenVersion) return;
       if (!onAuthError(e)) { toast("이용권을 불러오지 못했어요. 다시 시도해 주세요.", "error"); renderIdle(); }
     });
   }
   function showCategories(list) {
+    selectedGroup = null;
     var page = UI.categoryPage(supportedLayout(LAYOUT.categoryLayout), function (group) { showProducts(list, group); }, imageUrl, CATEGORIES, list);
     page.params.navbarButton = { label: "직원 관리", onClick: startStaff };
     page.params.onBack = renderIdle;
-    sdk.template[page.method](page.params);
+    render(page.method, page.params);
   }
   function productLabel(p) {
     return UI.productLabel(p);
   }
   function showProducts(list, group) {
+    selectedGroup = group;
     var page = UI.productPage(list, group, supportedLayout(LAYOUT.productLayout), askPhone, imageUrl, CATEGORIES);
     page.params.onBack = function () { showCategories(list); };
-    sdk.template[page.method](page.params);
+    render(page.method, page.params);
   }
 
   /* ---------- 2. 휴대폰 번호 ---------- */
   function askPhone(p) {
-    sdk.template.renderInputPage({
+    render("renderInputPage", {
       type: "phone",
       top: { title: "휴대폰 번호를 입력해 주세요", subtitle: productLabel(p) + " · " + won(p.price) },
       input: { placeholder: "010-" },
@@ -236,28 +284,34 @@
         if (!/^01[016789]\d{7,8}$/.test(d)) { toast("휴대폰 번호를 다시 확인해 주세요.", "error"); return; }
         askAgreement(p, d);
       },
-      onBack: function () { showCategories(PRODUCTS); }
+      onBack: function () { if (selectedGroup) showProducts(PRODUCTS, selectedGroup); else returnToCategories(); }
     });
   }
 
   /* ---------- 3. 개인정보 수집 · 이용 안내 동의 ---------- */
   function askAgreement(p, phone) {
-    sdk.template.renderAgreementPage({
+    var submitting = false;
+    render("renderAgreementPage", {
       title: "개인정보 이용에 동의해 주세요",
       subtitle: "등록 번호 " + phone.replace(/^(\d{3})(\d{4})(\d{4})$/, "$1-$2-$3"),
       agreements: { required: [{ id: "privacy", title: "개인정보 수집 · 이용 동의 (필수)", href: PRIVACY_URL || (API + "/privacy") }], optional: [] },
       onSubmit: function (ids) {
         if (!ids || ids.indexOf("privacy") < 0) { toast("필수 항목에 동의해 주세요.", "error"); return; }
+        if (submitting) return;
+        submitting = true;
         return prepare(p, phone);
-      }
+      },
+      onBack: function () { askPhone(p); }
     });
   }
 
   /* ---------- 4. 결제 준비 · 금액 확인 ---------- */
   function prepare(p, phone) {
+    var version = waiting("결제 정보를 확인하고 있어요", "잠시만 기다려 주세요", function () { askAgreement(p, phone); });
     return api("/api/kiosk/intents", { productId: p.id, phone: phone, agreePrivacy: true }).then(function (it) {
+      if (version !== screenVersion) return;
       var discount = it.listPrice ? it.listPrice - it.amount : 0;
-      sdk.template.renderOrderPage({
+      render("renderOrderPage", {
         localeCode: "ko",
         order: {
           items: [{ label: productLabel(p), value: it.listPrice || it.amount, quantity: 1, imageUrl: imageUrl(p.image),
@@ -271,9 +325,12 @@
         },
         onClick: function () { pay(it); },
         navbarButton: { label: "번호 수정", onClick: function () { askPhone(p); } },
-        onBack: function () { askPhone(p); }
+        onBack: function () { askAgreement(p, phone); }
       });
-    }).catch(function (e) { if (!onAuthError(e)) { toast(e.message && e.status === 400 ? e.message : "결제를 준비하지 못했어요. 다시 시도해 주세요.", "error"); renderIdle(); } });
+    }).catch(function (e) {
+      if (version !== screenVersion) return;
+      if (!onAuthError(e)) { toast(e.message && e.status === 400 ? e.message : "결제를 준비하지 못했어요. 다시 시도해 주세요.", "error"); askAgreement(p, phone); }
+    });
   }
 
   /* ---------- 5. 결제 · 결과 보고 ---------- */
@@ -281,7 +338,7 @@
   function pay(it) {
     if (paying) return; paying = true;
     // 카드 결제창이 닫혀도 이전 금액 확인 화면이 다시 드러나지 않게 합니다.
-    sdk.template.renderSelectPage({
+    render("renderSelectPage", {
       title: "결제를 진행하고 있어요", subtitle: "결제창의 안내를 따라 주세요", options: []
     });
     var pending = JSON.stringify({ paymentKey: it.paymentKey, productName: it.productName, at: Date.now() });
@@ -309,7 +366,7 @@
       // 시간 초과는 실제로 승인됐을 수도 있어 저장소에 남겨 두고 나중에 getPayment 로 확인합니다.
       if (result.type !== "TIMEOUT") sdel(K_PENDING);
       report(it.paymentKey, result).catch(function (e) { logFailure("PAYMENT_RESULT_REPORT_FAILED", it.paymentKey, e); console.error("report", e); });
-      sdk.template.renderResultPage({
+      render("renderResultPage", {
         type: "image", status: "error",
         title: result.type === "CANCELED" ? "결제를 취소했어요" : result.type === "TIMEOUT" ? "결제 시간이 지났어요" : "결제하지 못했어요",
         description: "처음 화면으로 돌아가요",
@@ -326,12 +383,12 @@
   function showDone(name, endsText, registering) {
     if (registering) {
       // 저장 중에는 닫힘 타이머·확정 종료 시각 없이 승인 완료 사실만 안내합니다.
-      sdk.template.renderSelectPage({
+      render("renderSelectPage", {
         title: "결제가 완료됐어요", subtitle: "이용권을 등록하고 있어요", options: []
       });
       return;
     }
-    sdk.template.renderResultPage({
+    render("renderResultPage", {
       type: "image", status: "success",
       title: endsText ? passEndTitle(endsText) : "결제는 완료됐어요",
       description: endsText ? productLabel({ name: name }) + " · 구매 완료" : "이용권 등록을 확인하고 있어요",
@@ -368,43 +425,56 @@
      이용권 고르기 화면 오른쪽 위 '관리' → 관리 비밀번호(KIOSK_STAFF_PIN) → 최근 결제 → 취소 확인 → requestPaymentCancel */
   var staffToken = null;
   function startStaff() {
-    sdk.template.renderInputPage({
+    sget(K_CANCEL);
+    var submitting = false;
+    render("renderInputPage", {
       type: "number",
       top: { title: "관리 비밀번호를 입력해 주세요", subtitle: "매장 직원 전용" },
       input: { placeholder: "비밀번호", type: "password", maxLength: 8 },
       button: { label: "확인" },
       onSubmit: function (value) {
+        if (submitting) return;
+        submitting = true;
+        var version = waiting("직원 정보를 확인하고 있어요", "잠시만 기다려 주세요", startStaff);
         return api("/api/kiosk/staff", { pin: digits(value) }).then(function (j) {
+          if (version !== screenVersion) return;
           staffToken = j.staffToken;
-          return recoverCancel().then(function () { showRefundList(j.payments || []); });
-        }).catch(function (e) { if (!onAuthError(e)) toast(e.code === "too-many" ? "잠시 뒤 다시 시도해 주세요." : (e.message || "확인하지 못했어요."), "error"); });
+          return recoverCancel().then(function (recoveredKey) {
+            if (version === screenVersion) showRefundList((j.payments || []).filter(function (x) { return x.paymentKey !== recoveredKey; }));
+          });
+        }).catch(function (e) {
+          if (version !== screenVersion) return;
+          if (!onAuthError(e)) { toast(e.code === "too-many" ? "잠시 뒤 다시 시도해 주세요." : (e.message || "확인하지 못했어요."), "error"); startStaff(); }
+        });
       },
-      onBack: startPurchase
+      onBack: returnToCategories
     });
   }
   function showRefundList(list) {
-    sdk.template.renderSelectPage({
+    render("renderSelectPage", {
       title: list.length ? "취소할 결제를 골라 주세요" : "취소할 결제가 없어요",
       subtitle: "이 단말기의 최근 30일 결제",
       options: list.map(function (x) {
-        return { title: productLabel({ name: x.productName }), subtitle: won(x.amount) + " · " + x.phoneMasked, description: x.paidText, onClick: function () { confirmRefund(x); } };
+        return { title: productLabel({ name: x.productName }), subtitle: won(x.amount) + " · " + x.phoneMasked, description: x.paidText, onClick: function () { confirmRefund(x, function () { showRefundList(list); }); } };
       }),
-      onBack: renderIdle
+      onBack: returnToCategories
     });
   }
-  function confirmRefund(x) {
-    sdk.template.renderSelectPage({
+  function confirmRefund(x, onBack) {
+    onBack = onBack || returnToCategories;
+    render("renderSelectPage", {
       title: "이 결제를 전액 취소할까요?",
       subtitle: productLabel({ name: x.productName }) + " · " + won(x.amount),
       options: [
         { title: "전액 취소하기", subtitle: x.phoneMasked, description: "이용권도 함께 취소돼요", onClick: function () { doRefund(x); } },
-        { title: "결제 유지하기", onClick: function () { renderIdle(); } }
+        { title: "결제 유지하기", onClick: onBack }
       ],
-      onBack: renderIdle
+      onBack: onBack
     });
   }
   function doRefund(x) {
     if (paying) return; paying = true;
+    waiting("취소를 준비하고 있어요", "잠시만 기다려 주세요");
     api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: x.paymentKey, stage: "start" }).then(function (j) {
       return sset(K_CANCEL, x.paymentKey).then(function () {
         return sdk.payment.requestPaymentCancel(j.params).catch(function (e) { return { type: "FAILED", message: (e && e.message) || "취소 오류" }; });
@@ -413,15 +483,16 @@
       result = result || { type: "FAILED" };
       if (result.type !== "SUCCESS") {
         sdel(K_CANCEL);
-        sdk.template.renderResultPage({ type: "image", status: "error", title: "결제를 취소하지 못했어요", description: result.type === "CANCELED" ? "취소 화면을 닫았어요" : "다시 시도해 주세요", timerMs: 6000, onTimeout: renderIdle, localeCode: "ko" });
+        render("renderResultPage", { type: "image", status: "error", title: "결제를 취소하지 못했어요", description: result.type === "CANCELED" ? "취소 화면을 닫았어요" : "다시 시도해 주세요", timerMs: 6000, onTimeout: renderIdle, localeCode: "ko" });
         return;
       }
+      waiting("카드 취소가 완료됐어요", "이용권 취소 내역을 저장하고 있어요");
       return api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: x.paymentKey, stage: "result", type: "SUCCESS", response: result.response }).then(function () {
         sdel(K_CANCEL);
-        sdk.template.renderResultPage({ type: "image", status: "success", title: "결제를 취소했어요", description: x.productName + " · " + won(x.amount) + "\n이용권도 취소했어요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
+        render("renderResultPage", { type: "image", status: "success", title: "결제를 취소했어요", description: x.productName + " · " + won(x.amount) + "\n이용권도 취소했어요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
       }, function (e) {
         logFailure("CANCEL_RECOVERY_FAILED", x.paymentKey, e);
-        sdk.template.renderResultPage({ type: "image", status: "success", title: "카드 취소는 됐어요", description: "서버 기록은 다음에 관리 화면에 들어올 때 다시 맞춰요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
+        render("renderResultPage", { type: "image", status: "success", title: "카드 취소는 됐어요", description: "서버 기록은 다음에 관리 화면에 들어올 때 다시 맞춰요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
       });
     }).catch(function (e) {
       if (!onAuthError(e)) { toast(e.message || "취소를 준비하지 못했어요.", "error"); renderIdle(); }
@@ -434,7 +505,7 @@
       if (!key) return;
       recoveryKey = key;
       return sdk.payment.getPaymentCancel({ paymentKey: key }).then(function (res) {
-        if (res && res.type === "SUCCESS") return api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: key, stage: "result", type: "SUCCESS", response: res.response }).then(function () { toast("지난 결제 취소를 기록했어요.", "success"); return sdel(K_CANCEL); });
+        if (res && res.type === "SUCCESS") return api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: key, stage: "result", type: "SUCCESS", response: res.response }).then(function () { toast("지난 결제 취소를 기록했어요.", "success"); return sdel(K_CANCEL).then(function () { return key; }); });
         return sdel(K_CANCEL);
       }, function (e) {
         if (/PAYMENT_NOT_FOUND/.test(String(e && (e.code || e.message) || e))) return sdel(K_CANCEL);
@@ -445,17 +516,25 @@
 
   /* ---------- 남은 시간 확인 ---------- */
   function startLookup() {
-    sdk.template.renderInputPage({
+    var submitting = false;
+    render("renderInputPage", {
       type: "phone",
       top: { title: "휴대폰 번호를 입력해 주세요", subtitle: "이용 종료 시각을 확인해요" },
       input: { placeholder: "010-" },
       onSubmit: function (value) {
         var d = digits(value);
         if (!/^01[016789]\d{7,8}$/.test(d)) { toast("휴대폰 번호를 다시 확인해 주세요.", "error"); return; }
+        if (submitting) return;
+        submitting = true;
+        var version = waiting("이용권을 확인하고 있어요", "잠시만 기다려 주세요", startLookup);
         return api("/api/kiosk/lookup", { phone: d }).then(function (j) {
-          if (j.active) sdk.template.renderResultPage({ type: "image", status: "success", title: passEndTitle(j.endsText), description: j.phoneMasked + " · 이용 종료 안내", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "확인", onClick: renderIdle, closeOnClick: true }] });
-          else sdk.template.renderResultPage({ type: "image", status: "error", title: "이용 중인 이용권이 없어요", description: j.phoneMasked, timerMs: 6000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "이용권 구매", onClick: startPurchase, closeOnClick: true }] });
-        }).catch(function (e) { if (!onAuthError(e)) toast("확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.", "error"); });
+          if (version !== screenVersion) return;
+          if (j.active) render("renderResultPage", { type: "image", status: "success", title: passEndTitle(j.endsText), description: j.phoneMasked + " · 이용 종료 안내", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "확인", onClick: renderIdle, closeOnClick: true }] });
+          else render("renderResultPage", { type: "image", status: "error", title: "이용 중인 이용권이 없어요", description: j.phoneMasked, timerMs: 6000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "이용권 구매", onClick: startPurchase, closeOnClick: true }] });
+        }).catch(function (e) {
+          if (version !== screenVersion) return;
+          if (!onAuthError(e)) { toast("확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.", "error"); startLookup(); }
+        });
       },
       onBack: renderIdle
     });
