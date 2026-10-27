@@ -289,9 +289,9 @@
       order.forEach(function (c) { list.appendChild(c); });
       if (result) {
         if (!p && !u) result.textContent = "인원이나 진행 방식을 고르면 맞는 룸을 앞으로 모아 보여 드립니다.";
-        else if (!matched.length && p > 50) {
+        else if (!matched.length && p > 48) {
           var mega = FAM.megaspot;
-          result.innerHTML = "50명이 넘는 모임은 여러 룸을 함께 쓰거나 층 전체를 쓰는 방법을 상담해 드립니다." +
+          result.innerHTML = "48명이 넘는 모임은 여러 룸을 함께 쓰거나 층 전체를 쓰는 방법을 상담해 드립니다." +
             (mega && mega.url ? " 한 공간에 모두 모여야 한다면 같은 건물 2층의 190평 대형 행사장 <a href=\"" + famEsc(mega.url) + "\" target=\"_blank\" rel=\"noopener\">" + famEsc(mega.name || "메가스팟") + "</a>(최대 200명)을 확인해 보세요." : " 일자 · 시간 · 인원 · 모임 유형을 문의로 남겨 주세요.");
         }
         else if (!matched.length) result.textContent = "조건에 맞는 룸이 없습니다. 인원을 나누어 진행하거나 문의 폼에 조건을 남겨 주세요.";

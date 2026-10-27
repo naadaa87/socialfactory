@@ -75,11 +75,11 @@ window.SF_CONFIG = {
      - key 는 바꾸지 마세요. 새 브랜드를 더하려면 화면 배치를 함께 만들어야 합니다 (README 2번 '패밀리 브랜드'). */
   family: [
     { key: "socialfactory", name: "소셜팩토리", en: "SOCIAL FACTORY", url: "https://socialfactory.co.kr", tag: "모임공간 · 코워킹 · 독립사무실", where: "같은 건물 4층",
-      desc: "최대 15~50명이 쓰는 룸 5개와 24시간 코워킹 50석, 1~3인 독립사무실. 강의 · 세미나 · 스터디 · 회의에 맞습니다.",
-      uses: ["15~50명 강의 · 세미나", "스터디 · 회의 · 면접", "코워킹 · 1인 사무실"] },
+      desc: "최대 20~48명이 쓰는 룸 5개와 24시간 코워킹 50석, 1~3인 독립사무실. 강의 · 세미나 · 스터디 · 회의에 맞습니다.",
+      uses: ["20~48명 강의 · 세미나", "스터디 · 회의 · 면접", "코워킹 · 1인 사무실"] },
     { key: "megaspot", name: "메가스팟", en: "MEGASPOT", url: "https://megaspot.kr", tag: "대형 행사장 대관", where: "같은 건물 2층",
       desc: "한 층 전체를 한 팀이 쓰는 190평 대형 공간입니다. 최대 200명까지 세미나 · 워크숍 · 네트워킹 · 파티 · 공연 · 팝업 · 촬영을 진행할 수 있습니다.",
-      uses: ["50명이 넘는 세미나 · 행사", "네트워킹 · 파티 · 공연", "팝업 · 촬영"] },
+      uses: ["48명이 넘는 세미나 · 행사", "네트워킹 · 파티 · 공연", "팝업 · 촬영"] },
     { key: "mingle", name: "밍글", en: "MINGLE", url: "https://hellomingle.kr", tag: "24시간 무인디저트카페 · 동네 커뮤니티", where: "같은 건물",
       desc: "건대 · 화양동의 24시간 무인디저트카페이자 동네 커뮤니티입니다. 모임 전후에 들르기 좋고, 모임 · 스터디 · 언어교환 소식도 올라옵니다.",
       uses: ["모임 전후 커피 · 디저트", "동네 모임 · 스터디", "언어교환"] },
@@ -132,10 +132,10 @@ window.SF_CONFIG = {
     note: "부가세 포함 · 룸 단위 요금(인원 추가 요금 없음) · 24시간 예약",
     from: "10,000",    /* 메인에 쓰는 '시간당 ○○원부터' (3번룸 평일 오전·심야) */
     rooms: {
-      r1: { max: 30, wdEarly: 15000, wdStd: 20000, hdEarly: 20000, hdStd: 30000 },
+      r1: { max: 36, wdEarly: 15000, wdStd: 20000, hdEarly: 20000, hdStd: 30000 },
       r2: { max: 40, wdEarly: 20000, wdStd: 30000, hdEarly: 25000, hdStd: 40000 },
-      r3: { max: 15, wdEarly: 10000, wdStd: 15000, hdEarly: 15000, hdStd: 20000 },
-      r4: { max: 50, wdEarly: 25000, wdStd: 35000, hdEarly: 30000, hdStd: 45000 },
+      r3: { max: 20, wdEarly: 10000, wdStd: 15000, hdEarly: 15000, hdStd: 20000 },
+      r4: { max: 48, wdEarly: 25000, wdStd: 35000, hdEarly: 30000, hdStd: 45000 },
       r5: { max: 30, wdEarly: 20000, wdStd: 30000, hdEarly: 25000, hdStd: 40000 }
     },
     /* 별도 옵션 — price: 0 은 무료, null 은 금액 별도 안내 */
