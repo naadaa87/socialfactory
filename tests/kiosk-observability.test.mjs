@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
-import { deviceTokenHash, staffTokenOk } from "../functions/_lib/kiosk.js";
+import { deviceTokenHash, staffTokenOk, deviceFromRequest } from "../functions/_lib/kiosk.js";
 import { onRequestPost as staff } from "../functions/api/kiosk/staff.js";
 import { onRequestPost as log } from "../functions/api/kiosk/logs.js";
 import { onRequestGet as readLogs } from "../functions/api/admin/kiosk-logs.js";
@@ -10,14 +10,15 @@ import { onRequestGet as readLogs } from "../functions/api/admin/kiosk-logs.js";
 function fixture() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));
+  const queries = [];
   const DB = {
     prepare(sql) {
       let args = [];
       const stmt = {
         bind(...values) { args = values; return stmt; },
-        async first() { return sqlite.prepare(sql).get(...args) || null; },
+        async first() { queries.push(sql); return sqlite.prepare(sql).get(...args) || null; },
         async all() { return { results: sqlite.prepare(sql).all(...args) }; },
-        async run() { return { meta: sqlite.prepare(sql).run(...args) }; }
+        async run() { queries.push(sql); return { meta: sqlite.prepare(sql).run(...args) }; }
       };
       return stmt;
     },
@@ -25,7 +26,7 @@ function fixture() {
       for (const stmt of stmts) await stmt.run();
     }
   };
-  return { sqlite, env: { DB, ADMIN_KEY: "test-admin", KIOSK_STAFF_PIN: "12345678" } };
+  return { sqlite, queries, env: { DB, ADMIN_KEY: "test-admin", KIOSK_STAFF_PIN: "12345678" } };
 }
 const req = (url, token, body) => new Request(url, {
   method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" },
@@ -69,4 +70,16 @@ test("device error logs are idempotent, private, and readable only by admin", as
   const auth = await readLogs({ request: new Request("https://example.test/api/admin/kiosk-logs", { headers: { authorization: "Bearer test-admin" } }), env });
   assert.equal(auth.status, 200);
   assert.equal((await auth.json()).results.length, 2);
+});
+
+test("last-seen writes are throttled but device revocation is checked every request", async () => {
+  const { sqlite, env, queries } = fixture();
+  const token = "sfk_fixture-device-token-for-latency";
+  sqlite.prepare("INSERT INTO kiosk_devices (id,name,status,token_hash) VALUES (1,'Fixture','active',?)").run(await deviceTokenHash(token));
+  const request = new Request("https://example.test/api/kiosk/lookup", { headers: { authorization: "Bearer " + token } });
+  assert(await deviceFromRequest(request, env)); assert(await deviceFromRequest(request, env));
+  assert.equal(queries.filter(q => q.startsWith("UPDATE kiosk_devices SET last_seen_at")).length, 1);
+  sqlite.prepare("UPDATE kiosk_devices SET status='revoked' WHERE id=1").run();
+  assert.equal(await deviceFromRequest(request, env), null);
+  assert.equal(queries.filter(q => q.startsWith("SELECT id, name, status FROM kiosk_devices")).length, 3);
 });

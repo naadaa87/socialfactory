@@ -55,13 +55,25 @@ export const makePairCode = () => rand(8);
 
 /* ---------- 응답 · 단말기 인증 ---------- */
 export const kjson = json;
+// 인증은 매번 DB에서 확인하고, 최근 접속 시각 기록만 단말기별 최대 분당 한 번으로 줄입니다.
+const lastSeenWrites = new WeakMap();
+function touchDevice(env, deviceId) {
+  let writes = lastSeenWrites.get(env.DB);
+  if (!writes) { writes = new Map(); lastSeenWrites.set(env.DB, writes); }
+  const now = Date.now(), previous = writes.get(deviceId);
+  if (previous != null && now - previous < 60000) return;
+  writes.set(deviceId, now);
+  env.DB.prepare("UPDATE kiosk_devices SET last_seen_at = datetime('now', '+9 hours') WHERE id = ?1").bind(deviceId).run().catch(() => {
+    if (writes.get(deviceId) === now) writes.delete(deviceId);
+  });
+}
 export async function deviceFromRequest(request, env) {
   const tok = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
   if (!tok || tok.length < 20 || tok.length > 200 || !env.DB) return null;
   await ensureSchema(env);
   const row = await env.DB.prepare("SELECT id, name, status FROM kiosk_devices WHERE token_hash = ?1").bind(await sha256Hex("kiosk|" + tok)).first().catch(() => null);
   if (!row || row.status !== "active") return null;
-  env.DB.prepare("UPDATE kiosk_devices SET last_seen_at = datetime('now', '+9 hours') WHERE id = ?1").bind(row.id).run().catch(() => {});
+  touchDevice(env, row.id);
   return row;
 }
 export async function deviceGate(request, env) {
