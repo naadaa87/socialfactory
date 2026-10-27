@@ -259,11 +259,16 @@
       });
     }).finally(function () { paying = false; });
   }
+  // text 타입은 짧은 대기번호용 초대형 글자라 날짜가 겹칩니다.
+  // 중앙 정렬되는 기본 성공 화면에서 날짜·시간을 두 줄로 구분합니다.
+  function passEndTitle(endsText) {
+    return String(endsText).trim().replace(/\s+(\d{1,2}:\d{2})$/, "\n$1") + "까지 이용";
+  }
   function showDone(name, endsText) {
     sdk.template.renderResultPage({
-      type: "text", text: endsText || "등록 확인 중",
-      title: endsText ? "이때까지 이용할 수 있어요" : "결제는 완료됐어요",
-      description: endsText ? productLabel({ name: name }) : "이용권 등록을 확인하고 있어요",
+      type: "image", status: "success",
+      title: endsText ? passEndTitle(endsText) : "결제는 완료됐어요",
+      description: endsText ? productLabel({ name: name }) + " · 구매 완료" : "이용권 등록을 확인하고 있어요",
       timerMs: 10000, onTimeout: renderIdle, localeCode: "ko",
       buttons: [{ label: "확인", onClick: renderIdle, closeOnClick: true }]
     });
@@ -382,7 +387,7 @@
         var d = digits(value);
         if (!/^01[016789]\d{7,8}$/.test(d)) { toast("휴대폰 번호를 다시 확인해 주세요.", "error"); return; }
         return api("/api/kiosk/lookup", { phone: d }).then(function (j) {
-          if (j.active) sdk.template.renderResultPage({ type: "text", text: j.endsText, title: "이때까지 이용할 수 있어요", description: j.phoneMasked, timerMs: 8000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "확인", onClick: renderIdle, closeOnClick: true }] });
+          if (j.active) sdk.template.renderResultPage({ type: "image", status: "success", title: passEndTitle(j.endsText), description: j.phoneMasked + " · 이용 종료 안내", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "확인", onClick: renderIdle, closeOnClick: true }] });
           else sdk.template.renderResultPage({ type: "image", status: "error", title: "이용 중인 이용권이 없어요", description: j.phoneMasked, timerMs: 6000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "이용권 구매", onClick: startPurchase, closeOnClick: true }] });
         }).catch(function (e) { if (!onAuthError(e)) toast("확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.", "error"); });
       },
