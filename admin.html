@@ -10,7 +10,7 @@
   <title>관리자 | 소셜팩토리</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=20261026-tf">
+  <link rel="stylesheet" href="/css/admin.css?v=20261027-kprod">
 </head>
 <body class="adm">
 <div id="admin-root">
@@ -292,6 +292,21 @@
       <header class="vh"><div><h1>토스프론트 상품</h1><p class="muted small">현장 프론트에서 판매할 이용권입니다. 저장한 상품은 다음 상품 선택부터 적용됩니다.</p></div>
         <div class="acts"><button class="btn btn-primary btn-sm" type="button" id="kp-new">+ 상품 등록</button></div></header>
       <div class="note">가격은 서버가 다시 검증합니다. 이미 준비된 결제와 발급된 이용권에는 구매 당시 금액·기간이 유지됩니다. 판매 중지를 하면 새 구매 화면에서만 숨겨집니다.</div>
+      <div class="card mt">
+        <div class="ch"><h2>프론트 분류</h2><button class="btn btn-light btn-sm" type="button" id="kc-new">+ 분류 추가</button></div>
+        <p class="tiny muted">분류 이름·설명·아이콘·순서를 수정하면 상품 선택 화면에 반영됩니다. 판매 중인 상품이 연결된 분류는 비활성화할 수 없습니다.</p>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>분류</th><th>상품 수</th><th>노출</th><th>관리</th></tr></thead><tbody id="kc-rows"></tbody></table></div>
+        <form class="form mt" id="kc-form" hidden>
+          <h3 id="kc-form-title">분류 추가</h3><input id="kc-id" type="hidden">
+          <div class="frow"><div class="f"><label for="kc-name">분류 이름</label><input class="input" id="kc-name" maxlength="40" required></div>
+            <div class="f"><label for="kc-description">화면 설명</label><input class="input" id="kc-description" maxlength="100"></div></div>
+          <div class="frow"><div class="f"><label for="kc-image">아이콘</label><select class="select" id="kc-image"><option value="pass-2h.webp">2시간</option><option value="pass-1d.webp">1일</option><option value="pass-15d.webp">15일</option><option value="pass-1m.webp">1개월</option><option value="pass-3m.webp">3개월</option></select></div>
+            <div class="f"><label for="kc-sort">정렬 순서</label><input class="input" id="kc-sort" type="number" min="0" max="999" step="1" value="100"></div></div>
+          <label class="chk"><input type="checkbox" id="kc-active" checked> 프론트에 노출</label>
+          <div class="acts"><button class="btn btn-primary btn-sm" type="submit" id="kc-save">분류 저장</button><button class="btn btn-light btn-sm" type="button" id="kc-cancel">닫기</button></div>
+          <p class="form-note" id="kc-msg" role="status" hidden></p>
+        </form>
+      </div>
       <div class="filters mt"><button class="btn btn-light btn-sm" type="button" id="kp-reload">새로고침</button></div>
       <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>상품</th><th>프론트 분류</th><th>가격</th><th>이용 기간</th><th>노출</th><th>관리</th></tr></thead><tbody id="kp-rows"></tbody></table></div></div>
       <form class="form card mt" id="kp-form" hidden>
@@ -301,19 +316,29 @@
           <div class="f"><label for="kp-name">상품명</label><input class="input" id="kp-name" maxlength="60" required></div>
           <div class="f"><label for="kp-short">간단한 설명</label><input class="input" id="kp-short" maxlength="120" placeholder="결제한 때부터 이용"></div>
         </div>
-        <div class="frow">
-          <div class="f"><label for="kp-price">판매가 (원)</label><input class="input" id="kp-price" type="number" min="100" max="10000000" step="1" required></div>
-          <div class="f"><label for="kp-list-price">정가 (원, 할인 상품만)</label><input class="input" id="kp-list-price" type="number" min="100" max="10000000" step="1"></div>
+        <div class="frow three">
+          <div class="f"><label for="kp-base-price">정가 (원)</label><input class="input" id="kp-base-price" type="number" min="100" max="10000000" step="1" required></div>
+          <div class="f"><label for="kp-discount">할인율 (%)</label><input class="input" id="kp-discount" type="number" min="0" max="90" step="1" value="0" required></div>
+          <div class="f"><label for="kp-price">판매가 (자동 계산)</label><input class="input" id="kp-price" type="number" readonly aria-live="polite"></div>
         </div>
+        <p class="tiny muted">판매가는 정가 × (100 − 할인율) ÷ 100을 1원 단위로 반올림합니다. 친구 동반 상품은 할인율을 입력해 주세요.</p>
         <div class="frow three">
           <div class="f"><label for="kp-duration-value">이용 기간</label><input class="input" id="kp-duration-value" type="number" min="1" max="365" step="1" required></div>
           <div class="f"><label for="kp-duration-unit">기간 단위</label><select class="select" id="kp-duration-unit"><option value="hours">시간</option><option value="days">일</option><option value="months">개월</option></select></div>
           <div class="f"><label for="kp-group">연장 그룹</label><select class="select" id="kp-group"><option value="seat">좌석 이용권</option><option value="locker">사물함</option></select></div>
         </div>
         <div class="frow three">
-          <div class="f"><label for="kp-category">프론트 분류</label><select class="select" id="kp-category"><option value="day">잠깐 · 하루</option><option value="regular">꾸준히 이용</option><option value="friend">친구와 함께</option></select></div>
-          <div class="f"><label for="kp-image">아이콘</label><select class="select" id="kp-image"><option value="pass-2h.webp">2시간</option><option value="pass-1d.webp">1일</option><option value="pass-15d.webp">15일</option><option value="pass-1m.webp">1개월</option><option value="pass-3m.webp">3개월</option></select></div>
+          <div class="f"><label for="kp-category">프론트 분류</label><select class="select" id="kp-category" required></select></div>
+          <div class="f"><label for="kp-image">기본 아이콘</label><select class="select" id="kp-image"><option value="pass-2h.webp">2시간</option><option value="pass-1d.webp">1일</option><option value="pass-15d.webp">15일</option><option value="pass-1m.webp">1개월</option><option value="pass-3m.webp">3개월</option></select></div>
           <div class="f"><label for="kp-sort">정렬 순서</label><input class="input" id="kp-sort" type="number" min="0" max="999" step="1" value="100"></div>
+        </div>
+        <div class="kp-image-picker">
+          <img id="kp-preview" class="kp-preview" alt="상품 이미지 미리보기">
+          <div class="f"><label for="kp-file">프론트에 표시할 이미지 업로드</label>
+            <input class="input" id="kp-file" type="file" accept="image/png,image/jpeg,image/webp">
+            <small class="muted">PNG·JPG·WebP 파일을 선택하세요. 저장할 때 384px 이하 WebP로 변환하며 이미지 메타데이터는 제거합니다. 업로드 이미지가 기본 아이콘보다 우선합니다.</small>
+            <button class="btn btn-light btn-xs" type="button" id="kp-reset-image" hidden>업로드 이미지 삭제 · 기본 아이콘 사용</button>
+          </div>
         </div>
         <label class="chk"><input type="checkbox" id="kp-active" checked> 프론트에 노출 · 신규 구매 허용</label>
         <div class="acts"><button class="btn btn-primary btn-sm" type="submit" id="kp-save">저장</button><button class="btn btn-light btn-sm" type="button" id="kp-cancel">닫기</button></div>
@@ -456,6 +481,6 @@
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
 <script src="/js/admin-passes.js?v=20261026-tf"></script>
-<script src="/js/admin-kiosk-products.js?v=20261027-1"></script>
+<script src="/js/admin-kiosk-products.js?v=20261027-2"></script>
 </body>
 </html>
