@@ -130,7 +130,7 @@
               <legend><span class="nb">1</span>호실과 계약 기간</legend>
               <div class="est-row two">
                 <label class="est-field"><span>호실</span><select name="office"><option value="0">A호 · 2~3인 · 월 400,000원</option><option value="1">B호 · 1~2인 · 월 250,000원</option><option value="2">C호 · 1~2인 · 월 250,000원</option><option value="3">D호 · 1~2인 · 월 250,000원</option></select></label>
-                <label class="est-field"><span>계약 기간</span><select name="term"><option value="1">1개월</option><option value="6">6개월 (5% 할인)</option><option value="12">12개월 (10% 할인)</option><option value="18">18개월 (15% 할인)</option></select></label>
+                <label class="est-field"><span>계약 기간</span><select name="term"><option value="1">1개월</option><option value="6">6개월 (10% 할인)</option><option value="12">12개월 (20% 할인)</option></select></label>
               </div>
               <p class="est-hint">독립사무실은 월 단위로 이용하며 부가세 별도입니다. 그 밖의 기간은 문의해 주세요.</p>
             </fieldset>
@@ -349,8 +349,13 @@
     </div>
     <div class="table-wrap reveal">
       <table class="table price office-table table-stack">
-        <thead><tr><th>호실</th><th>월 이용료<small>1개월</small></th><th>6개월 계약<small>5% 할인 · 월</small></th><th>12개월 계약<small>10% 할인 · 월</small></th><th>18개월 계약<small>15% 할인 · 월</small></th></tr></thead>
-        <tbody><tr><td class="strong" data-label="호실"><span class="cell">A호<small class="block">2~3인</small></span></td><td class="num peak" data-label="월 이용료 1개월"><span class="cell"><span data-sf="pricing.officeRooms.0.monthly">400,000</span></span></td><td class="num" data-label="6개월 계약 5% 할인 · 월"><span class="cell"><span data-office="0:6">380,000</span></span></td><td class="num" data-label="12개월 계약 10% 할인 · 월"><span class="cell"><span data-office="0:12">360,000</span></span></td><td class="num" data-label="18개월 계약 15% 할인 · 월"><span class="cell"><span data-office="0:18">340,000</span></span></td></tr><tr><td class="strong" data-label="호실"><span class="cell">B호<small class="block">1~2인</small></span></td><td class="num peak" data-label="월 이용료 1개월"><span class="cell"><span data-sf="pricing.officeRooms.1.monthly">250,000</span></span></td><td class="num" data-label="6개월 계약 5% 할인 · 월"><span class="cell"><span data-office="1:6">237,500</span></span></td><td class="num" data-label="12개월 계약 10% 할인 · 월"><span class="cell"><span data-office="1:12">225,000</span></span></td><td class="num" data-label="18개월 계약 15% 할인 · 월"><span class="cell"><span data-office="1:18">212,500</span></span></td></tr><tr><td class="strong" data-label="호실"><span class="cell">C호<small class="block">1~2인</small></span></td><td class="num peak" data-label="월 이용료 1개월"><span class="cell"><span data-sf="pricing.officeRooms.2.monthly">250,000</span></span></td><td class="num" data-label="6개월 계약 5% 할인 · 월"><span class="cell"><span data-office="2:6">237,500</span></span></td><td class="num" data-label="12개월 계약 10% 할인 · 월"><span class="cell"><span data-office="2:12">225,000</span></span></td><td class="num" data-label="18개월 계약 15% 할인 · 월"><span class="cell"><span data-office="2:18">212,500</span></span></td></tr><tr><td class="strong" data-label="호실"><span class="cell">D호<small class="block">1~2인</small></span></td><td class="num peak" data-label="월 이용료 1개월"><span class="cell"><span data-sf="pricing.officeRooms.3.monthly">250,000</span></span></td><td class="num" data-label="6개월 계약 5% 할인 · 월"><span class="cell"><span data-office="3:6">237,500</span></span></td><td class="num" data-label="12개월 계약 10% 할인 · 월"><span class="cell"><span data-office="3:12">225,000</span></span></td><td class="num" data-label="18개월 계약 15% 할인 · 월"><span class="cell"><span data-office="3:18">212,500</span></span></td></tr></tbody>
+        <thead><tr><th>호실</th><th>월 이용료<small>1개월</small></th><th>6개월 계약<small>10% 할인 · 월</small></th><th>12개월 계약<small>20% 할인 · 월</small></th></tr></thead>
+        <tbody>
+          <tr><td class="strong" data-label="호실"><span class="cell">A호<small class="block">2~3인</small></span></td><td class="num peak" data-label="월 이용료 1개월"><span class="cell"><span data-sf="pricing.officeRooms.0.monthly">400,000</span></span></td><td class="num" data-label="6개월 계약 10% 할인 · 월"><span class="cell"><span data-office="0:6">360,000</span></span></td><td class="num" data-label="12개월 계약 20% 할인 · 월"><span class="cell"><span data-office="0:12">320,000</span></span></td></tr>
+          <tr><td class="strong" data-label="호실"><span class="cell">B호<small class="block">1~2인</small></span></td><td class="num peak" data-label="월 이용료 1개월"><span class="cell"><span data-sf="pricing.officeRooms.1.monthly">250,000</span></span></td><td class="num" data-label="6개월 계약 10% 할인 · 월"><span class="cell"><span data-office="1:6">225,000</span></span></td><td class="num" data-label="12개월 계약 20% 할인 · 월"><span class="cell"><span data-office="1:12">200,000</span></span></td></tr>
+          <tr><td class="strong" data-label="호실"><span class="cell">C호<small class="block">1~2인</small></span></td><td class="num peak" data-label="월 이용료 1개월"><span class="cell"><span data-sf="pricing.officeRooms.2.monthly">250,000</span></span></td><td class="num" data-label="6개월 계약 10% 할인 · 월"><span class="cell"><span data-office="2:6">225,000</span></span></td><td class="num" data-label="12개월 계약 20% 할인 · 월"><span class="cell"><span data-office="2:12">200,000</span></span></td></tr>
+          <tr><td class="strong" data-label="호실"><span class="cell">D호<small class="block">1~2인</small></span></td><td class="num peak" data-label="월 이용료 1개월"><span class="cell"><span data-sf="pricing.officeRooms.3.monthly">250,000</span></span></td><td class="num" data-label="6개월 계약 10% 할인 · 월"><span class="cell"><span data-office="3:6">225,000</span></span></td><td class="num" data-label="12개월 계약 20% 할인 · 월"><span class="cell"><span data-office="3:12">200,000</span></span></td></tr>
+        </tbody>
       </table>
     </div>
     <p class="note mt-16">부가세 별도 · 단위 원. 할인 금액은 계약 기간 동안의 월 이용료입니다.</p>
@@ -529,7 +534,7 @@
   </div>
 </footer>
 <a class="kakao-fab" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener" aria-label="카카오톡으로 문의하기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span class="kf-t">카카오톡 문의</span></a>
-<script src="js/site-config.js?v=469f6a43"></script>
+<script src="js/site-config.js?v=20261027-office"></script>
 <script src="js/main.js?v=980aaa85"></script>
 <script src="js/estimate.js?v=d18048ac"></script>
 </body>

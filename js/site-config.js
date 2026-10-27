@@ -159,7 +159,7 @@ window.SF_CONFIG = {
       { name: "C호", people: "1~2인", monthly: 250000 },
       { name: "D호", people: "1~2인", monthly: 250000 }
     ],
-    officeDiscounts: [ { months: 6, rate: 5 }, { months: 12, rate: 10 }, { months: 18, rate: 15 } ],
+    officeDiscounts: [ { months: 6, rate: 10 }, { months: 12, rate: 20 } ],
     cancel: "예약 후 2시간 이내 100% · 이용 8일 전까지 100% · 6~7일 전 80% · 4~5일 전 60% · 2~3일 전 40% · 1일 전·당일 환불 불가",
     refund: [
       { when: "예약 후 2시간 이내", rate: 100 },
