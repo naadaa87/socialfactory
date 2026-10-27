@@ -12,6 +12,7 @@
   "use strict";
   var sdk = window.TossFrontSDK;
   var CFG = window.SF_PLUGIN || {};
+  var UI = window.SF_KIOSK_UI;
   var API = String(CFG.apiBase || "").replace(/\/+$/, "");
   var K_TOKEN = "sf_kiosk_token", K_PENDING = "sf_kiosk_pending", K_CANCEL = "sf_kiosk_pending_cancel", K_LOGS = "sf_kiosk_error_logs";
   var isLocal = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
@@ -106,8 +107,8 @@
   /* ---------- 단말기 연결 (처음 한 번) ---------- */
   function renderPair() {
     sdk.template.renderOnboardingPage({
-      title: (CFG.storeName || "소셜팩토리") + " 단말기 연결",
-      inputs: { code: { label: "연결 코드 (8자리)", type: "text", placeholder: "관리자 화면 → 고객 · 이용권 → 단말기에서 만든 코드" } },
+      title: "단말기를 연결해 주세요",
+      inputs: { code: { label: "연결 코드 (8자리)", type: "text", placeholder: "관리자에서 만든 연결 코드" } },
       onSubmit: function (values) {
         var code = String((values && values.code) || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
         if (code.length !== 8) { toast("연결 코드 8자리를 확인해 주세요.", "error"); return; }
@@ -128,7 +129,7 @@
     sdk.template.renderIdlePage({
       type: "twoButton",
       title: { text1: CFG.storeName || "소셜팩토리", text2: "오늘도, 편하게" },
-      description: { text: "24시간 코워킹 · 스터디 라운지", subText: "처음 구매하면 바로 시작 · 남은 이용권은 자동 연장" },
+      description: { text: "24시간 코워킹 · 스터디 라운지", subText: "첫 이용권은 바로 시작해요" },
       primaryButton: { text: "이용권 구매", onClick: startPurchase },
       secondaryButton: { text: "내 이용권 확인", onClick: startLookup }
     });
@@ -136,67 +137,61 @@
   }
 
   /* ---------- 1. 이용권 선택 ---------- */
-  var PRODUCTS = null, CATEGORIES = [], PRIVACY_URL = "";
+  var PRODUCTS = [], CATEGORIES = null, PRIVACY_URL = "", LAYOUT = UI ? UI.normalize() : { categoryLayout: "list", productLayout: "list" };
   function loadProducts() {
-    return api("/api/kiosk/products").then(function (j) { PRODUCTS = j.products || []; CATEGORIES = j.categories || []; PRIVACY_URL = j.privacyUrl || ""; return PRODUCTS; });
+    // 구매 시작 때 설정을 가져오고, 구매 도중에는 같은 구성을 유지합니다.
+    return api("/api/kiosk/products").then(function (j) {
+      PRIVACY_URL = j.privacyUrl || "";
+      CATEGORIES = j.categories || null;
+      LAYOUT = UI.normalize(j.layout);
+      PRODUCTS = j.products || [];
+      return PRODUCTS;
+    });
   }
+  function supportedLayout(layout) { return layout === "grid" && typeof sdk.template.renderSelectGridPage === "function" ? "grid" : "list"; }
   // 상품 종류부터 고르면 한 화면에서 비교하는 항목이 2~3개로 줄어듭니다.
   function startPurchase() {
     loadProducts().then(function (list) {
       if (!list.length) { toast("현재 판매 중인 이용권이 없어요.", "error"); renderIdle(); return; }
-      var groups = CATEGORIES.filter(function (g) { return list.some(function (p) { return p.category === g.id; }); });
-      sdk.template.renderSelectPage({
-        title: CFG.storeName || "소셜팩토리 건대",
-        subtitle: "얼마나 이용하실 건가요?",
-        options: groups.map(function (g) {
-          return { title: g.name, subtitle: list.filter(function (p) { return p.category === g.id; }).length + "가지 이용권",
-            description: g.description, iconUrl: g.imageUrl || imageUrl(g.image), onClick: function () { showProducts(list, g.id); } };
-        }),
-        navbarButton: { label: "직원 관리", onClick: startStaff },
-        onBack: renderIdle
-      });
+      showCategories(list);
     }).catch(function (e) { if (!onAuthError(e)) { toast("이용권을 불러오지 못했어요. 다시 시도해 주세요.", "error"); renderIdle(); } });
   }
+  function showCategories(list) {
+    var page = UI.categoryPage(supportedLayout(LAYOUT.categoryLayout), function (group) { showProducts(list, group); }, imageUrl, CATEGORIES, list);
+    page.params.navbarButton = { label: "직원 관리", onClick: startStaff };
+    page.params.onBack = renderIdle;
+    sdk.template[page.method](page.params);
+  }
   function productLabel(p) {
-    return p.name;
+    return UI.productLabel(p);
   }
   function showProducts(list, group) {
-    var selected = list.filter(function (p) { return p.category === group; });
-    var category = CATEGORIES.filter(function (c) { return c.id === group; })[0];
-    sdk.template.renderSelectPage({
-      title: "남은 이용권이 있으면 끝나는 시각부터 이어져요",
-      subtitle: category ? category.name : "이용권 선택",
-      options: selected.map(function (p) {
-        return { title: productLabel(p) + " · " + won(p.price),
-          subtitle: p.listPrice ? "정가 " + won(p.listPrice) + " → " + won(p.price) : p.duration + " 자유 이용",
-          description: p.short || "남은 기간 자동 연장",
-          iconUrl: p.imageUrl || imageUrl(p.image), onClick: function () { askPhone(p); } };
-      }),
-      onBack: startPurchase
-    });
+    var page = UI.productPage(list, group, supportedLayout(LAYOUT.productLayout), askPhone, imageUrl, CATEGORIES);
+    page.params.onBack = function () { showCategories(list); };
+    sdk.template[page.method](page.params);
   }
 
   /* ---------- 2. 휴대폰 번호 ---------- */
   function askPhone(p) {
     sdk.template.renderInputPage({
       type: "phone",
-      top: { title: "휴대폰 번호를 입력해 주세요", subtitle: "1 / 3 · " + productLabel(p) + " · " + won(p.price) },
+      top: { title: "휴대폰 번호를 입력해 주세요", subtitle: productLabel(p) + " · " + won(p.price) },
       input: { placeholder: "010-0000-0000" },
-      disclaimer: "이 번호로 이용권을 등록해요. 결제 전 한 번 더 확인할 수 있어요.",
+      disclaimer: "이 번호로 이용권을 등록해요",
       onSubmit: function (value) {
         var d = digits(value);
         if (!/^01[016789]\d{7,8}$/.test(d)) { toast("휴대폰 번호를 다시 확인해 주세요.", "error"); return; }
         askAgreement(p, d);
       },
-      onBack: startPurchase
+      onBack: function () { showCategories(PRODUCTS); }
     });
   }
 
   /* ---------- 3. 개인정보 수집 · 이용 안내 동의 ---------- */
   function askAgreement(p, phone) {
     sdk.template.renderAgreementPage({
-      title: "이용권 등록에 동의해 주세요",
-      subtitle: "2 / 3 · " + phone.replace(/^(\d{3})(\d{4})(\d{4})$/, "$1-$2-$3") + " · 이용권 관리 및 만료 안내",
+      title: "개인정보 이용에 동의해 주세요",
+      subtitle: "등록 번호 " + phone.replace(/^(\d{3})(\d{4})(\d{4})$/, "$1-$2-$3"),
       agreements: { required: [{ id: "privacy", title: "개인정보 수집 · 이용 동의 (필수)", href: PRIVACY_URL || (API + "/privacy") }], optional: [] },
       onSubmit: function (ids) {
         if (!ids || ids.indexOf("privacy") < 0) { toast("필수 항목에 동의해 주세요.", "error"); return; }
@@ -212,13 +207,13 @@
       sdk.template.renderOrderPage({
         localeCode: "ko",
         order: {
-          items: [{ label: it.productName, value: it.listPrice || it.amount, quantity: 1, imageUrl: p.imageUrl || imageUrl(p.image),
+          items: [{ label: productLabel(p), value: it.listPrice || it.amount, quantity: 1, imageUrl: imageUrl(p.image),
             options: [{ type: "option", label: "등록 번호 " + phone.replace(/^(\d{3})(\d{4})(\d{4})$/, "$1-$2-$3"), value: 0 }] }],
-          discounts: discount ? [{ label: it.category === "friend" ? "친구 동반 할인" : "할인", value: discount }] : [],
+          discounts: discount ? [{ label: "친구 동반 할인", value: discount }] : [],
           summary: {
             totalAmount: it.amount,
             discountAmount: discount || undefined,
-            earned: { label: it.preview.extends ? "이용 기간 (이어서)" : "이용 기간", value: it.preview.startsText + " ~ " + it.preview.endsText }
+            earned: { label: it.preview.extends ? "연장 후 종료" : "이용 종료", value: it.preview.endsText }
           }
         },
         onClick: function () { pay(it); },
@@ -244,12 +239,12 @@
       if (result.type === "SUCCESS") {
         return report(it.paymentKey, result).then(function (j) {
           sdel(K_PENDING);
-          showDone(j.pass.productName, j.pass.startsText + " ~ " + j.pass.endsText, j.phoneMasked, null, j.pass.endsText);
+          showDone(j.pass.productName, j.pass.endsText);
         }, function (e) {
           // 결제는 됐지만 서버 보고가 안 된 경우: 저장소에 남겨 두고 대기 화면에서 다시 보고합니다.
           logFailure("PAYMENT_RESULT_REPORT_FAILED", it.paymentKey, e);
           console.error("report", e);
-          showDone(it.productName, it.preview.startsText + " ~ " + it.preview.endsText, it.phoneMasked, "이용권 등록이 잠시 늦어질 수 있어요");
+          showDone(it.productName);
         });
       }
       // 시간 초과는 실제로 승인됐을 수도 있어 저장소에 남겨 두고 나중에 getPayment 로 확인합니다.
@@ -264,11 +259,11 @@
       });
     }).finally(function () { paying = false; });
   }
-  function showDone(name, period, phoneMasked, extra, endsText) {
+  function showDone(name, endsText) {
     sdk.template.renderResultPage({
       type: "text", text: endsText || "등록 확인 중",
-      title: endsText ? "이 시각까지 이용하실 수 있어요" : "결제 완료 · 이용권 등록 확인 중",
-      description: name + "\n" + period + "\n" + (phoneMasked || "") + (extra ? "\n" + extra : ""),
+      title: endsText ? "이때까지 이용할 수 있어요" : "결제는 완료됐어요",
+      description: endsText ? productLabel({ name: name }) : "이용권 등록을 확인하고 있어요",
       timerMs: 10000, onTimeout: renderIdle, localeCode: "ko",
       buttons: [{ label: "확인", onClick: renderIdle, closeOnClick: true }]
     });
@@ -318,21 +313,21 @@
   }
   function showRefundList(list) {
     sdk.template.renderSelectPage({
-      title: "최근 30일 · 이 단말기에서 결제한 이용권",
-      subtitle: list.length ? "취소할 결제를 골라 주세요" : "취소할 수 있는 결제가 없어요",
+      title: list.length ? "취소할 결제를 골라 주세요" : "취소할 결제가 없어요",
+      subtitle: "이 단말기의 최근 30일 결제",
       options: list.map(function (x) {
-        return { title: x.productName + " · " + won(x.amount), subtitle: x.paidText + " · " + x.phoneMasked, description: "누르면 취소 확인 화면으로 가요", onClick: function () { confirmRefund(x); } };
+        return { title: productLabel({ name: x.productName }), subtitle: won(x.amount) + " · " + x.phoneMasked, description: x.paidText, onClick: function () { confirmRefund(x); } };
       }),
       onBack: renderIdle
     });
   }
   function confirmRefund(x) {
     sdk.template.renderSelectPage({
-      title: x.productName + " · " + won(x.amount) + " · " + x.phoneMasked,
-      subtitle: "이 결제를 전액 취소할까요?",
+      title: "이 결제를 전액 취소할까요?",
+      subtitle: productLabel({ name: x.productName }) + " · " + won(x.amount),
       options: [
-        { title: "네, 결제 취소", description: "카드 승인을 취소하고 이용권도 취소해요", onClick: function () { doRefund(x); } },
-        { title: "아니요", onClick: function () { renderIdle(); } }
+        { title: "전액 취소하기", subtitle: x.phoneMasked, description: "이용권도 함께 취소돼요", onClick: function () { doRefund(x); } },
+        { title: "결제 유지하기", onClick: function () { renderIdle(); } }
       ],
       onBack: renderIdle
     });
@@ -381,14 +376,14 @@
   function startLookup() {
     sdk.template.renderInputPage({
       type: "phone",
-      top: { title: "휴대폰 번호를 입력해 주세요", subtitle: "이용권이 언제까지인지 알려 드려요" },
+      top: { title: "휴대폰 번호를 입력해 주세요", subtitle: "이용 종료 시각을 확인해요" },
       input: { placeholder: "010-0000-0000" },
       onSubmit: function (value) {
         var d = digits(value);
         if (!/^01[016789]\d{7,8}$/.test(d)) { toast("휴대폰 번호를 다시 확인해 주세요.", "error"); return; }
         return api("/api/kiosk/lookup", { phone: d }).then(function (j) {
-          if (j.active) sdk.template.renderResultPage({ type: "text", text: j.endsText, title: "이 시각까지 이용할 수 있어요", description: j.phoneMasked, timerMs: 8000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "확인", onClick: renderIdle, closeOnClick: true }] });
-          else sdk.template.renderResultPage({ type: "image", status: "error", title: "이용 중인 이용권이 없어요", description: j.phoneMasked + " · 이용권을 구매해 주세요", timerMs: 6000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "이용권 구매", onClick: startPurchase, closeOnClick: true }] });
+          if (j.active) sdk.template.renderResultPage({ type: "text", text: j.endsText, title: "이때까지 이용할 수 있어요", description: j.phoneMasked, timerMs: 8000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "확인", onClick: renderIdle, closeOnClick: true }] });
+          else sdk.template.renderResultPage({ type: "image", status: "error", title: "이용 중인 이용권이 없어요", description: j.phoneMasked, timerMs: 6000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "이용권 구매", onClick: startPurchase, closeOnClick: true }] });
         }).catch(function (e) { if (!onAuthError(e)) toast("확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.", "error"); });
       },
       onBack: renderIdle
@@ -396,6 +391,6 @@
   }
 
   /* ---------- 시작 ---------- */
-  if (!sdk) { document.getElementById("app").textContent = "토스 프론트 SDK를 불러오지 못했습니다."; return; }
+  if (!sdk || !UI) { document.getElementById("app").textContent = "화면을 불러오지 못했어요. 플러그인 파일을 확인해 주세요."; return; }
   sget(K_TOKEN).then(function (t) { token = t; if (token) renderIdle(); else renderPair(); });
 })();

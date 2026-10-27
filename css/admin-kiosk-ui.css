@@ -1,0 +1,53 @@
+/* 프론트 화면 선택기 — 실제 손님 화면은 SDK Template API로 렌더링합니다. */
+.kui-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:24px 0 16px; }
+.kui-head h2 { font-size:19px; }
+.kui-head p { margin:6px 0 0; }
+.kui-workspace { display:grid; grid-template-columns:minmax(280px,.85fr) minmax(340px,1.15fr); gap:20px; align-items:start; }
+.kui-controls,.kui-preview-card { padding:24px; min-width:0; }
+.kui-controls fieldset { border:0; padding:0; margin:0 0 28px; min-width:0; }
+.kui-controls legend { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:750; padding:0; }
+.kui-controls fieldset > p { margin:8px 0 14px; }
+.kui-step { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:8px; background:var(--blue-50); color:var(--blue); font-size:12px; }
+.kui-choices { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.kui-choice { position:relative; display:grid; gap:5px; padding:14px; border:2px solid var(--line); border-radius:12px; cursor:pointer; min-width:0; }
+.kui-choice:has(input:checked) { border-color:var(--blue); background:var(--blue-25); }
+.kui-choice:has(input:focus-visible) { outline:3px solid #83b4ff; outline-offset:3px; }
+.kui-choice input { position:absolute; right:10px; top:10px; accent-color:var(--blue); width:16px; height:16px; }
+.kui-choice strong { font-size:14px; }
+.kui-choice > span:last-child { color:var(--muted); font-size:12px; line-height:1.6; }
+.kui-controls fieldset:disabled .kui-choice { cursor:wait; opacity:.6; }
+.kui-mini { display:grid; gap:5px; width:82px; height:65px; margin:3px 0 9px; padding:8px; background:#f0f3f7; border-radius:7px; }
+.kui-mini i { display:block; border-radius:3px; background:#fff; border:1px solid #dce2eb; }
+.kui-mini-list { grid-auto-rows:12px; align-content:center; }
+.kui-mini-grid { grid-template-columns:1fr 1fr; grid-auto-rows:21px; }
+.kui-save-row { display:flex; flex-wrap:wrap; gap:8px; }
+.kui-apply-note { border-top:1px solid var(--line); padding-top:16px; margin:18px 0 0; color:var(--muted); font-size:12px; line-height:1.7; }
+#kui-message { margin:12px 0 0; line-height:1.6; color:var(--muted); }
+#kui-message.kui-error { color:var(--red); }
+.kui-preview-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:16px; }
+.kui-preview-top h3 { font-size:15px; }
+.kui-preview-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+.kui-preview-tools .seg button { padding:6px 10px; font-size:12px; }
+.kui-preview-tools .chip { height:29px; font-size:11px; padding:0 10px; }
+.kui-device { border:7px solid #293342; border-radius:20px; overflow:hidden; background:#fff; box-shadow:0 10px 24px #18233a12; }
+.kui-device-bar { display:flex; align-items:center; gap:8px; padding:12px 18px; border-bottom:1px solid #f1f3f5; font-size:11px; color:#7c8695; min-height:44px; }
+.kui-device-bar small { margin-left:auto; font-size:10px; white-space:nowrap; }
+.kui-device-bar button { background:none; border:0; font-size:19px; padding:0 4px 0 0; color:#323d4b; }
+.kui-screen { min-height:340px; padding:28px 22px; }
+.kui-screen h3 { font-size:22px; line-height:1.35; margin:0 0 8px; color:#191f28; overflow-wrap:anywhere; }
+.kui-screen > p { font-size:12px; color:#6b7684; margin:0 0 22px; line-height:1.6; }
+.kui-options { display:grid; gap:10px; }
+.kui-option { border:0; background:#f6f7f9; border-radius:12px; min-width:0; text-align:left; color:#191f28; padding:17px 15px; display:flex; gap:12px; align-items:center; }
+.kui-option:hover { background:#edf3ff; }
+.kui-option:focus-visible { outline:3px solid #83b4ff; outline-offset:2px; }
+.kui-option img { width:42px; height:42px; border-radius:9px; object-fit:contain; flex:none; }
+.kui-option > span { display:grid; gap:5px; min-width:0; }
+.kui-option strong { font-size:16px; line-height:1.4; font-weight:700; overflow-wrap:anywhere; }
+.kui-option small { font-size:13px; line-height:1.5; color:#4e5968; }
+.kui-option em { font-size:11px; line-height:1.6; color:#6b7684; font-style:normal; }
+.kui-options-grid { grid-template-columns:1fr 1fr; gap:12px; }
+.kui-options-grid .kui-option { min-height:100px; justify-content:center; text-align:center; padding:20px 14px; }
+.kui-options-grid .kui-option strong { font-size:16px; }
+#kui-selection { color:var(--blue); min-height:22px; margin:14px 0 7px; }
+@media(max-width:1100px) { .kui-workspace { grid-template-columns:1fr; } .kui-preview-card { max-width:660px; width:100%; } }
+@media(max-width:600px) { .kui-head { align-items:flex-start; flex-direction:column; gap:8px; } .kui-controls,.kui-preview-card { padding:16px; } .kui-choice { padding:12px; } .kui-mini { width:68px; } .kui-screen { padding:22px 16px; } .kui-screen h3 { font-size:20px; } #ps-tabs { max-width:100%; overflow-x:auto; } #ps-tabs button { flex-shrink:0; } }

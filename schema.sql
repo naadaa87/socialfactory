@@ -353,3 +353,11 @@ CREATE TABLE IF NOT EXISTS kiosk_error_logs (
   created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours'))
 );
 CREATE INDEX IF NOT EXISTS idx_kiosk_error_logs_time ON kiosk_error_logs (created_at DESC);
+
+-- 프론트 화면 구성 (어드민에서 저장, 다음 구매 시작부터 적용)
+CREATE TABLE IF NOT EXISTS kiosk_ui_settings (
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  category_layout TEXT NOT NULL,
+  product_layout TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

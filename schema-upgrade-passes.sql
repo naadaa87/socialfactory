@@ -162,3 +162,11 @@ CREATE TABLE IF NOT EXISTS kiosk_error_logs (
   created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours'))
 );
 CREATE INDEX IF NOT EXISTS idx_kiosk_error_logs_time ON kiosk_error_logs (created_at DESC);
+
+-- 프론트 화면 구성 (없으면 API가 자동 생성)
+CREATE TABLE IF NOT EXISTS kiosk_ui_settings (
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  category_layout TEXT NOT NULL,
+  product_layout TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

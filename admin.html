@@ -11,6 +11,7 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="/css/admin.css?v=20261027-kprod">
+  <link rel="stylesheet" href="/css/admin-kiosk-ui.css?v=e0d7e77a0f">
 </head>
 <body class="adm">
 <div id="admin-root">
@@ -189,7 +190,7 @@
         <div class="acts"><button class="btn btn-primary btn-sm" type="button" id="ps-new">+ 이용권 직접 발급</button></div>
       </header>
       <div class="kpis kpis-4" id="ps-kpis"></div>
-      <div class="seg mt-s" id="ps-tabs" role="group" aria-label="보기"><button type="button" data-tab="passes" class="on">이용권</button><button type="button" data-tab="customers">고객</button><button type="button" data-tab="payments">결제</button><button type="button" data-tab="jobs">알림톡</button><button type="button" data-tab="devices">단말기</button><button type="button" data-tab="logs">단말기 오류</button></div>
+      <div class="seg mt-s" id="ps-tabs" role="group" aria-label="보기"><button type="button" data-tab="passes" class="on">이용권</button><button type="button" data-tab="customers">고객</button><button type="button" data-tab="payments">결제</button><button type="button" data-tab="jobs">알림톡</button><button type="button" data-tab="devices">단말기</button><button type="button" data-tab="logs">단말기 오류</button><button type="button" data-tab="ui">프론트 화면</button></div>
 
       <div class="ps-pane" data-pane="passes">
         <div class="filters">
@@ -229,6 +230,43 @@
           <button class="btn btn-light btn-sm" type="button" id="pj-run">보낼 때가 된 알림 지금 보내기</button>
         </div>
         <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>보낼 시각</th><th>종류 · 상태</th><th>받는 사람</th><th>문구</th><th></th></tr></thead><tbody id="pj-rows"></tbody></table></div></div>
+      </div>
+
+      <div class="ps-pane" data-pane="ui" hidden>
+        <div class="kui-head"><div><h2>프론트 화면 구성</h2><p class="muted small">보이는 구성을 비교하고, 매장에 사용할 화면을 선택해 주세요.</p></div><span class="st" id="kui-saved">설정 불러오는 중</span></div>
+        <div class="kui-workspace">
+          <form id="kui-form" class="card kui-controls">
+            <fieldset disabled>
+              <legend><span class="kui-step">1</span> 분류 선택 화면</legend>
+              <p class="muted small">손님이 이용권 종류를 고르는 첫 화면이에요.</p>
+              <div class="kui-choices">
+                <label class="kui-choice"><input type="radio" name="categoryLayout" value="list" checked><span class="kui-mini kui-mini-list" aria-hidden="true"><i></i><i></i><i></i></span><strong>목록형</strong><span>설명을 함께 보여줘요</span></label>
+                <label class="kui-choice"><input type="radio" name="categoryLayout" value="grid"><span class="kui-mini kui-mini-grid" aria-hidden="true"><i></i><i></i><i></i></span><strong>그리드형</strong><span>종류를 타일로 보여줘요</span></label>
+              </div>
+            </fieldset>
+            <fieldset disabled>
+              <legend><span class="kui-step">2</span> 상품 선택 화면</legend>
+              <p class="muted small">선택한 분류의 이용권과 가격을 보여줘요.</p>
+              <div class="kui-choices">
+                <label class="kui-choice"><input type="radio" name="productLayout" value="list" checked><span class="kui-mini kui-mini-list" aria-hidden="true"><i></i><i></i></span><strong>목록형</strong><span>상품명과 가격을 나눠요</span></label>
+                <label class="kui-choice"><input type="radio" name="productLayout" value="grid"><span class="kui-mini kui-mini-grid" aria-hidden="true"><i></i><i></i><i></i></span><strong>그리드형</strong><span>상품명과 가격을 타일에 담아요</span></label>
+              </div>
+            </fieldset>
+            <div class="kui-save-row"><button class="btn btn-primary" type="submit" id="kui-save" disabled>선택한 화면 저장</button><button class="btn btn-light" type="button" id="kui-reset" disabled>저장한 설정으로</button></div>
+            <p class="small" id="kui-message" role="status" aria-live="polite">화면 설정을 불러오고 있어요.</p>
+            <button class="btn btn-light btn-sm" type="button" id="kui-retry" hidden>다시 불러오기</button>
+            <p class="kui-apply-note">저장하면 다음 ‘이용권 구매’부터 반영돼요. 구매 중인 화면은 그대로 유지돼요.</p>
+          </form>
+          <div class="card kui-preview-card">
+            <div class="kui-preview-top"><h3>화면 미리보기</h3><span class="st blue" id="kui-draft-status">저장된 설정</span></div>
+            <div class="kui-preview-tools"><span class="small muted">미리 볼 화면</span><div class="seg" role="group" aria-label="미리 볼 화면"><button type="button" data-kui-screen="category" class="on" aria-pressed="true">분류 선택</button><button type="button" data-kui-screen="product" aria-pressed="false">상품 선택</button></div></div>
+            <div id="kui-groups" class="kui-preview-tools" hidden><span class="small muted">미리 볼 상품</span><div class="chips" role="group" aria-label="미리 볼 상품 분류"><button type="button" class="chip on" data-kui-group="day" aria-pressed="true">잠깐 · 하루</button><button type="button" class="chip" data-kui-group="regular" aria-pressed="false">꾸준히 이용</button><button type="button" class="chip" data-kui-group="friend" aria-pressed="false">친구와 함께</button></div></div>
+            <div class="kui-device"><div class="kui-device-bar"><button type="button" id="kui-back" aria-label="분류 선택 미리보기로 돌아가기" hidden>←</button><span>소셜팩토리 건대</span><small>구성 미리보기</small></div><div class="kui-screen" id="kui-preview" aria-label="선택한 프론트 화면 구성"></div></div>
+            <p class="small" id="kui-selection" role="status" aria-live="polite">분류를 눌러 상품 화면도 확인해 보세요.</p>
+            <p class="tiny muted">실제 상품과 같은 문구로 보여주는 구성 예시예요. 글자 크기·간격·그리드 배치는 실제 토스프론트에서 최종 확인해 주세요.</p>
+          </div>
+        </div>
+        <p class="tiny muted mt">이 설정을 지원하는 플러그인은 최초 한 번 새 버전으로 배포해야 해요. 이후 목록형·그리드형 변경은 어드민에서 저장하면 됩니다.</p>
       </div>
 
       <div class="ps-pane" data-pane="devices" hidden>
@@ -499,7 +537,9 @@
 <script src="js/spacecloud-import.js?v=paid20261024"></script>
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
-<script src="/js/admin-passes.js?v=20261026-tf"></script>
+<script src="/toss-front-plugin/ui.js?v=9aa875d6bc"></script>
+<script src="/js/admin-kiosk-ui.js?v=749a2de995"></script>
+<script src="/js/admin-passes.js?v=c2db2c3ac9"></script>
 <script src="/js/admin-kiosk-products.js?v=20261027-category-drawer"></script>
 </body>
 </html>

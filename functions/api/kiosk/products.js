@@ -1,4 +1,5 @@
 // GET /api/kiosk/products — 프론트에서 파는 이용권 목록 (단말기 토큰 필요)
+import { readKioskUi } from "../../_lib/kiosk-ui.js";
 import { json } from "../../_lib/auth.js";
 import { getKioskProducts, getKioskCategories } from "../../_lib/kiosk-catalog.js";
 import { deviceGate, durationText } from "../../_lib/kiosk.js";
@@ -11,6 +12,7 @@ export async function onRequestGet({ request, env }) {
   return json({
     ok: true, device: { id: device.id, name: device.name },
     privacyUrl: origin + "/privacy",
+    layout: await readKioskUi(env),
     categories: categories.map((c) => ({ id: c.id, name: c.name, description: c.description, image: c.image,
       imageUrl: c.imageVersion ? origin + "/api/kiosk/category-images/" + encodeURIComponent(c.id) + "?v=" + c.imageVersion : null })),
     products: products.map((p) => ({
