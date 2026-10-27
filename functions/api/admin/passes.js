@@ -13,7 +13,8 @@
  */
 import { json, clean, phoneDigits } from "../../_lib/auth.js";
 import { adminGate, kstNow } from "../../_lib/admin.js";
-import { KIOSK_PRODUCT_MAP, splitVat } from "../../_lib/kiosk-products.js";
+import { splitVat } from "../../_lib/kiosk-products.js";
+import { getKioskProducts, getKioskProduct, termsJson, termsForPayment } from "../../_lib/kiosk-catalog.js";
 import { issuePassForPayment, expiryNoticeStmts, upsertCustomer, validMobile, addDuration, nextStart, toMs, fromMs, cancelPass } from "../../_lib/kiosk.js";
 
 const TS = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
@@ -74,7 +75,7 @@ export async function onRequestGet({ request, env }) {
       ends3d: await one("SELECT COUNT(DISTINCT customer_id) AS n FROM passes WHERE status = 'active' AND ends_at > ?1 AND ends_at <= ?2", now, in3),
       customers: await one("SELECT COUNT(*) AS n FROM customers")
     };
-    return json({ ok: true, now, state, results, summary, products: Object.values(KIOSK_PRODUCT_MAP).map((p) => ({ id: p.id, name: p.name, price: p.price })), payMethods: ADMIN_PAY });
+    return json({ ok: true, now, state, results, summary, products: (await getKioskProducts(env)).map((p) => ({ id: p.id, name: p.name, price: p.price })), payMethods: ADMIN_PAY });
   } catch (e) {
     console.error("admin-passes", e && e.message);
     return json({ ok: false, error: "db-error" }, 500);
@@ -86,7 +87,7 @@ export async function onRequestPost({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
   let b;
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
-  const product = KIOSK_PRODUCT_MAP[clean(b && b.productId, 40)];
+  const product = await getKioskProduct(env, clean(b && b.productId, 40));
   const phone = clean(b && b.phone, 20);
   const amount = parseInt(b && b.amount, 10);
   const payMethod = ADMIN_PAY[b && b.payMethod] ? b.payMethod : "";
@@ -100,11 +101,12 @@ export async function onRequestPost({ request, env }) {
     const c = await upsertCustomer(env, phone, { name: clean(b.name, 40) });
     const { tax, supplyValue } = splitVat(amount);
     const key = "ADM" + kstNow().replace(/[^0-9]/g, "").slice(2) + Math.random().toString(36).slice(2, 8).toUpperCase();
-    const ins = await env.DB.prepare(
+    await env.DB.batch([env.DB.prepare(
       `INSERT INTO pass_payments (payment_key, status, channel, customer_id, product_id, product_name, amount, tax, supply, pay_method, paid_at, admin_memo)
        VALUES (?1, 'paid', 'admin', ?2, ?3, ?4, ?5, ?6, ?7, ?8, COALESCE(?9, datetime('now', '+9 hours')), ?10)`
-    ).bind(key, c.id, product.id, product.name, amount, tax, supplyValue, payMethod, normTs(b.paidAt) || null, clean(b.memo, 300) || null).run();
-    const pay = await env.DB.prepare("SELECT * FROM pass_payments WHERE id = ?1").bind(ins.meta.last_row_id).first();
+    ).bind(key, c.id, product.id, product.name, amount, tax, supplyValue, payMethod, normTs(b.paidAt) || null, clean(b.memo, 300) || null),
+      env.DB.prepare("INSERT INTO kiosk_payment_terms (payment_key, terms) VALUES (?1, ?2)").bind(key, termsJson(product))]);
+    const pay = await env.DB.prepare("SELECT * FROM pass_payments WHERE payment_key = ?1").bind(key).first();
     const { pass } = await issuePassForPayment(env, pay, { startAt: startsAt || null, purchaseNotice: b.notify === true });
     return json({ ok: true, pass });
   } catch (e) {
@@ -147,7 +149,8 @@ export async function onRequestPatch({ request, env }) {
       const to = await upsertCustomer(env, b.phone);
       if (to.id === p.customer_id) return json({ ok: false, error: "invalid", message: "같은 번호입니다." }, 400);
       // 옮겨 간 번호에 이용 중인 이용권이 있으면 그 뒤로 다시 이어 붙입니다
-      const prod = KIOSK_PRODUCT_MAP[p.product_id];
+      const sourcePay = await env.DB.prepare("SELECT * FROM pass_payments WHERE id = ?1").bind(p.payment_id).first();
+      const prod = sourcePay ? await termsForPayment(env, sourcePay) : null;
       const start = prod && p.starts_at > kstNow() ? await nextStart(env, to.id, p.pass_group) : p.starts_at;
       const ends = prod && start !== p.starts_at ? addDuration(start, prod.duration) : p.ends_at;
       await env.DB.batch([

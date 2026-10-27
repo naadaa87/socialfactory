@@ -107,6 +107,27 @@ CREATE TABLE IF NOT EXISTS kiosk_devices (
   paired_at       TEXT,
   last_seen_at    TEXT
 );
+-- 토스프론트 상품은 관리자에서 관리하고, 결제 당시 조건을 보존합니다.
+CREATE TABLE IF NOT EXISTS kiosk_products (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  price INTEGER NOT NULL,
+  list_price INTEGER,
+  duration_unit TEXT NOT NULL,
+  duration_value INTEGER NOT NULL,
+  pass_group TEXT NOT NULL,
+  image TEXT NOT NULL,
+  short TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')),
+  updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS kiosk_payment_terms (
+  payment_key TEXT PRIMARY KEY,
+  terms TEXT NOT NULL
+);
 -- 토스프론트 장애 진단: 결제 식별자만 저장하고 전화번호/응답 원문은 저장하지 않습니다.
 CREATE TABLE IF NOT EXISTS kiosk_error_logs (
   event_id TEXT PRIMARY KEY,

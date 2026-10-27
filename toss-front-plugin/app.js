@@ -136,42 +136,43 @@
   }
 
   /* ---------- 1. 이용권 선택 ---------- */
-  var PRODUCTS = null, PRIVACY_URL = "", loadedAt = 0;
+  var PRODUCTS = null, PRIVACY_URL = "";
   function loadProducts() {
-    if (PRODUCTS && Date.now() - loadedAt < 5 * 60e3) return Promise.resolve(PRODUCTS);
-    return api("/api/kiosk/products").then(function (j) { PRODUCTS = j.products || []; PRIVACY_URL = j.privacyUrl || ""; loadedAt = Date.now(); return PRODUCTS; });
+    return api("/api/kiosk/products").then(function (j) { PRODUCTS = j.products || []; PRIVACY_URL = j.privacyUrl || ""; return PRODUCTS; });
   }
   // 상품 종류부터 고르면 한 화면에서 비교하는 항목이 2~3개로 줄어듭니다.
   function startPurchase() {
     loadProducts().then(function (list) {
+      if (!list.length) { toast("현재 판매 중인 이용권이 없어요.", "error"); renderIdle(); return; }
+      var groups = [
+        { id: "day", title: "잠깐 · 하루", subtitle: "오늘 필요한 만큼 가볍게", image: "pass-1d.webp" },
+        { id: "regular", title: "꾸준히 이용", subtitle: "정기 이용권과 사물함", image: "pass-1m.webp" },
+        { id: "friend", title: "친구와 함께", subtitle: "친구 동반 할인권", image: "pass-3m.webp" }
+      ].filter(function (g) { return list.some(function (p) { return p.category === g.id; }); });
       sdk.template.renderSelectPage({
         title: CFG.storeName || "소셜팩토리 건대",
         subtitle: "얼마나 이용하실 건가요?",
-        options: [
-          { title: "잠깐 · 하루", subtitle: "2시간 4,000원 · 24시간 6,000원", description: "오늘 필요한 만큼 가볍게", iconUrl: imageUrl("pass-1d.webp"), onClick: function () { showProducts(list, "day"); } },
-          { title: "꾸준히 이용", subtitle: "15일 · 1개월 · 3개월", description: "나만의 작업 공간이 필요할 때", iconUrl: imageUrl("pass-1m.webp"), onClick: function () { showProducts(list, "regular"); } },
-          { title: "친구와 함께", subtitle: "친구 동반 할인권", description: "함께 방문한 친구와 각자 구매해요", iconUrl: imageUrl("pass-3m.webp"), onClick: function () { showProducts(list, "friend"); } }
-        ],
+        options: groups.map(function (g) {
+          return { title: g.title, subtitle: list.filter(function (p) { return p.category === g.id; }).length + "가지 이용권",
+            description: g.subtitle, iconUrl: imageUrl(g.image), onClick: function () { showProducts(list, g.id); } };
+        }),
         navbarButton: { label: "직원 관리", onClick: startStaff },
         onBack: renderIdle
       });
     }).catch(function (e) { if (!onAuthError(e)) { toast("이용권을 불러오지 못했어요. 다시 시도해 주세요.", "error"); renderIdle(); } });
   }
   function productLabel(p) {
-    return p.name.replace(/ \(친구 동반.*\)/, "").replace("1일권 (24시간)", "24시간 이용권");
+    return p.name;
   }
   function showProducts(list, group) {
-    var selected = list.filter(function (p) {
-      var day = p.id === "seat-2h" || p.id === "seat-1d";
-      return group === "friend" ? p.friend : !p.friend && (group === "day" ? day : !day);
-    });
+    var selected = list.filter(function (p) { return p.category === group; });
     sdk.template.renderSelectPage({
       title: group === "friend" ? "친구 동반 · 1인 가격" : "남은 이용권이 있으면 끝나는 시각부터 이어져요",
       subtitle: group === "day" ? "오늘의 이용권" : group === "friend" ? "함께 와서, 각자 할인" : "꾸준히 머무는 공간",
       options: selected.map(function (p) {
         return { title: productLabel(p) + " · " + won(p.price),
           subtitle: p.listPrice ? "정가 " + won(p.listPrice) + " → " + won(p.price) : p.duration + " 자유 이용",
-          description: p.friend ? p.short : "24시간 자유롭게 · 남은 기간 자동 연장",
+          description: p.short || "남은 기간 자동 연장",
           iconUrl: imageUrl(p.image), onClick: function () { askPhone(p); } };
       }),
       onBack: startPurchase
@@ -214,9 +215,9 @@
       sdk.template.renderOrderPage({
         localeCode: "ko",
         order: {
-          items: [{ label: productLabel(p), value: it.listPrice || it.amount, quantity: 1, imageUrl: imageUrl(p.image),
+          items: [{ label: it.productName, value: it.listPrice || it.amount, quantity: 1, imageUrl: imageUrl(p.image),
             options: [{ type: "option", label: "등록 번호 " + phone.replace(/^(\d{3})(\d{4})(\d{4})$/, "$1-$2-$3"), value: 0 }] }],
-          discounts: discount ? [{ label: "친구 동반 할인", value: discount }] : [],
+          discounts: discount ? [{ label: it.category === "friend" ? "친구 동반 할인" : "할인", value: discount }] : [],
           summary: {
             totalAmount: it.amount,
             discountAmount: discount || undefined,

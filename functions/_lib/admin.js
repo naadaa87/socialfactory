@@ -65,6 +65,8 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS idx_jobs_due ON notification_jobs (status, send_after)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_customer ON notification_jobs (customer_id)`,
   `CREATE TABLE IF NOT EXISTS kiosk_devices (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pairing', token_hash TEXT UNIQUE, pair_hash TEXT, pair_expires_at TEXT, serial TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), paired_at TEXT, last_seen_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS kiosk_products (id TEXT PRIMARY KEY, name TEXT NOT NULL, price INTEGER NOT NULL, list_price INTEGER, duration_unit TEXT NOT NULL, duration_value INTEGER NOT NULL, pass_group TEXT NOT NULL, image TEXT NOT NULL, short TEXT NOT NULL DEFAULT '', category TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), updated_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS kiosk_payment_terms (payment_key TEXT PRIMARY KEY, terms TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS kiosk_error_logs (event_id TEXT PRIMARY KEY, device_id INTEGER NOT NULL, payment_key TEXT NOT NULL, kind TEXT NOT NULL, code TEXT NOT NULL, http_status INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')))`,
   `CREATE INDEX IF NOT EXISTS idx_kiosk_error_logs_time ON kiosk_error_logs (created_at DESC)`
 ];
