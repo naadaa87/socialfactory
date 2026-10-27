@@ -338,6 +338,10 @@ details.help ol { padding-left: 20px; margin-bottom: 0; }
 .prod .p .pr { margin-top: 6px; font-weight: 800; font-size: 18px; }
 .prod .p .so { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .prod .p a { display: inline-block; margin-top: 8px; font-size: 12.5px; color: var(--blue); font-weight: 700; }
+.kp-thumb { width: 44px; height: 44px; object-fit: contain; border-radius: 8px; background: var(--bg); vertical-align: middle; margin-right: 8px; }
+.kp-image-picker { display: flex; align-items: center; gap: 16px; }
+.kp-preview { width: 92px; height: 92px; flex: none; object-fit: contain; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+@media (max-width: 640px) { .kp-image-picker { align-items: flex-start; } .kp-preview { width: 70px; height: 70px; } }
 .setlist { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .setlist li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
 .setlist .s { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; }

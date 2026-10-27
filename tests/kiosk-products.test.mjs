@@ -7,6 +7,9 @@ import { termsForPayment } from "../functions/_lib/kiosk-catalog.js";
 import { onRequestGet as adminList, onRequestPost as adminCreate, onRequestPatch as adminEdit } from "../functions/api/admin/kiosk-products.js";
 import { onRequestGet as frontList } from "../functions/api/kiosk/products.js";
 import { onRequestPost as intent } from "../functions/api/kiosk/intents.js";
+import { onRequestGet as categoryList, onRequestPost as categoryCreate, onRequestPatch as categoryEdit } from "../functions/api/admin/kiosk-categories.js";
+import { onRequestPost as imageUpload, onRequestDelete as imageDelete } from "../functions/api/admin/kiosk-product-images.js";
+import { onRequestGet as publicImage } from "../functions/api/kiosk/product-images/[id].js";
 
 function fixture() {
   const sqlite = new DatabaseSync(":memory:");
@@ -107,4 +110,45 @@ test("editing a seeded product freezes terms for payments created before catalog
   const pay = sqlite.prepare("SELECT * FROM pass_payments WHERE payment_key = 'SFKLEGACY12345678'").get();
   assert.equal((await termsForPayment(env, pay)).duration.months, 1);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM kiosk_payment_terms").get().n, 1);
+});
+
+test("admin can add and edit front categories; discount and image reach the kiosk", async () => {
+  const { sqlite, env } = fixture();
+  const token = "sfk_test-token-two-long-enough";
+  sqlite.prepare("INSERT INTO kiosk_devices (id,name,status,token_hash) VALUES (1,'Test front','active',?)").run(await deviceTokenHash(token));
+  const categoryReq = (method, body) => new Request("https://example.test/api/admin/kiosk-categories", {
+    method, headers: { authorization: "Bearer test-admin", "content-type": "application/json" }, body: body && JSON.stringify(body)
+  });
+  const category = { name: "새 분류", description: "직접 만든 분류", image: "pass-1d.webp", sortOrder: 5, active: true };
+  assert.equal((await categoryList({ request: categoryReq("GET"), env })).status, 200);
+  const c = await (await categoryCreate({ request: categoryReq("POST", category), env })).json();
+  assert.equal(c.ok, true);
+  const product = { name: "새 할인권", short: "테스트", basePrice: 10000, discountPercent: 35,
+    durationUnit: "hours", durationValue: 2, group: "seat", category: c.id,
+    image: "pass-2h.webp", sortOrder: 1, active: true };
+  const p = await (await adminCreate({ request: adminReq("POST", product), env })).json();
+  assert.equal(p.ok, true);
+  let front = await (await frontList({ request: deviceReq("GET", token, "products"), env })).json();
+  assert(front.categories.some((x) => x.id === c.id && x.name === "새 분류"));
+  assert.equal(front.products.find((x) => x.id === p.id).price, 6500);
+  assert.equal(front.products.find((x) => x.id === p.id).listPrice, 10000);
+  assert.equal((await categoryEdit({ request: categoryReq("PATCH", { ...category, id: c.id, active: false }), env })).status, 409);
+  assert.equal((await categoryEdit({ request: categoryReq("PATCH", { ...category, id: c.id, name: "수정한 분류" }), env })).status, 200);
+  front = await (await frontList({ request: deviceReq("GET", token, "products"), env })).json();
+  assert(front.categories.some((x) => x.id === c.id && x.name === "수정한 분류"));
+  const bytes = Buffer.alloc(30); bytes.write("RIFF", 0); bytes.writeUInt32LE(22, 4); bytes.write("WEBPVP8 ", 8);
+  const base64 = bytes.toString("base64");
+  const imageReq = (method, body) => new Request("https://example.test/api/admin/kiosk-product-images", {
+    method, headers: { authorization: "Bearer test-admin", "content-type": "application/json" }, body: JSON.stringify(body)
+  });
+  assert.equal((await imageUpload({ request: imageReq("POST", { productId: p.id, base64: "invalid" }), env })).status, 400);
+  const uploaded = await imageUpload({ request: imageReq("POST", { productId: p.id, base64 }), env });
+  assert.equal(uploaded.status, 200);
+  front = await (await frontList({ request: deviceReq("GET", token, "products"), env })).json();
+  assert.match(front.products.find((x) => x.id === p.id).imageUrl, /\/api\/kiosk\/product-images\//);
+  const served = await publicImage({ params: { id: p.id }, env });
+  assert.equal(served.headers.get("content-type"), "image/webp");
+  assert.deepEqual(Buffer.from(await served.arrayBuffer()), bytes);
+  assert.equal((await imageDelete({ request: imageReq("DELETE", { productId: p.id }), env })).status, 200);
+  assert.equal((await publicImage({ params: { id: p.id }, env })).status, 404);
 });

@@ -299,6 +299,16 @@ CREATE TABLE IF NOT EXISTS spacecloud_sync_audit (
  before_refund INTEGER,after_refund INTEGER,action TEXT NOT NULL,reason TEXT,created_at TEXT DEFAULT (datetime('now','+9 hours'))
 );
 -- 토스프론트 상품은 관리자에서 관리하고, 결제 당시 조건을 보존합니다.
+CREATE TABLE IF NOT EXISTS kiosk_categories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  image TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')),
+  updated_at TEXT
+);
 CREATE TABLE IF NOT EXISTS kiosk_products (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -318,6 +328,13 @@ CREATE TABLE IF NOT EXISTS kiosk_products (
 CREATE TABLE IF NOT EXISTS kiosk_payment_terms (
   payment_key TEXT PRIMARY KEY,
   terms TEXT NOT NULL
+);
+-- 프론트 상품 아이콘: 관리자가 업로드한 작고 메타데이터가 제거된 WebP 이미지.
+CREATE TABLE IF NOT EXISTS kiosk_product_images (
+  product_id TEXT PRIMARY KEY,
+  data_base64 TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours'))
 );
 -- 토스프론트 장애 진단: 결제 식별자만 저장하고 전화번호/응답 원문은 저장하지 않습니다.
 CREATE TABLE IF NOT EXISTS kiosk_error_logs (

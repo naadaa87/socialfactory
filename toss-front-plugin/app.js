@@ -136,25 +136,21 @@
   }
 
   /* ---------- 1. 이용권 선택 ---------- */
-  var PRODUCTS = null, PRIVACY_URL = "";
+  var PRODUCTS = null, CATEGORIES = [], PRIVACY_URL = "";
   function loadProducts() {
-    return api("/api/kiosk/products").then(function (j) { PRODUCTS = j.products || []; PRIVACY_URL = j.privacyUrl || ""; return PRODUCTS; });
+    return api("/api/kiosk/products").then(function (j) { PRODUCTS = j.products || []; CATEGORIES = j.categories || []; PRIVACY_URL = j.privacyUrl || ""; return PRODUCTS; });
   }
   // 상품 종류부터 고르면 한 화면에서 비교하는 항목이 2~3개로 줄어듭니다.
   function startPurchase() {
     loadProducts().then(function (list) {
       if (!list.length) { toast("현재 판매 중인 이용권이 없어요.", "error"); renderIdle(); return; }
-      var groups = [
-        { id: "day", title: "잠깐 · 하루", subtitle: "오늘 필요한 만큼 가볍게", image: "pass-1d.webp" },
-        { id: "regular", title: "꾸준히 이용", subtitle: "정기 이용권과 사물함", image: "pass-1m.webp" },
-        { id: "friend", title: "친구와 함께", subtitle: "친구 동반 할인권", image: "pass-3m.webp" }
-      ].filter(function (g) { return list.some(function (p) { return p.category === g.id; }); });
+      var groups = CATEGORIES.filter(function (g) { return list.some(function (p) { return p.category === g.id; }); });
       sdk.template.renderSelectPage({
         title: CFG.storeName || "소셜팩토리 건대",
         subtitle: "얼마나 이용하실 건가요?",
         options: groups.map(function (g) {
-          return { title: g.title, subtitle: list.filter(function (p) { return p.category === g.id; }).length + "가지 이용권",
-            description: g.subtitle, iconUrl: imageUrl(g.image), onClick: function () { showProducts(list, g.id); } };
+          return { title: g.name, subtitle: list.filter(function (p) { return p.category === g.id; }).length + "가지 이용권",
+            description: g.description, iconUrl: imageUrl(g.image), onClick: function () { showProducts(list, g.id); } };
         }),
         navbarButton: { label: "직원 관리", onClick: startStaff },
         onBack: renderIdle
@@ -166,14 +162,15 @@
   }
   function showProducts(list, group) {
     var selected = list.filter(function (p) { return p.category === group; });
+    var category = CATEGORIES.filter(function (c) { return c.id === group; })[0];
     sdk.template.renderSelectPage({
-      title: group === "friend" ? "친구 동반 · 1인 가격" : "남은 이용권이 있으면 끝나는 시각부터 이어져요",
-      subtitle: group === "day" ? "오늘의 이용권" : group === "friend" ? "함께 와서, 각자 할인" : "꾸준히 머무는 공간",
+      title: "남은 이용권이 있으면 끝나는 시각부터 이어져요",
+      subtitle: category ? category.name : "이용권 선택",
       options: selected.map(function (p) {
         return { title: productLabel(p) + " · " + won(p.price),
           subtitle: p.listPrice ? "정가 " + won(p.listPrice) + " → " + won(p.price) : p.duration + " 자유 이용",
           description: p.short || "남은 기간 자동 연장",
-          iconUrl: imageUrl(p.image), onClick: function () { askPhone(p); } };
+          iconUrl: p.imageUrl || imageUrl(p.image), onClick: function () { askPhone(p); } };
       }),
       onBack: startPurchase
     });
@@ -215,7 +212,7 @@
       sdk.template.renderOrderPage({
         localeCode: "ko",
         order: {
-          items: [{ label: it.productName, value: it.listPrice || it.amount, quantity: 1, imageUrl: imageUrl(p.image),
+          items: [{ label: it.productName, value: it.listPrice || it.amount, quantity: 1, imageUrl: p.imageUrl || imageUrl(p.image),
             options: [{ type: "option", label: "등록 번호 " + phone.replace(/^(\d{3})(\d{4})(\d{4})$/, "$1-$2-$3"), value: 0 }] }],
           discounts: discount ? [{ label: it.category === "friend" ? "친구 동반 할인" : "할인", value: discount }] : [],
           summary: {
