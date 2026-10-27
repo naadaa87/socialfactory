@@ -5,14 +5,15 @@
  */
 import { json, clean } from "../../_lib/auth.js";
 import { kstNow } from "../../_lib/admin.js";
-import { KIOSK_PRODUCT_MAP, splitVat } from "../../_lib/kiosk-products.js";
+import { splitVat } from "../../_lib/kiosk-products.js";
+import { getKioskProduct, termsJson } from "../../_lib/kiosk-catalog.js";
 import { deviceGate, upsertCustomer, validMobile, maskPhone, makePaymentKey, nextStart, addDuration, kTime } from "../../_lib/kiosk.js";
 
 export async function onRequestPost({ request, env }) {
   const { deny, device } = await deviceGate(request, env); if (deny) return deny;
   let b;
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
-  const product = KIOSK_PRODUCT_MAP[clean(b && b.productId, 40)];
+  const product = await getKioskProduct(env, clean(b && b.productId, 40));
   const phone = clean(b && b.phone, 20);
   if (!product) return json({ ok: false, error: "invalid", field: "productId" }, 400);
   if (!validMobile(phone)) return json({ ok: false, error: "invalid", field: "phone", message: "휴대폰 번호를 다시 확인해 주세요." }, 400);
@@ -25,10 +26,11 @@ export async function onRequestPost({ request, env }) {
   const customer = await upsertCustomer(env, phone, { privacy: true });
   const { tax, supplyValue } = splitVat(product.price);
   const paymentKey = makePaymentKey();
-  await env.DB.prepare(
+  await env.DB.batch([env.DB.prepare(
     `INSERT INTO pass_payments (payment_key, status, channel, device_id, customer_id, product_id, product_name, amount, tax, supply, test_mode)
      VALUES (?1, 'pending', 'toss_front', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
-  ).bind(paymentKey, device.id, customer.id, product.id, product.name, product.price, tax, supplyValue, env.KIOSK_TEST === "1" ? 1 : 0).run();
+  ).bind(paymentKey, device.id, customer.id, product.id, product.name, product.price, tax, supplyValue, env.KIOSK_TEST === "1" ? 1 : 0),
+    env.DB.prepare("INSERT INTO kiosk_payment_terms (payment_key, terms) VALUES (?1, ?2)").bind(paymentKey, termsJson(product))]);
 
   // 결제 전 확인 화면에 보여 줄 예상 이용 기간 (실제 기간은 결제가 끝난 시각으로 다시 계산합니다)
   const start = await nextStart(env, customer.id, product.group, kstNow());
@@ -36,7 +38,7 @@ export async function onRequestPost({ request, env }) {
   return json({
     ok: true, paymentKey,
     payment: { tax, supplyValue, taxExemptValue: 0, tip: 0 },
-    amount: product.price, productName: product.name, listPrice: product.listPrice || null,
+    amount: product.price, productName: product.name, listPrice: product.listPrice || null, category: product.category,
     phoneMasked: maskPhone(phone),
     preview: { startsAt: start, endsAt: end, startsText: kTime(start), endsText: kTime(end), extends: start > kstNow() }
   });

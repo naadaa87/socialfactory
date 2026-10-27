@@ -1,7 +1,9 @@
 /**
  * 토스프론트(현장 무인 결제)에서 파는 이용권
  * ------------------------------------------------------------------
- * 홈페이지 온라인 판매 상품(products.js)과 따로 관리합니다. 가격 · 이름을 바꾸려면 이 파일만 고치고 Commit 합니다 (단위: 원, 부가세 포함).
+ * 홈페이지 온라인 판매 상품(products.js)과 따로 관리합니다.
+ * 이 목록은 D1 kiosk_products 표의 초기값이자 기존 결제의 조건 복구용입니다.
+ * 운영 상품 등록·수정·노출은 관리자 '토스프론트 상품' 화면에서 합니다.
  * - id        : 바꾸지 않습니다 (결제 · 이용권 기록에 남는 값)
  * - price     : 실제 결제 금액
  * - listPrice : 할인 전 금액 (할인 상품만, 화면에 할인 표시용)
@@ -21,7 +23,7 @@ export const KIOSK_PRODUCTS = [
   { id: "seat-3m",  name: "3개월 이용권",  price: 297000, duration: { months: 3 },  group: "seat", remind: [3 * D, D],  image: "pass-3m.webp",  short: "3개월 뒤 같은 날 같은 시각까지" },
   // 친구 동반 할인 — 친구와 함께 오면 각자 할인된 가격으로 한 장씩 삽니다 (현장 확인은 따로 하지 않음)
   { id: "seat-1m-friend", name: "1개월 이용권 (친구 동반 35% 할인)", price: 64350,  listPrice: 99000,  duration: { months: 1 }, group: "seat", remind: [3 * D, D], image: "pass-1m.webp", short: "친구와 함께 오면 각자 35% 할인", friend: true },
-  { id: "seat-3m-friend", name: "3개월 이용권 (친구 동반 45% 할인)", price: 163350, listPrice: 297000, duration: { months: 3 }, group: "seat", remind: [3 * D, D], image: "pass-3m.webp", short: "친구와 함께 오면 각자 45% 할인", friend: true }
+  { id: "seat-3m-friend", name: "3개월 이용권 (친구 동반 35% 할인)", price: 193050, listPrice: 297000, duration: { months: 3 }, group: "seat", remind: [3 * D, D], image: "pass-3m.webp", short: "친구와 함께 오면 각자 35% 할인", friend: true }
 ];
 
 export const KIOSK_PRODUCT_MAP = Object.fromEntries(KIOSK_PRODUCTS.map((p) => [p.id, p]));

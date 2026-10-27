@@ -9,7 +9,7 @@
  */
 import { json, clean, sha256Hex, randomToken, phoneDigits, formatPhone } from "./auth.js";
 import { ensureSchema, kstNow } from "./admin.js";
-import { KIOSK_PRODUCT_MAP } from "./kiosk-products.js";
+import { termsForPayment } from "./kiosk-catalog.js";
 
 /* ---------- 시각 (한국 시간 문자열 ↔ 계산용 숫자) ---------- */
 // 'YYYY-MM-DD HH:MM:SS' 를 UTC 로 읽어 '벽시계 시각'을 그대로 계산합니다 (한국은 서머타임이 없어 안전).
@@ -101,7 +101,7 @@ export async function nextStart(env, customerId, group, now = kstNow()) {
 export async function issuePassForPayment(env, pay, { startAt = null, purchaseNotice = true } = {}) {
   const found = await env.DB.prepare("SELECT * FROM passes WHERE payment_id = ?1").bind(pay.id).first();
   if (found) return { pass: found, created: false };
-  const product = KIOSK_PRODUCT_MAP[pay.product_id];
+  const product = await termsForPayment(env, pay);
   if (!product) throw new Error("unknown-product");
   const now = kstNow();
   const starts = startAt || await nextStart(env, pay.customer_id, product.group, now);
@@ -140,7 +140,8 @@ export async function expiryNoticeStmts(env, c, group, now = kstNow()) {
   const out = [env.DB.prepare("UPDATE notification_jobs SET status = 'cancelled', updated_at = datetime('now', '+9 hours') WHERE customer_id = ?1 AND kind = 'expire_soon' AND status = 'queued' AND pass_group = ?2").bind(c.id, group)];
   const last = await env.DB.prepare("SELECT * FROM passes WHERE customer_id = ?1 AND pass_group = ?2 AND status = 'active' AND ends_at > ?3 ORDER BY ends_at DESC LIMIT 1").bind(c.id, group, now).first();
   if (!last) return out;
-  const product = KIOSK_PRODUCT_MAP[last.product_id] || {};
+  const lastPay = await env.DB.prepare("SELECT * FROM pass_payments WHERE id = ?1").bind(last.payment_id).first();
+  const product = lastPay ? (await termsForPayment(env, lastPay) || {}) : {};
   for (const before of product.remind || []) {
     const at = fromMs(toMs(last.ends_at) - before * 6e4);
     if (at <= now) continue;
@@ -193,7 +194,8 @@ export async function cancelPass(env, p, { refundAmount = 0, rechain = true, mem
     const { results: later } = await env.DB.prepare("SELECT * FROM passes WHERE customer_id = ?1 AND pass_group = ?2 AND status = 'active' AND id <> ?3 AND starts_at >= ?4 ORDER BY starts_at").bind(p.customer_id, p.pass_group, p.id, p.ends_at).all();
     let cursor = p.starts_at > kstNow() ? p.starts_at : kstNow();
     for (const x of later) {
-      const prod = KIOSK_PRODUCT_MAP[x.product_id]; if (!prod) continue;
+      const laterPay = await env.DB.prepare("SELECT * FROM pass_payments WHERE id = ?1").bind(x.payment_id).first();
+      const prod = laterPay ? await termsForPayment(env, laterPay) : null; if (!prod) continue;
       const ends = addDuration(cursor, prod.duration);
       stmts.push(env.DB.prepare("UPDATE passes SET starts_at = ?1, ends_at = ?2, updated_at = datetime('now', '+9 hours') WHERE id = ?3").bind(cursor, ends, x.id));
       cursor = ends;
