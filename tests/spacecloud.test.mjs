@@ -45,6 +45,18 @@ test('Korea wall time and UTC convert consistently, with overnight events split 
   assert.notEqual(rows[0].code, (await calendarRows(a, 'r2', 1234))[0].code);
   assert(rows.every(r => r.amount === null && r.pay_status === 'unknown' && r.external));
 });
+test('date-bounded calendar rows only hash and return days visible in the requested month', async () => {
+  const events = parseCalendar(calendar(
+    event('oct','20261031T230000','20261101T010000'),
+    event('dec','20261201T100000','20261201T120000')));
+  const october = await calendarRows(events, 'r1', 1, { from:'2026-10-01', to:'2026-10-31' });
+  const november = await calendarRows(events, 'r1', 1, { from:'2026-11-01', to:'2026-11-30' });
+  assert.deepEqual(october.map(r => r.date), ['2026-10-31']);
+  assert.deepEqual(november.map(r => r.date), ['2026-11-01']);
+  assert.equal(october[0].end_min, 1440);
+  assert.equal(november[0].start_min, 0);
+  assert.equal((await calendarRows(events, 'r1', 1)).length, 3);
+});
 test('date-only exclusive end, folded/escaped titles, and cancellation', async () => {
   const raw = event('all').replace('DTSTART;TZID=Asia/Seoul:20261024T230000','DTSTART;VALUE=DATE:20261024').replace('DTEND;TZID=Asia/Seoul:20261025T010000','DTEND;VALUE=DATE:20261026').replace('SUMMARY:예약 일정','SUMMARY:예약\\, 일\r\n 정\\n다음');
   const events = parseCalendar(calendar(raw)); assert.equal(events[0].title,'예약, 일정\n다음');
@@ -170,6 +182,19 @@ test('a previously seen paid calendar booking remains after the feed drops it; v
  assert.equal(removed.results.length,0);
  assert.equal(e2.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_calendar_history').get().n,0);
  e.sqlite.close();e2.sqlite.close();
+});
+test('date-bounded history preserves a past paid booking only in its month', async () => {
+  const e = env(); let body = calendar(event('paid-past','20261024T100000','20261024T120000'));
+  const fetcher = async () => response(body);
+  const before = Date.parse('2026-10-23T00:00:00Z'), after = Date.parse('2026-10-25T00:00:00Z');
+  e.sqlite.exec("INSERT INTO spacecloud_sales(reservation_id,use_date,end_date,paid_at,amount,refund_amount,space) VALUES('123','2026-10-24','2026-10-24','2026-10-20',40000,0,'r1')");
+  await loadSpacecloud(e,{fetcher,force:true,now:before}); body = calendar();
+  const october = await loadSpacecloud(e,{fetcher,force:true,now:after,from:'2026-10-01',to:'2026-10-31'});
+  const november = await loadSpacecloud(e,{fetcher,now:after+1000,from:'2026-11-01',to:'2026-11-30'});
+  assert.equal(october.results.length, 1);
+  assert.equal(october.results[0].historical, true);
+  assert.equal(november.results.length, 0);
+  e.sqlite.close();
 });
 
 test('uses the Workers-supported manual redirect policy and refuses redirected feeds', async()=>{

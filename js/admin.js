@@ -88,13 +88,14 @@
   function api(path, opt) {
     opt = opt || {};
     var init = { method: opt.method || "GET", credentials: "same-origin", headers: {} };
+    if (opt.signal) init.signal = opt.signal;
     if (opt.body !== undefined) { init.headers["Content-Type"] = "application/json"; init.body = JSON.stringify(opt.body); }
     return fetch(path, init).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) {
         if (r.ok && j.ok !== false) return j;
         var e = new Error(errText(j, r.status)); e.status = r.status; e.code = (j && (j.code || j.error)) || ""; e.data = j || {}; throw e;
       });
-    }, function () { var e = new Error("서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요."); e.code = "NETWORK"; throw e; });
+    }, function (cause) { if (opt.signal && opt.signal.aborted) throw cause; var e = new Error("서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요."); e.code = "NETWORK"; throw e; });
   }
   var toastT;
   function toast(msg) { var t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, 3400); }
@@ -609,7 +610,7 @@
   }, 5 * 60 * 1000);
 
   /* =================== 예약 현황 (일간 시간표 · 월간 달력) =================== */
-  var BD = { mode: "day", date: null, items: [] };
+  var BD = { mode: "day", date: null, items: [], requestSeq: 0, controller: null, renderedKey: null };
   function bdSyncUi() {
     if (!BD.date) BD.date = todayIso();
     $$("#bd-mode [data-mode]").forEach(function (b) { b.classList.toggle("on", b.dataset.mode === BD.mode); });
@@ -623,13 +624,22 @@
     if (BD.mode === "day") { from = addDays(BD.date, -1); to = BD.date; }
     else { from = addDays(BD.date.slice(0, 8) + "01", -1); var d = parseIso(BD.date.slice(0, 8) + "01"); d.setMonth(d.getMonth() + 1); d.setDate(0); to = isoOf(d); }
     var box = BD.mode === "day" ? $("#bd-day") : $("#bd-month"), key = BD.mode + BD.date;
-    if (!box.innerHTML) box.innerHTML = emptyMsg("불러오는 중…");
-    api("/api/admin/reservations?from=" + from + "&to=" + to).then(function (j) {
-      if (key !== BD.mode + BD.date) return;
+    if (BD.controller) BD.controller.abort();
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    BD.controller = controller;
+    var seq = ++BD.requestSeq;
+    if (BD.renderedKey !== key) box.innerHTML = emptyMsg("불러오는 중…");
+    api("/api/admin/reservations?from=" + from + "&to=" + to, controller ? { signal: controller.signal } : {}).then(function (j) {
+      if (seq !== BD.requestSeq || key !== BD.mode + BD.date) return;
       BD.items = remember(j.results);
       renderSpacecloudStatus(j.spacecloud);
       if (BD.mode === "day") drawDay(); else drawMonth();
-    }).catch(fail(box));
+      BD.renderedKey = key;
+    }).catch(function (e) {
+      if (seq !== BD.requestSeq || (controller && controller.signal.aborted)) return;
+      BD.renderedKey = null;
+      fail(box)(e);
+    });
   }
   function drawDay() {
     var D = BD.date, show = $("#bd-cancel").checked;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
-function harness() {
+function harness(fetchImpl) {
   const html = readFileSync(new URL('../admin.html', import.meta.url), 'utf8');
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
   const nodes = new Map();
@@ -23,9 +23,9 @@ function harness() {
   const window={SF_CONFIG:{pricing:{rooms:{r1:{max:30},r2:{max:40},r3:{max:15},r4:{max:50},r5:{max:30}}}},addEventListener(){},scrollTo(){}};
   let code=readFileSync(new URL('../js/admin.js',import.meta.url),'utf8');
   code=code.replace(/  api\("\/api\/admin\/session"\)\.then\(showApp\)\.catch\([^\n]+\);/,'');
-  code=code.replace(/\}\)\(\);\s*$/, 'window.testHooks={resRow,renderExternalDetail,renderSpacecloudStatus,net,BD,drawDay,drawMonth,SL,drawSales};})();');
+  code=code.replace(/\}\)\(\);\s*$/, 'window.testHooks={resRow,renderExternalDetail,renderSpacecloudStatus,net,BD,loadBoard,drawDay,drawMonth,SL,drawSales};})();');
   vm.runInNewContext(code,{window,document,sessionStorage:{removeItem(){}},location:{hash:'',pathname:'/admin'},history:{replaceState(){}},
-    setTimeout(){},clearTimeout(){},setInterval(){},navigator:{},console});
+    setTimeout(){},clearTimeout(){},setInterval(){},navigator:{},console,fetch:fetchImpl,AbortController});
   return {hooks:window.testHooks,nodes,statuses};
 }
 const slot={external:true,code:'SC1-123',status:'confirmed',space:'r1',date:'2026-10-24',start_min:600,end_min:720,
@@ -51,6 +51,22 @@ test('day and month views render the separate external color and unknown payment
  const {hooks,nodes}=harness();hooks.BD.date='2026-10-24';hooks.BD.items=[slot];hooks.drawDay();
  assert(nodes.get('#bd-day').innerHTML.includes('sc-external'));assert(nodes.get('#bd-day').innerHTML.includes('금액 확인 필요'));
  hooks.drawMonth();assert(nodes.get('#bd-month').innerHTML.includes('sc-external'));
+});
+test('rapid month navigation aborts the old request and ignores its late result', async () => {
+ const requests=[];
+ const {hooks,nodes}=harness((url,opt)=>new Promise(resolve=>requests.push({url,opt,resolve})));
+ hooks.BD.mode='month'; hooks.BD.date='2026-10-01'; hooks.loadBoard();
+ assert.equal(requests.length,1);
+ hooks.BD.date='2026-11-01'; hooks.loadBoard();
+ assert.equal(requests.length,2);
+ assert.equal(requests[0].opt.signal.aborted,true);
+ assert(nodes.get('#bd-month').innerHTML.includes('불러오는 중'));
+ const response=results=>({ok:true,json:async()=>({ok:true,results,spacecloud:{configured:false,rooms:[]}})});
+ requests[1].resolve(response([])); await new Promise(setImmediate);
+ assert(nodes.get('#bd-sum-title').textContent.includes('11월'));
+ requests[0].resolve(response([slot])); await new Promise(setImmediate);
+ assert(nodes.get('#bd-sum-title').textContent.includes('11월'));
+ assert.equal(hooks.BD.items.length,0);
 });
 test('source errors show stale-data warnings in every visible status line without exposing feed tokens',()=>{
  const {hooks,statuses}=harness();hooks.renderSpacecloudStatus({configured:true,rooms:[{space:'r1',count:1,updated_at:1,error:'offline',stale:true}]});

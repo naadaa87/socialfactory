@@ -129,10 +129,13 @@ export function parseCalendar(text) {
   return [...events.values()].filter(e => !e.cancelled);
 }
 
-export async function calendarRows(events, space, updatedAt) {
+export async function calendarRows(events, space, updatedAt, { from, to } = {}) {
   const rows = [];
+  const fromDay = from ? Math.floor(Date.parse(from + 'T00:00:00Z') / DAY) : -Infinity;
+  const toDay = to ? Math.floor(Date.parse(to + 'T00:00:00Z') / DAY) : Infinity;
   for (const event of events) {
-    const first = Math.floor((event.start + KST) / DAY), last = Math.ceil((event.end + KST) / DAY);
+    const first = Math.max(Math.floor((event.start + KST) / DAY), fromDay);
+    const last = Math.min(Math.ceil((event.end + KST) / DAY), toDay + 1);
     for (let day = first; day < last; day++) {
       if (rows.length >= 6000) throw new Error('too-many-events');
       const date = new Date(day * DAY).toISOString().slice(0, 10);
@@ -202,7 +205,7 @@ async function refreshRoom(env, feed, force, fetcher, now) {
   return cached;
 }
 
-export async function loadSpacecloud(env, { force = false, fetcher = fetch, now = Date.now() } = {}) {
+export async function loadSpacecloud(env, { force = false, fetcher = fetch, now = Date.now(), from, to } = {}) {
   let feeds;
   try { feeds = await readFeedConfig(env); } catch { return { results: [], info: { configured: false, error: '캘린더 연결 설정을 확인해 주세요.', rooms: [] } }; }
   if (!feeds.length) return { results: [], info: { configured: false, rooms: [] } };
@@ -211,13 +214,13 @@ export async function loadSpacecloud(env, { force = false, fetcher = fetch, now 
     const snapshots = await Promise.all(feeds.map(async feed => {
       const cached = await refreshRoom(env, feed, force, fetcher, now);
       const events = JSON.parse(cached.events_json);
-      return { rows: await calendarRows(events, feed.space, cached.updated_at), room: {
+      return { rows: await calendarRows(events, feed.space, cached.updated_at, { from, to }), room: {
         space: feed.space, count: events.length, checked_at: cached.checked_at, updated_at: cached.updated_at,
         error: cached.error || null, stale: !!cached.error || !cached.updated_at || now - cached.updated_at >= TTL * 2 } };
     }));
     const current = snapshots.flatMap(x => x.rows);
     const history = await historicalCalendarRows(env,
-      await Promise.all(feeds.map(async f => ({ space:f.space, hash:await sha256Hex(f.url) }))), current, now);
+      await Promise.all(feeds.map(async f => ({ space:f.space, hash:await sha256Hex(f.url) }))), current, now, { from, to });
     return { results: current.concat(history), info: { configured: true, rooms: snapshots.map(x => x.room), refresh_minutes: TTL / 60000 } };
   } catch { return { results: [], info: { configured: true, error: '외부 일정을 읽지 못했습니다. 다시 불러와 주세요.', rooms: [] } }; }
 }
