@@ -13,7 +13,7 @@
   var sdk = window.TossFrontSDK;
   var CFG = window.SF_PLUGIN || {};
   var API = String(CFG.apiBase || "").replace(/\/+$/, "");
-  var K_TOKEN = "sf_kiosk_token", K_PENDING = "sf_kiosk_pending", K_CANCEL = "sf_kiosk_pending_cancel";
+  var K_TOKEN = "sf_kiosk_token", K_PENDING = "sf_kiosk_pending", K_CANCEL = "sf_kiosk_pending_cancel", K_LOGS = "sf_kiosk_error_logs";
   var isLocal = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 
   // 이 PC 브라우저에서 시험할 때만: 토스 예제(sdk.js)와 같은 방식으로 단말기 · 매장 정보를 흉내 냅니다.
@@ -47,6 +47,41 @@
         });
       }, function () { var e = new Error("서버에 연결하지 못했어요"); e.code = "NETWORK"; throw e; })
       .finally(function () { if (t) clearTimeout(t); });
+  }
+  // 장애 기록에는 전화번호·SDK 응답·PIN·토큰을 넣지 않습니다. paymentKey는 결제 대조를 위해 원문 보관합니다.
+  var logSending = false;
+  function errorCode(e) {
+    var code = String(e && e.code || (e && e.status ? "HTTP_" + e.status : "UNKNOWN")).toUpperCase();
+    return /^[A-Z0-9_-]{1,40}$/.test(code) ? code : "SDK_ERROR";
+  }
+  function flushLogs() {
+    if (logSending || !token) return Promise.resolve();
+    logSending = true;
+    return sget(K_LOGS).then(function (raw) {
+      var queue; try { queue = JSON.parse(raw || "[]"); } catch (_) { queue = []; }
+      if (!Array.isArray(queue) || !queue.length) return;
+      var batch = queue.slice(0, 10), ids = batch.map(function (x) { return x.eventId; });
+      return api("/api/kiosk/logs", { events: batch }).then(function () {
+        return sget(K_LOGS).then(function (latest) {
+          var all; try { all = JSON.parse(latest || "[]"); } catch (_) { all = []; }
+          return sset(K_LOGS, JSON.stringify(all.filter(function (x) { return ids.indexOf(x.eventId) < 0; })));
+        });
+      }).catch(function () { /* 서버 장애 중에는 단말기 저장소에 남겨 다음 접속 때 전송 */ });
+    }).finally(function () { logSending = false; });
+  }
+  function logFailure(kind, paymentKey, e) {
+    if (!paymentKey || !token) return Promise.resolve();
+    var item = {
+      eventId: "K" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12),
+      kind: kind, paymentKey: paymentKey, code: errorCode(e),
+      httpStatus: Number(e && e.status) || 0
+    };
+    return sget(K_LOGS).then(function (raw) {
+      var queue; try { queue = JSON.parse(raw || "[]"); } catch (_) { queue = []; }
+      if (!Array.isArray(queue)) queue = [];
+      queue.push(item);
+      return sset(K_LOGS, JSON.stringify(queue.slice(-50))).then(flushLogs);
+    });
   }
   // 결제 결과 보고는 네트워크가 잠깐 끊겨도 몇 번 더 시도합니다.
   function report(paymentKey, result) {
@@ -89,6 +124,7 @@
 
   /* ---------- 대기 화면 ---------- */
   function renderIdle() {
+    flushLogs();
     sdk.template.renderIdlePage({
       type: "twoButton",
       title: { text1: CFG.storeName || "소셜팩토리", text2: "오늘도, 편하게" },
@@ -214,13 +250,14 @@
           showDone(j.pass.productName, j.pass.startsText + " ~ " + j.pass.endsText, j.phoneMasked, null, j.pass.endsText);
         }, function (e) {
           // 결제는 됐지만 서버 보고가 안 된 경우: 저장소에 남겨 두고 대기 화면에서 다시 보고합니다.
+          logFailure("PAYMENT_RESULT_REPORT_FAILED", it.paymentKey, e);
           console.error("report", e);
           showDone(it.productName, it.preview.startsText + " ~ " + it.preview.endsText, it.phoneMasked, "이용권 등록이 잠시 늦어질 수 있어요");
         });
       }
       // 시간 초과는 실제로 승인됐을 수도 있어 저장소에 남겨 두고 나중에 getPayment 로 확인합니다.
       if (result.type !== "TIMEOUT") sdel(K_PENDING);
-      report(it.paymentKey, result).catch(function (e) { console.error("report", e); });
+      report(it.paymentKey, result).catch(function (e) { logFailure("PAYMENT_RESULT_REPORT_FAILED", it.paymentKey, e); console.error("report", e); });
       sdk.template.renderResultPage({
         type: "image", status: "error",
         title: result.type === "CANCELED" ? "결제를 취소했어요" : result.type === "TIMEOUT" ? "결제 시간이 지났어요" : "결제하지 못했어요",
@@ -245,18 +282,22 @@
   function recoverPending() {
     if (recovering || paying || !token) return;
     recovering = true;
+    var recoveryKey = "";
     sget(K_PENDING).then(function (raw) {
       if (!raw) return;
       var p; try { p = JSON.parse(raw); } catch (e) { return sdel(K_PENDING); }
+      recoveryKey = p.paymentKey;
       return sdk.payment.getPayment({ paymentKey: p.paymentKey }).then(function (res) {
         if (res && res.type === "SUCCESS") return report(p.paymentKey, res).then(function () { return sdel(K_PENDING); });
       }, function (e) {
         // 승인 결과가 없으면(PAYMENT_NOT_FOUND) 결제가 안 된 것 — 2분이 지났으면 시간 초과로 정리합니다.
-        if (/PAYMENT_NOT_FOUND/.test(String((e && (e.code || e.message)) || e)) && Date.now() - (p.at || 0) > 120e3) {
-          return report(p.paymentKey, { type: "TIMEOUT", message: "PAYMENT_NOT_FOUND" }).catch(function () {}).then(function () { return sdel(K_PENDING); });
+        if (/PAYMENT_NOT_FOUND/.test(String((e && (e.code || e.message)) || e))) {
+          if (Date.now() - (p.at || 0) > 120e3) return report(p.paymentKey, { type: "TIMEOUT", message: "PAYMENT_NOT_FOUND" }).then(function () { return sdel(K_PENDING); }, function (err) { logFailure("PAYMENT_RESULT_REPORT_FAILED", p.paymentKey, err); });
+          return;
         }
+        logFailure("PAYMENT_RECOVERY_FAILED", p.paymentKey, e);
       });
-    }).catch(function (e) { console.error("recover", e); }).finally(function () { recovering = false; });
+    }).catch(function (e) { logFailure("PAYMENT_RECOVERY_FAILED", recoveryKey, e); console.error("recover", e); }).finally(function () { recovering = false; });
   }
 
   /* ---------- 관리 (직원): 카드 결제 취소 ----------
@@ -273,7 +314,7 @@
         return api("/api/kiosk/staff", { pin: digits(value) }).then(function (j) {
           staffToken = j.staffToken;
           return recoverCancel().then(function () { showRefundList(j.payments || []); });
-        }).catch(function (e) { if (!onAuthError(e)) toast(e.message || "확인하지 못했어요.", "error"); });
+        }).catch(function (e) { if (!onAuthError(e)) toast(e.code === "too-many" ? "잠시 뒤 다시 시도해 주세요." : (e.message || "확인하지 못했어요."), "error"); });
       },
       onBack: startPurchase
     });
@@ -315,7 +356,8 @@
       return api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: x.paymentKey, stage: "result", type: "SUCCESS", response: result.response }).then(function () {
         sdel(K_CANCEL);
         sdk.template.renderResultPage({ type: "image", status: "success", title: "결제를 취소했어요", description: x.productName + " · " + won(x.amount) + "\n이용권도 취소했어요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
-      }, function () {
+      }, function (e) {
+        logFailure("CANCEL_RECOVERY_FAILED", x.paymentKey, e);
         sdk.template.renderResultPage({ type: "image", status: "success", title: "카드 취소는 됐어요", description: "서버 기록은 다음에 관리 화면에 들어올 때 다시 맞춰요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
       });
     }).catch(function (e) {
@@ -324,12 +366,18 @@
   }
   // 취소 응답이 서버에 못 갔던 건: 관리 화면에 들어올 때 getPaymentCancel 로 확인해 다시 보고합니다.
   function recoverCancel() {
+    var recoveryKey = "";
     return sget(K_CANCEL).then(function (key) {
       if (!key) return;
+      recoveryKey = key;
       return sdk.payment.getPaymentCancel({ paymentKey: key }).then(function (res) {
-        if (res && res.type === "SUCCESS") return api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: key, stage: "result", type: "SUCCESS", response: res.response }).then(function () { toast("지난 결제 취소를 기록했어요.", "success"); });
-      }, function () { /* 취소 결과 없음 = 취소 안 됨 */ }).then(function () { return sdel(K_CANCEL); });
-    }).catch(function (e) { console.error("recover-cancel", e); });
+        if (res && res.type === "SUCCESS") return api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: key, stage: "result", type: "SUCCESS", response: res.response }).then(function () { toast("지난 결제 취소를 기록했어요.", "success"); return sdel(K_CANCEL); });
+        return sdel(K_CANCEL);
+      }, function (e) {
+        if (/PAYMENT_NOT_FOUND/.test(String(e && (e.code || e.message) || e))) return sdel(K_CANCEL);
+        logFailure("CANCEL_RECOVERY_FAILED", key, e);
+      });
+    }).catch(function (e) { logFailure("CANCEL_RECOVERY_FAILED", recoveryKey, e); console.error("recover-cancel", e); });
   }
 
   /* ---------- 남은 시간 확인 ---------- */
