@@ -29,11 +29,12 @@
 .kui-preview-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
 .kui-preview-tools .seg button { padding:6px 10px; font-size:12px; }
 .kui-preview-tools .chip { height:29px; font-size:11px; padding:0 10px; }
-.kui-device { border:7px solid #293342; border-radius:20px; overflow:hidden; background:#fff; box-shadow:0 10px 24px #18233a12; }
-.kui-device-bar { display:flex; align-items:center; gap:8px; padding:12px 18px; border-bottom:1px solid #f1f3f5; font-size:11px; color:#7c8695; min-height:44px; }
+.kui-device { width:100%; max-width:400px; aspect-ratio:5 / 8; margin-inline:auto; display:flex; flex-direction:column; border:7px solid #293342; border-radius:20px; overflow:hidden; background:#fff; box-shadow:0 10px 24px #18233a12; }
+.kui-device-bar { flex:none; display:flex; align-items:center; gap:8px; padding:12px 18px; border-bottom:1px solid #f1f3f5; font-size:11px; color:#7c8695; min-height:44px; }
 .kui-device-bar small { margin-left:auto; font-size:10px; white-space:nowrap; }
 .kui-device-bar button { background:none; border:0; font-size:19px; padding:0 4px 0 0; color:#323d4b; }
-.kui-screen { min-height:340px; padding:28px 22px; }
+.kui-device-bar > span { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kui-screen { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:28px 22px; }
 .kui-screen h3 { font-size:22px; line-height:1.35; margin:0 0 8px; color:#191f28; overflow-wrap:anywhere; }
 .kui-screen > p { font-size:12px; color:#6b7684; margin:0 0 22px; line-height:1.6; }
 .kui-options { display:grid; gap:10px; }
