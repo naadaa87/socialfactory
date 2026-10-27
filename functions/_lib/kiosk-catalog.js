@@ -30,12 +30,17 @@ function productFromRow(r) {
   };
 }
 
+// 기본 데이터 준비 여부만 기억합니다. 가격·분류·판매 상태는 매 요청마다 DB에서 읽습니다.
+const categoriesReady = new WeakSet(), productsReady = new WeakSet();
+function categorySeedStatements(env) {
+  return DEFAULT_CATEGORIES.map((c) => env.DB.prepare(
+    "INSERT OR IGNORE INTO kiosk_categories (id,name,description,image,sort_order) VALUES (?1,?2,?3,?4,?5)"
+  ).bind(c.id, c.name, c.description, c.image, c.sortOrder));
+}
 export async function seedKioskCategories(env) {
-  for (const c of DEFAULT_CATEGORIES) {
-    await env.DB.prepare(
-      "INSERT OR IGNORE INTO kiosk_categories (id,name,description,image,sort_order) VALUES (?1,?2,?3,?4,?5)"
-    ).bind(c.id, c.name, c.description, c.image, c.sortOrder).run();
-  }
+  if (categoriesReady.has(env.DB)) return;
+  await env.DB.batch(categorySeedStatements(env));
+  categoriesReady.add(env.DB);
 }
 
 export async function getKioskCategories(env, { all = false } = {}) {
@@ -52,16 +57,20 @@ export async function getKioskCategories(env, { all = false } = {}) {
 }
 
 export async function seedKioskProducts(env) {
-  await seedKioskCategories(env);
+  if (productsReady.has(env.DB)) return;
+  const statements = categoriesReady.has(env.DB) ? [] : categorySeedStatements(env);
   for (let i = 0; i < KIOSK_PRODUCTS.length; i++) {
     const p = KIOSK_PRODUCTS[i], unit = defaultUnit(p);
-    await env.DB.prepare(
+    statements.push(env.DB.prepare(
       `INSERT OR IGNORE INTO kiosk_products
        (id,name,price,list_price,duration_unit,duration_value,pass_group,image,short,category,active,sort_order)
        VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,1,?11)`
     ).bind(p.id, p.name, p.price, p.listPrice || null, unit, p.duration[unit], p.group,
-      p.image, p.short, defaultCategory(p), i * 10).run();
+      p.image, p.short, defaultCategory(p), i * 10));
   }
+  // 분류 → 상품 순서를 지키며 최초 한 번의 D1 왕복으로 준비합니다.
+  await env.DB.batch(statements);
+  categoriesReady.add(env.DB); productsReady.add(env.DB);
 }
 
 export async function getKioskProducts(env, { all = false } = {}) {

@@ -7,10 +7,10 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 async function harness({soundFails=false}={}) {
  const pages=[],listeners=new Map(),timers=new Map();let timerId=0,sounds=0;
  const template={openToast(){}};
- for(const name of ['renderIdlePage','renderInputPage','renderOnboardingPage']) template[name]=params=>pages.push({name,params});
+ for(const name of ['renderIdlePage','renderInputPage','renderOnboardingPage','renderSelectPage']) template[name]=params=>pages.push({name,params});
  const document={getElementById:()=>({contains:target=>target.inside!==false}),addEventListener:(name,callback)=>listeners.set(name,callback)};
  const window={SF_KIOSK_UI:{normalize:()=>({})},TossFrontSDK:{template,app:{playTouchSound(){sounds++;return soundFails?Promise.reject(new Error('fixture mute')):Promise.resolve()}},storage:{async get({key}){return {value:key==='sf_kiosk_token'?'fixture-token':null}}}}};
- vm.runInNewContext(source,{window,document,location:{hostname:'fixture.invalid'},URL,AbortController,console,
+ vm.runInNewContext(source,{window,document,fetch:async()=>new Response(JSON.stringify({ok:true,products:[]})),location:{hostname:'fixture.invalid'},URL,AbortController,console,
   setTimeout(callback,ms){const id=++timerId;timers.set(id,{callback,ms});return id},clearTimeout(id){timers.delete(id)}});
  await tick();
  return {get current(){return pages.at(-1)},get sounds(){return sounds},click(control){listeners.get('click')({target:control})},
@@ -46,4 +46,9 @@ test('이동·지우기·체크 버튼에는 소리, SDK 숫자 키에는 중복
 test('터치음 API 실패가 조회 화면 진입을 막지 않음',async()=>{
  const h=await harness({soundFails:true});h.current.params.secondaryButton.onClick();h.click(control());h.runTimers(0);await tick();
  assert.equal(h.current.name,'renderInputPage');
+});
+
+test('구매 버튼은 click이 없는 환경에서도 40ms 뒤 준비 화면으로 반응',async()=>{
+ const h=await harness();h.current.params.primaryButton.onClick();h.runTimers(40);
+ assert.equal(h.current.params.title,'이용권을 불러오고 있어요');await tick();
 });

@@ -13,8 +13,15 @@ export function validateKioskUi(value) {
   return { categoryLayout: value.categoryLayout, productLayout: value.productLayout };
 }
 
-export async function readKioskUi(env) {
+const tableReady = new WeakSet();
+async function ensureKioskUiTable(env) {
+  if (tableReady.has(env.DB)) return;
   await env.DB.prepare(TABLE).run();
+  tableReady.add(env.DB);
+}
+
+export async function readKioskUi(env) {
+  await ensureKioskUiTable(env);
   const row = await env.DB.prepare("SELECT * FROM kiosk_ui_settings WHERE id = 1").first();
   if (!row) return { ...DEFAULT_KIOSK_UI, updatedAt: null };
   let layout;
@@ -25,7 +32,7 @@ export async function readKioskUi(env) {
 
 export async function saveKioskUi(env, value) {
   const layout = validateKioskUi(value);
-  await env.DB.prepare(TABLE).run();
+  await ensureKioskUiTable(env);
   await env.DB.prepare(`INSERT INTO kiosk_ui_settings (id, category_layout, product_layout, updated_at)
     VALUES (1, ?1, ?2, strftime('%Y-%m-%d %H:%M:%f', 'now', '+9 hours'))
     ON CONFLICT(id) DO UPDATE SET category_layout=excluded.category_layout,

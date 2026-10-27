@@ -34,14 +34,14 @@
     idleTapAction = null; clearTimeout(idleTapTimer); idleTapTimer = null;
     if (action) action();
   }
-  function afterIdleTap(action) {
+  function afterIdleTap(action, fallbackMs) {
     return function () {
       if (!touchFeedbackReady) return action();
       if (idleTapAction) return;
       // 대기 화면은 pointerup에서 콜백을 부릅니다. 뒤따르는 click이 끝난 뒤
       // 화면을 바꿔 같은 터치가 새 전화번호 키패드의 0으로 이어지지 않게 합니다.
       idleTapAction = action;
-      idleTapTimer = setTimeout(finishIdleTap, 400);
+      idleTapTimer = setTimeout(finishIdleTap, fallbackMs || 400);
     };
   }
   function installTouchFeedback() {
@@ -168,12 +168,13 @@
 
   /* ---------- 대기 화면 ---------- */
   function renderIdle() {
+    purchaseScreenVersion++;
     flushLogs();
     sdk.template.renderIdlePage({
       type: "twoButton",
       title: { text1: CFG.storeName || "소셜팩토리", text2: "오늘도, 편하게" },
       description: { text: "24시간 코워킹 · 스터디 라운지", subText: "첫 이용권은 바로 시작해요" },
-      primaryButton: { text: "이용권 구매", onClick: afterIdleTap(startPurchase) },
+      primaryButton: { text: "이용권 구매", onClick: afterIdleTap(startPurchase, 40) },
       secondaryButton: { text: "내 이용권 확인", onClick: afterIdleTap(startLookup) }
     });
     recoverPending();
@@ -182,22 +183,31 @@
   /* ---------- 1. 이용권 선택 ---------- */
   var PRODUCTS = [], CATEGORIES = null, PRIVACY_URL = "", LAYOUT = UI ? UI.normalize() : { categoryLayout: "list", productLayout: "list" };
   function loadProducts() {
-    // 구매 시작 때 설정을 가져오고, 구매 도중에는 같은 구성을 유지합니다.
-    return api("/api/kiosk/products").then(function (j) {
+    // 매번 최신 값을 읽습니다. 화면을 떠난 뒤 도착한 응답은 적용하지 않습니다.
+    return api("/api/kiosk/products");
+  }
+  function supportedLayout(layout) { return layout === "grid" && typeof sdk.template.renderSelectGridPage === "function" ? "grid" : "list"; }
+  // 상품 종류부터 고르면 한 화면에서 비교하는 항목이 2~3개로 줄어듭니다.
+  var purchaseScreenVersion = 0;
+  function startPurchase() {
+    var version = ++purchaseScreenVersion;
+    // 최신 설정을 읽는 동안에도 버튼이 눌렸음을 즉시 보여 줍니다.
+    sdk.template.renderSelectPage({
+      title: "이용권을 불러오고 있어요", subtitle: "잠시만 기다려 주세요",
+      options: [], onBack: renderIdle
+    });
+    loadProducts().then(function (j) {
+      if (version !== purchaseScreenVersion) return;
       PRIVACY_URL = j.privacyUrl || "";
       CATEGORIES = j.categories || null;
       LAYOUT = UI.normalize(j.layout);
       PRODUCTS = j.products || [];
-      return PRODUCTS;
+      if (!PRODUCTS.length) { toast("현재 판매 중인 이용권이 없어요.", "error"); renderIdle(); return; }
+      showCategories(PRODUCTS);
+    }).catch(function (e) {
+      if (version !== purchaseScreenVersion) return;
+      if (!onAuthError(e)) { toast("이용권을 불러오지 못했어요. 다시 시도해 주세요.", "error"); renderIdle(); }
     });
-  }
-  function supportedLayout(layout) { return layout === "grid" && typeof sdk.template.renderSelectGridPage === "function" ? "grid" : "list"; }
-  // 상품 종류부터 고르면 한 화면에서 비교하는 항목이 2~3개로 줄어듭니다.
-  function startPurchase() {
-    loadProducts().then(function (list) {
-      if (!list.length) { toast("현재 판매 중인 이용권이 없어요.", "error"); renderIdle(); return; }
-      showCategories(list);
-    }).catch(function (e) { if (!onAuthError(e)) { toast("이용권을 불러오지 못했어요. 다시 시도해 주세요.", "error"); renderIdle(); } });
   }
   function showCategories(list) {
     var page = UI.categoryPage(supportedLayout(LAYOUT.categoryLayout), function (group) { showProducts(list, group); }, imageUrl, CATEGORIES, list);
@@ -270,6 +280,10 @@
   var paying = false;
   function pay(it) {
     if (paying) return; paying = true;
+    // 카드 결제창이 닫혀도 이전 금액 확인 화면이 다시 드러나지 않게 합니다.
+    sdk.template.renderSelectPage({
+      title: "결제를 진행하고 있어요", subtitle: "결제창의 안내를 따라 주세요", options: []
+    });
     var pending = JSON.stringify({ paymentKey: it.paymentKey, productName: it.productName, at: Date.now() });
     sset(K_PENDING, pending).then(function () {
       return sdk.payment.requestPayment({
@@ -280,6 +294,8 @@
     }).then(function (result) {
       result = result || { type: "FAILED", message: "결제 결과 없음" };
       if (result.type === "SUCCESS") {
+        // 승인 성공 직후 완료 안내로 바꾸고, 서버 저장 뒤 확정 종료 시각을 표시합니다.
+        showDone(it.productName, null, true);
         return report(it.paymentKey, result).then(function (j) {
           sdel(K_PENDING);
           showDone(j.pass.productName, j.pass.endsText);
@@ -307,7 +323,14 @@
   function passEndTitle(endsText) {
     return String(endsText).trim().replace(/\s+(\d{1,2}:\d{2})$/, "\n$1") + "까지 이용";
   }
-  function showDone(name, endsText) {
+  function showDone(name, endsText, registering) {
+    if (registering) {
+      // 저장 중에는 닫힘 타이머·확정 종료 시각 없이 승인 완료 사실만 안내합니다.
+      sdk.template.renderSelectPage({
+        title: "결제가 완료됐어요", subtitle: "이용권을 등록하고 있어요", options: []
+      });
+      return;
+    }
     sdk.template.renderResultPage({
       type: "image", status: "success",
       title: endsText ? passEndTitle(endsText) : "결제는 완료됐어요",
