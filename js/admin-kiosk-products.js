@@ -4,6 +4,7 @@
   var A = window.SF_ADMIN; if (!A) return;
   // 예약 패널처럼 화면 영역 밖으로 옮겨, 다른 관리자 화면으로 이동해도 패널이 숨은 화면에 갇히지 않게 합니다.
   document.body.appendChild(document.getElementById("dr-kprod"));
+  document.body.appendChild(document.getElementById("dr-kcategory"));
   var $ = A.$, esc = A.esc, won = A.won, api = A.api, toast = A.toast, guard = A.guard, emptyMsg = A.emptyMsg;
   var items = [], categoryItems = [], busy = false;
   function categoryName(id) { var c = categoryItems.find(function (x) { return x.id === id; }); return c ? c.name : id; }
@@ -62,7 +63,7 @@
         return '<tr><td><img class="kp-thumb" alt="" src="' + esc(categoryPicture(c)) + '"><b>' + esc(c.name) + '</b><small>' + esc(c.description || c.id) + '</small></td>' +
           '<td>' + c.activeProducts + '개</td><td><span class="st ' + (c.active ? 'ok' : 'gray') + '">' + (c.active ? '노출' : '숨김') + '</span></td>' +
           '<td><button type="button" class="btn btn-light btn-xs" data-kc-edit="' + esc(c.id) + '">수정</button></td></tr>';
-      }).join('') || '<tr><td colspan="4">' + emptyMsg('등록된 분류가 없습니다.') + '</td></tr>';
+      }).join('') || '<tr><td colspan="4">' + emptyMsg('등록된 카테고리가 없습니다.') + '</td></tr>';
       categoryOptions($("#kp-category").value);
       box.innerHTML = items.length ? items.map(function (p) {
         var unit = unitOf(p);
@@ -117,9 +118,9 @@
   $("#kp-new").addEventListener("click", function () { open(null); });
   var categoryPreviewUrl = null;
   function openCategory(c) {
-    var form = $("#kc-form"); form.hidden = false; form.reset(); $("#kc-msg").hidden = true;
+    var form = $("#kc-form"); form.reset(); $("#kc-msg").hidden = true;
     $("#kc-id").value = c ? c.id : "";
-    $("#kc-form-title").textContent = c ? "분류 수정 · " + c.name : "새 프론트 분류 추가";
+    $("#kc-form-title").textContent = c ? "카테고리 수정 · " + c.name : "새 카테고리 추가";
     $("#kc-name").value = c ? c.name : "";
     $("#kc-description").value = c ? c.description : "";
     $("#kc-image").value = c ? c.image : "pass-1d.webp";
@@ -129,7 +130,8 @@
     $("#kc-file").value = "";
     $("#kc-preview").src = categoryPicture(c);
     $("#kc-reset-image").hidden = !(c && c.imageVersion);
-    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    A.openDrawer("#dr-kcategory");
+    $("#kc-name").focus();
   }
   $("#kc-file").addEventListener("change", function () {
     if (categoryPreviewUrl) URL.revokeObjectURL(categoryPreviewUrl);
@@ -146,11 +148,11 @@
       if (categoryPreviewUrl) { URL.revokeObjectURL(categoryPreviewUrl); categoryPreviewUrl = null; }
       $("#kc-reset-image").hidden = true; $("#kc-file").value = "";
       $("#kc-preview").src = "/toss-front-plugin/images/" + encodeURIComponent($("#kc-image").value);
-      toast("업로드한 분류 이미지를 삭제했습니다."); load();
+      toast("업로드한 카테고리 이미지를 삭제했습니다."); load();
     }).catch(function (e) { if (!guard(e)) toast(e.message); });
   });
   $("#kc-new").addEventListener("click", function () { openCategory(null); });
-  $("#kc-cancel").addEventListener("click", function () { $("#kc-form").hidden = true; });
+  $("#kc-cancel").addEventListener("click", function () { A.closeDrawer($("#dr-kcategory")); });
   $("#kc-rows").addEventListener("click", function (e) {
     var b = e.target.closest("[data-kc-edit]");
     if (b) openCategory(categoryItems.find(function (c) { return c.id === b.dataset.kcEdit; }));
@@ -168,10 +170,10 @@
         return api("/api/admin/kiosk-category-images", { method: "POST", body: { categoryId: j.id, base64: base64 } });
       }) : null;
     }).then(function () {
-      $("#kc-form").hidden = true; toast("프론트 분류를 저장했습니다."); load();
+      A.closeDrawer($("#dr-kcategory")); toast("카테고리를 저장했습니다."); load();
     }).catch(function (err) {
       if (!guard(err)) {
-        $("#kc-msg").textContent = (categorySaved ? "분류는 저장됐습니다. 이미지 업로드 실패: " : "") + (err.message || "분류를 저장하지 못했습니다.");
+        $("#kc-msg").textContent = (categorySaved ? "카테고리는 저장됐습니다. 이미지 업로드 실패: " : "") + (err.message || "카테고리를 저장하지 못했습니다.");
         $("#kc-msg").hidden = false; if (categorySaved) load();
       }
     }).finally(function () { busy = false; $("#kc-save").disabled = false; });

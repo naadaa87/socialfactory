@@ -37,11 +37,11 @@ async function save(request, env, update) {
   let b;
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
   const p = checked(b);
-  if (!p) return json({ ok: false, error: "invalid", message: "상품명·가격·기간·분류를 확인해 주세요." }, 400);
+  if (!p) return json({ ok: false, error: "invalid", message: "상품명·가격·기간·카테고리를 확인해 주세요." }, 400);
   try {
     await getKioskProducts(env, { all: true });
     const category = await env.DB.prepare("SELECT id FROM kiosk_categories WHERE id=?1 AND active=1").bind(p.category).first();
-    if (!category) return json({ ok: false, error: "invalid-category", message: "사용 중인 프론트 분류를 골라 주세요." }, 400);
+    if (!category) return json({ ok: false, error: "invalid-category", message: "사용 중인 카테고리를 골라 주세요." }, 400);
     await backfillLegacyTerms(env);
     const id = update ? clean(b.id, 40) : "custom-" + Date.now().toString(36) + "-" +
       Array.from(crypto.getRandomValues(new Uint8Array(4)), (x) => x.toString(16).padStart(2, "0")).join("");

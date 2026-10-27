@@ -293,30 +293,36 @@
         <div class="acts"><button class="btn btn-primary btn-sm" type="button" id="kp-new">+ 상품 등록</button></div></header>
       <div class="note">가격은 서버가 다시 검증합니다. 이미 준비된 결제와 발급된 이용권에는 구매 당시 금액·기간이 유지됩니다. 판매 중지를 하면 새 구매 화면에서만 숨겨집니다.</div>
       <div class="card mt">
-        <div class="ch"><h2>프론트 분류</h2><button class="btn btn-light btn-sm" type="button" id="kc-new">+ 분류 추가</button></div>
-        <p class="tiny muted">분류 이름·설명·아이콘·순서를 수정하면 상품 선택 화면에 반영됩니다. 판매 중인 상품이 연결된 분류는 비활성화할 수 없습니다.</p>
-        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>분류</th><th>상품 수</th><th>노출</th><th>관리</th></tr></thead><tbody id="kc-rows"></tbody></table></div>
-        <form class="form mt" id="kc-form" hidden>
-          <h3 id="kc-form-title">분류 추가</h3><input id="kc-id" type="hidden">
-          <div class="frow"><div class="f"><label for="kc-name">분류 이름</label><input class="input" id="kc-name" maxlength="40" required></div>
+        <div class="ch"><h2>카테고리</h2><button class="btn btn-light btn-sm" type="button" id="kc-new">+ 카테고리 추가</button></div>
+        <p class="tiny muted">카테고리 이름·설명·이미지·순서를 수정하면 상품 선택 화면에 반영됩니다. 판매 중인 상품이 연결된 카테고리는 비활성화할 수 없습니다.</p>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>카테고리</th><th>상품 수</th><th>노출</th><th>관리</th></tr></thead><tbody id="kc-rows"></tbody></table></div>
+      </div>
+      <div class="drawer" id="dr-kcategory" hidden>
+        <div class="drawer-bg" data-close></div>
+        <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="kc-form-title">
+          <div class="drawer-head"><h2 id="kc-form-title">카테고리 추가</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+        <form class="drawer-body form" id="kc-form">
+          <input id="kc-id" type="hidden">
+          <div class="frow"><div class="f"><label for="kc-name">카테고리 이름</label><input class="input" id="kc-name" maxlength="40" required></div>
             <div class="f"><label for="kc-description">화면 설명</label><input class="input" id="kc-description" maxlength="100"></div></div>
           <input id="kc-image" type="hidden" value="pass-1d.webp">
           <div class="f"><label for="kc-sort">정렬 순서</label><input class="input" id="kc-sort" type="number" min="0" max="999" step="1" value="100"></div>
           <div class="kp-image-picker">
-            <img id="kc-preview" class="kp-preview" alt="분류 이미지 미리보기">
-            <div class="f"><label for="kc-file">분류 이미지 업로드</label>
+            <img id="kc-preview" class="kp-preview" alt="카테고리 이미지 미리보기">
+            <div class="f"><label for="kc-file">카테고리 이미지 업로드</label>
               <input class="input" id="kc-file" type="file" accept="image/png,image/jpeg,image/webp">
               <small class="muted">PNG·JPG·WebP 파일(5MB 이하)을 선택하세요. 저장할 때 작은 WebP로 변환합니다. 업로드하지 않으면 기본 이미지가 표시됩니다.</small>
               <button class="btn btn-light btn-xs" type="button" id="kc-reset-image" hidden>업로드 이미지 삭제</button>
             </div>
           </div>
           <label class="chk"><input type="checkbox" id="kc-active" checked> 프론트에 노출</label>
-          <div class="acts"><button class="btn btn-primary btn-sm" type="submit" id="kc-save">분류 저장</button><button class="btn btn-light btn-sm" type="button" id="kc-cancel">닫기</button></div>
           <p class="form-note" id="kc-msg" role="status" hidden></p>
+          <div class="drawer-actions"><button class="btn btn-primary" type="submit" id="kc-save">카테고리 저장</button><button class="btn btn-light" type="button" id="kc-cancel">취소</button></div>
         </form>
+        </div>
       </div>
       <div class="filters mt"><button class="btn btn-light btn-sm" type="button" id="kp-reload">새로고침</button></div>
-      <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>상품</th><th>프론트 분류</th><th>가격</th><th>이용 기간</th><th>노출</th><th>관리</th></tr></thead><tbody id="kp-rows"></tbody></table></div></div>
+      <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>상품</th><th>카테고리</th><th>가격</th><th>이용 기간</th><th>노출</th><th>관리</th></tr></thead><tbody id="kp-rows"></tbody></table></div></div>
       <div class="drawer" id="dr-kprod" hidden>
         <div class="drawer-bg" data-close></div>
         <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="kp-form-title">
@@ -339,7 +345,7 @@
           <div class="f"><label for="kp-group">연장 그룹</label><select class="select" id="kp-group"><option value="seat">좌석 이용권</option><option value="locker">사물함</option></select></div>
         </div>
         <div class="frow">
-          <div class="f"><label for="kp-category">프론트 분류</label><select class="select" id="kp-category" required></select></div>
+          <div class="f"><label for="kp-category">카테고리</label><select class="select" id="kp-category" required></select></div>
           <div class="f"><label for="kp-sort">정렬 순서</label><input class="input" id="kp-sort" type="number" min="0" max="999" step="1" value="100"></div>
         </div>
         <input id="kp-image" type="hidden" value="pass-2h.webp">
@@ -494,6 +500,6 @@
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
 <script src="/js/admin-passes.js?v=20261026-tf"></script>
-<script src="/js/admin-kiosk-products.js?v=20261027-image-upload"></script>
+<script src="/js/admin-kiosk-products.js?v=20261027-category-drawer"></script>
 </body>
 </html>

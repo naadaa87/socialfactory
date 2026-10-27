@@ -20,7 +20,7 @@ async function save(request, env, update) {
   let b;
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
   const c = checked(b);
-  if (!c) return json({ ok: false, error: "invalid", message: "분류 이름·아이콘·순서를 확인해 주세요." }, 400);
+  if (!c) return json({ ok: false, error: "invalid", message: "카테고리 이름·이미지·순서를 확인해 주세요." }, 400);
   try {
     await getKioskCategories(env, { all: true });
     const id = update ? clean(b.id, 40) : "category-" + Date.now().toString(36) + "-" +
@@ -30,7 +30,7 @@ async function save(request, env, update) {
       if (!row) return json({ ok: false, error: "not-found" }, 404);
       if (!c.active) {
         const used = await env.DB.prepare("SELECT COUNT(*) AS n FROM kiosk_products WHERE category=?1 AND active=1").bind(id).first();
-        if (used && used.n) return json({ ok: false, error: "in-use", message: "판매 중인 상품을 다른 분류로 옮기거나 판매 중지한 뒤 비활성화해 주세요." }, 409);
+        if (used && used.n) return json({ ok: false, error: "in-use", message: "판매 중인 상품을 다른 카테고리로 옮기거나 판매 중지한 뒤 비활성화해 주세요." }, 409);
       }
       await env.DB.prepare(
         "UPDATE kiosk_categories SET name=?1, description=?2, image=?3, sort_order=?4, active=?5, updated_at=datetime('now', '+9 hours') WHERE id=?6"
