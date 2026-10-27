@@ -64,7 +64,9 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS notification_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, dedupe_key TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, customer_id INTEGER, pass_id INTEGER, pass_group TEXT, phone TEXT NOT NULL, vars TEXT, send_after TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued', attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, provider TEXT, provider_msg_id TEXT, rendered TEXT, sent_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), updated_at TEXT)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_due ON notification_jobs (status, send_after)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_customer ON notification_jobs (customer_id)`,
-  `CREATE TABLE IF NOT EXISTS kiosk_devices (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pairing', token_hash TEXT UNIQUE, pair_hash TEXT, pair_expires_at TEXT, serial TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), paired_at TEXT, last_seen_at TEXT)`
+  `CREATE TABLE IF NOT EXISTS kiosk_devices (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pairing', token_hash TEXT UNIQUE, pair_hash TEXT, pair_expires_at TEXT, serial TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), paired_at TEXT, last_seen_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS kiosk_error_logs (event_id TEXT PRIMARY KEY, device_id INTEGER NOT NULL, payment_key TEXT NOT NULL, kind TEXT NOT NULL, code TEXT NOT NULL, http_status INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')))`,
+  `CREATE INDEX IF NOT EXISTS idx_kiosk_error_logs_time ON kiosk_error_logs (created_at DESC)`
 ];
 // 예전에 만든 표에 나중에 추가한 칸 — 이미 있으면 오류가 나므로 하나씩 실행하고 오류는 무시합니다.
 const MIGRATIONS = ["ALTER TABLE inquiries ADD COLUMN member_id INTEGER", "ALTER TABLE customers ADD COLUMN notify_off INTEGER NOT NULL DEFAULT 0"];

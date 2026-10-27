@@ -298,3 +298,14 @@ CREATE TABLE IF NOT EXISTS spacecloud_sync_audit (
  id INTEGER PRIMARY KEY AUTOINCREMENT,reservation_id TEXT NOT NULL,observed_at INTEGER NOT NULL,
  before_refund INTEGER,after_refund INTEGER,action TEXT NOT NULL,reason TEXT,created_at TEXT DEFAULT (datetime('now','+9 hours'))
 );
+-- 토스프론트 장애 진단: 결제 식별자만 저장하고 전화번호/응답 원문은 저장하지 않습니다.
+CREATE TABLE IF NOT EXISTS kiosk_error_logs (
+  event_id TEXT PRIMARY KEY,
+  device_id INTEGER NOT NULL,
+  payment_key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  code TEXT NOT NULL,
+  http_status INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours'))
+);
+CREATE INDEX IF NOT EXISTS idx_kiosk_error_logs_time ON kiosk_error_logs (created_at DESC);

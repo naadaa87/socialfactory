@@ -43,10 +43,23 @@
     TAB = t;
     $$("#ps-tabs [data-tab]").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === t); });
     $$("#view-pass .ps-pane").forEach(function (p) { p.hidden = p.dataset.pane !== t; });
-    ({ passes: loadPasses, customers: loadCustomers, payments: loadPayments, jobs: loadJobs, devices: loadDevices })[t]();
+    ({ passes: loadPasses, customers: loadCustomers, payments: loadPayments, jobs: loadJobs, devices: loadDevices, logs: loadLogs })[t]();
   }
   $("#ps-tabs").addEventListener("click", function (e) { var b = e.target.closest("[data-tab]"); if (b) setTab(b.dataset.tab); });
   A.LOAD.pass = function () { setTab(TAB); };
+
+  function loadLogs() {
+    var box = $("#pl-rows"), key = $("#pl-key").value.trim();
+    api("/api/admin/kiosk-logs" + (key ? "?paymentKey=" + encodeURIComponent(key) : "")).then(function (j) {
+      box.innerHTML = (j.results || []).length ? j.results.map(function (r) {
+        return "<tr><td>" + esc(r.created_at) + "</td><td>" + esc(r.device_name || "") +
+          "</td><td class=\"mono\">" + esc(r.payment_key) + "</td><td>" + esc(r.kind) +
+          "</td><td>" + esc(r.code) + (r.http_status ? " · HTTP " + esc(r.http_status) : "") + "</td></tr>";
+      }).join("") : '<tr><td colspan="5">' + emptyMsg("기록된 오류가 없습니다.") + "</td></tr>";
+    }).catch(function (e) { if (!guard(e)) box.innerHTML = '<tr><td colspan="5">' + emptyMsg(e.message) + "</td></tr>"; });
+  }
+  $("#pl-reload").addEventListener("click", loadLogs);
+  $("#pl-key").addEventListener("keydown", function (e) { if (e.key === "Enter") loadLogs(); });
 
   /* ---------- 이용권 ---------- */
   var PS = { items: [], products: [], payMethods: {} };
