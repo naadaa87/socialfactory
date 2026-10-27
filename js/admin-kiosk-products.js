@@ -2,6 +2,8 @@
 (function () {
   "use strict";
   var A = window.SF_ADMIN; if (!A) return;
+  // 예약 패널처럼 화면 영역 밖으로 옮겨, 다른 관리자 화면으로 이동해도 패널이 숨은 화면에 갇히지 않게 합니다.
+  document.body.appendChild(document.getElementById("dr-kprod"));
   var $ = A.$, esc = A.esc, won = A.won, api = A.api, toast = A.toast, guard = A.guard, emptyMsg = A.emptyMsg;
   var items = [], categoryItems = [], busy = false;
   function categoryName(id) { var c = categoryItems.find(function (x) { return x.id === id; }); return c ? c.name : id; }
@@ -17,6 +19,10 @@
   function picture(p) {
     return p && p.imageVersion ? "/api/kiosk/product-images/" + encodeURIComponent(p.id) + "?v=" + p.imageVersion :
       "/toss-front-plugin/images/" + encodeURIComponent(p && p.image || $("#kp-image").value);
+  }
+  function categoryPicture(c) {
+    return c && c.imageVersion ? "/api/kiosk/category-images/" + encodeURIComponent(c.id) + "?v=" + c.imageVersion :
+      "/toss-front-plugin/images/" + encodeURIComponent(c && c.image || "pass-1d.webp");
   }
   function updatePrice() {
     var base = Number($("#kp-base-price").value), rate = Number($("#kp-discount").value);
@@ -53,7 +59,7 @@
       categoryItems = values[0].categories || [];
       items = values[1].products || [];
       $("#kc-rows").innerHTML = categoryItems.map(function (c) {
-        return '<tr><td><img class="kp-thumb" alt="" src="/toss-front-plugin/images/' + esc(c.image) + '"><b>' + esc(c.name) + '</b><small>' + esc(c.description || c.id) + '</small></td>' +
+        return '<tr><td><img class="kp-thumb" alt="" src="' + esc(categoryPicture(c)) + '"><b>' + esc(c.name) + '</b><small>' + esc(c.description || c.id) + '</small></td>' +
           '<td>' + c.activeProducts + '개</td><td><span class="st ' + (c.active ? 'ok' : 'gray') + '">' + (c.active ? '노출' : '숨김') + '</span></td>' +
           '<td><button type="button" class="btn btn-light btn-xs" data-kc-edit="' + esc(c.id) + '">수정</button></td></tr>';
       }).join('') || '<tr><td colspan="4">' + emptyMsg('등록된 분류가 없습니다.') + '</td></tr>';
@@ -70,7 +76,7 @@
     }).catch(function (e) { if (!guard(e)) { box.innerHTML = '<tr><td colspan="6">' + emptyMsg(e.message) + "</td></tr>"; $("#kc-rows").innerHTML = '<tr><td colspan="4">' + emptyMsg(e.message) + '</td></tr>'; } });
   }
   function open(p) {
-    var form = $("#kp-form"); form.hidden = false; form.reset(); $("#kp-msg").hidden = true;
+    var form = $("#kp-form"); form.reset(); $("#kp-msg").hidden = true;
     $("#kp-id").value = p ? p.id : "";
     $("#kp-form-title").textContent = p ? "상품 수정 · " + p.name : "새 토스프론트 상품 등록";
     $("#kp-name").value = p ? p.name : "";
@@ -89,13 +95,11 @@
     $("#kp-file").value = "";
     $("#kp-preview").src = picture(p);
     $("#kp-reset-image").hidden = !(p && p.imageVersion);
-    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    A.openDrawer("#dr-kprod");
+    $("#kp-name").focus();
   }
   $("#kp-base-price").addEventListener("input", updatePrice);
   $("#kp-discount").addEventListener("input", updatePrice);
-  $("#kp-image").addEventListener("change", function () {
-    if (!$("#kp-file").files.length && $("#kp-reset-image").hidden) $("#kp-preview").src = picture(null);
-  });
   var previewUrl = null;
   $("#kp-file").addEventListener("change", function () {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -111,6 +115,7 @@
     }).catch(function (e) { if (!guard(e)) toast(e.message); });
   });
   $("#kp-new").addEventListener("click", function () { open(null); });
+  var categoryPreviewUrl = null;
   function openCategory(c) {
     var form = $("#kc-form"); form.hidden = false; form.reset(); $("#kc-msg").hidden = true;
     $("#kc-id").value = c ? c.id : "";
@@ -120,8 +125,30 @@
     $("#kc-image").value = c ? c.image : "pass-1d.webp";
     $("#kc-sort").value = c ? c.sortOrder : 100;
     $("#kc-active").checked = c ? c.active : true;
+    if (categoryPreviewUrl) { URL.revokeObjectURL(categoryPreviewUrl); categoryPreviewUrl = null; }
+    $("#kc-file").value = "";
+    $("#kc-preview").src = categoryPicture(c);
+    $("#kc-reset-image").hidden = !(c && c.imageVersion);
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+  $("#kc-file").addEventListener("change", function () {
+    if (categoryPreviewUrl) URL.revokeObjectURL(categoryPreviewUrl);
+    var file = this.files[0];
+    if (file) { categoryPreviewUrl = URL.createObjectURL(file); $("#kc-preview").src = categoryPreviewUrl; }
+    else {
+      categoryPreviewUrl = null;
+      $("#kc-preview").src = categoryPicture(categoryItems.find(function (c) { return c.id === $("#kc-id").value; }));
+    }
+  });
+  $("#kc-reset-image").addEventListener("click", function () {
+    var id = $("#kc-id").value; if (!id) return;
+    api("/api/admin/kiosk-category-images", { method: "DELETE", body: { categoryId: id } }).then(function () {
+      if (categoryPreviewUrl) { URL.revokeObjectURL(categoryPreviewUrl); categoryPreviewUrl = null; }
+      $("#kc-reset-image").hidden = true; $("#kc-file").value = "";
+      $("#kc-preview").src = "/toss-front-plugin/images/" + encodeURIComponent($("#kc-image").value);
+      toast("업로드한 분류 이미지를 삭제했습니다."); load();
+    }).catch(function (e) { if (!guard(e)) toast(e.message); });
+  });
   $("#kc-new").addEventListener("click", function () { openCategory(null); });
   $("#kc-cancel").addEventListener("click", function () { $("#kc-form").hidden = true; });
   $("#kc-rows").addEventListener("click", function (e) {
@@ -134,14 +161,23 @@
     var body = { id: id, name: $("#kc-name").value, description: $("#kc-description").value,
       image: $("#kc-image").value, sortOrder: +$("#kc-sort").value, active: $("#kc-active").checked };
     busy = true; $("#kc-save").disabled = true; $("#kc-msg").hidden = true;
-    api("/api/admin/kiosk-categories", { method: id ? "PATCH" : "POST", body: body }).then(function () {
+    var file = $("#kc-file").files[0], categorySaved = false;
+    api("/api/admin/kiosk-categories", { method: id ? "PATCH" : "POST", body: body }).then(function (j) {
+      categorySaved = true; $("#kc-id").value = j.id;
+      return file ? webpBase64(file).then(function (base64) {
+        return api("/api/admin/kiosk-category-images", { method: "POST", body: { categoryId: j.id, base64: base64 } });
+      }) : null;
+    }).then(function () {
       $("#kc-form").hidden = true; toast("프론트 분류를 저장했습니다."); load();
     }).catch(function (err) {
-      if (!guard(err)) { $("#kc-msg").textContent = err.message || "분류를 저장하지 못했습니다."; $("#kc-msg").hidden = false; }
+      if (!guard(err)) {
+        $("#kc-msg").textContent = (categorySaved ? "분류는 저장됐습니다. 이미지 업로드 실패: " : "") + (err.message || "분류를 저장하지 못했습니다.");
+        $("#kc-msg").hidden = false; if (categorySaved) load();
+      }
     }).finally(function () { busy = false; $("#kc-save").disabled = false; });
   });
   $("#kp-reload").addEventListener("click", load);
-  $("#kp-cancel").addEventListener("click", function () { $("#kp-form").hidden = true; });
+  $("#kp-cancel").addEventListener("click", function () { A.closeDrawer($("#dr-kprod")); });
   $("#kp-rows").addEventListener("click", function (e) {
     var b = e.target.closest("[data-kp-edit]");
     if (b) open(items.filter(function (p) { return p.id === b.dataset.kpEdit; })[0] || null);
@@ -163,7 +199,7 @@
         return api("/api/admin/kiosk-product-images", { method: "POST", body: { productId: j.id, base64: base64 } });
       }) : null;
     }).then(function () {
-      $("#kp-form").hidden = true; toast("토스프론트 상품을 저장했습니다."); load();
+      A.closeDrawer($("#dr-kprod")); toast("토스프론트 상품을 저장했습니다."); load();
     }).catch(function (err) {
       if (!guard(err)) {
         $("#kp-msg").textContent = (productSaved ? "상품은 저장됐습니다. 이미지 업로드 실패: " : "") + (err.message || "상품을 저장하지 못했습니다.");

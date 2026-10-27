@@ -11,7 +11,8 @@ export async function onRequestGet({ request, env }) {
   return json({
     ok: true, device: { id: device.id, name: device.name },
     privacyUrl: origin + "/privacy",
-    categories: categories.map((c) => ({ id: c.id, name: c.name, description: c.description, image: c.image })),
+    categories: categories.map((c) => ({ id: c.id, name: c.name, description: c.description, image: c.image,
+      imageUrl: c.imageVersion ? origin + "/api/kiosk/category-images/" + encodeURIComponent(c.id) + "?v=" + c.imageVersion : null })),
     products: products.map((p) => ({
       id: p.id, name: p.name, price: p.price, listPrice: p.listPrice || null, friend: !!p.friend,
       short: p.short, duration: durationText(p.duration), image: p.image, category: p.category,

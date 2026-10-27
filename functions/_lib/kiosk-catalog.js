@@ -41,13 +41,13 @@ export async function seedKioskCategories(env) {
 export async function getKioskCategories(env, { all = false } = {}) {
   await seedKioskCategories(env);
   const { results } = await env.DB.prepare(
-    `SELECT c.id,c.name,c.description,c.image,c.sort_order,c.active,
+    `SELECT c.id,c.name,c.description,c.image,c.sort_order,c.active,i.version AS image_version,
       (SELECT COUNT(*) FROM kiosk_products p WHERE p.category=c.id AND p.active=1) AS active_products
-     FROM kiosk_categories c` + (all ? "" : " WHERE c.active=1") + " ORDER BY c.sort_order,c.id"
+     FROM kiosk_categories c LEFT JOIN kiosk_category_images i ON i.category_id=c.id` + (all ? "" : " WHERE c.active=1") + " ORDER BY c.sort_order,c.id"
   ).all();
   return results.map((r) => ({
     id: r.id, name: r.name, description: r.description, image: r.image,
-    sortOrder: Number(r.sort_order), active: !!r.active, activeProducts: Number(r.active_products)
+    sortOrder: Number(r.sort_order), active: !!r.active, activeProducts: Number(r.active_products), imageVersion: r.image_version || null
   }));
 }
 

@@ -118,6 +118,12 @@ CREATE TABLE IF NOT EXISTS kiosk_categories (
   created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')),
   updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS kiosk_category_images (
+  category_id TEXT PRIMARY KEY,
+  data_base64 TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours'))
+);
 CREATE TABLE IF NOT EXISTS kiosk_products (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
