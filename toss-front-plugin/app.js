@@ -150,7 +150,7 @@
         subtitle: "얼마나 이용하실 건가요?",
         options: groups.map(function (g) {
           return { title: g.name, subtitle: list.filter(function (p) { return p.category === g.id; }).length + "가지 이용권",
-            description: g.description, iconUrl: imageUrl(g.image), onClick: function () { showProducts(list, g.id); } };
+            description: g.description, iconUrl: g.imageUrl || imageUrl(g.image), onClick: function () { showProducts(list, g.id); } };
         }),
         navbarButton: { label: "직원 관리", onClick: startStaff },
         onBack: renderIdle

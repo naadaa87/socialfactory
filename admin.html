@@ -300,8 +300,16 @@
           <h3 id="kc-form-title">분류 추가</h3><input id="kc-id" type="hidden">
           <div class="frow"><div class="f"><label for="kc-name">분류 이름</label><input class="input" id="kc-name" maxlength="40" required></div>
             <div class="f"><label for="kc-description">화면 설명</label><input class="input" id="kc-description" maxlength="100"></div></div>
-          <div class="frow"><div class="f"><label for="kc-image">아이콘</label><select class="select" id="kc-image"><option value="pass-2h.webp">2시간</option><option value="pass-1d.webp">1일</option><option value="pass-15d.webp">15일</option><option value="pass-1m.webp">1개월</option><option value="pass-3m.webp">3개월</option></select></div>
-            <div class="f"><label for="kc-sort">정렬 순서</label><input class="input" id="kc-sort" type="number" min="0" max="999" step="1" value="100"></div></div>
+          <input id="kc-image" type="hidden" value="pass-1d.webp">
+          <div class="f"><label for="kc-sort">정렬 순서</label><input class="input" id="kc-sort" type="number" min="0" max="999" step="1" value="100"></div>
+          <div class="kp-image-picker">
+            <img id="kc-preview" class="kp-preview" alt="분류 이미지 미리보기">
+            <div class="f"><label for="kc-file">분류 이미지 업로드</label>
+              <input class="input" id="kc-file" type="file" accept="image/png,image/jpeg,image/webp">
+              <small class="muted">PNG·JPG·WebP 파일(5MB 이하)을 선택하세요. 저장할 때 작은 WebP로 변환합니다. 업로드하지 않으면 기본 이미지가 표시됩니다.</small>
+              <button class="btn btn-light btn-xs" type="button" id="kc-reset-image" hidden>업로드 이미지 삭제</button>
+            </div>
+          </div>
           <label class="chk"><input type="checkbox" id="kc-active" checked> 프론트에 노출</label>
           <div class="acts"><button class="btn btn-primary btn-sm" type="submit" id="kc-save">분류 저장</button><button class="btn btn-light btn-sm" type="button" id="kc-cancel">닫기</button></div>
           <p class="form-note" id="kc-msg" role="status" hidden></p>
@@ -330,16 +338,16 @@
           <div class="f"><label for="kp-duration-unit">기간 단위</label><select class="select" id="kp-duration-unit"><option value="hours">시간</option><option value="days">일</option><option value="months">개월</option></select></div>
           <div class="f"><label for="kp-group">연장 그룹</label><select class="select" id="kp-group"><option value="seat">좌석 이용권</option><option value="locker">사물함</option></select></div>
         </div>
-        <div class="frow three">
+        <div class="frow">
           <div class="f"><label for="kp-category">프론트 분류</label><select class="select" id="kp-category" required></select></div>
-          <div class="f"><label for="kp-image">기본 아이콘</label><select class="select" id="kp-image"><option value="pass-2h.webp">2시간</option><option value="pass-1d.webp">1일</option><option value="pass-15d.webp">15일</option><option value="pass-1m.webp">1개월</option><option value="pass-3m.webp">3개월</option></select></div>
           <div class="f"><label for="kp-sort">정렬 순서</label><input class="input" id="kp-sort" type="number" min="0" max="999" step="1" value="100"></div>
         </div>
+        <input id="kp-image" type="hidden" value="pass-2h.webp">
         <div class="kp-image-picker">
           <img id="kp-preview" class="kp-preview" alt="상품 이미지 미리보기">
           <div class="f"><label for="kp-file">프론트에 표시할 이미지 업로드</label>
             <input class="input" id="kp-file" type="file" accept="image/png,image/jpeg,image/webp">
-            <small class="muted">PNG·JPG·WebP 파일을 선택하세요. 저장할 때 384px 이하 WebP로 변환하며 이미지 메타데이터는 제거합니다. 업로드 이미지가 기본 아이콘보다 우선합니다.</small>
+            <small class="muted">PNG·JPG·WebP 파일(5MB 이하)을 선택하세요. 저장할 때 384px 이하 WebP로 변환합니다. 업로드하지 않으면 기본 이미지가 표시됩니다.</small>
             <button class="btn btn-light btn-xs" type="button" id="kp-reset-image" hidden>업로드 이미지 삭제 · 기본 아이콘 사용</button>
           </div>
         </div>
@@ -486,6 +494,6 @@
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
 <script src="/js/admin-passes.js?v=20261026-tf"></script>
-<script src="/js/admin-kiosk-products.js?v=20261027-drawer"></script>
+<script src="/js/admin-kiosk-products.js?v=20261027-image-upload"></script>
 </body>
 </html>

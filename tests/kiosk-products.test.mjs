@@ -10,6 +10,8 @@ import { onRequestPost as intent } from "../functions/api/kiosk/intents.js";
 import { onRequestGet as categoryList, onRequestPost as categoryCreate, onRequestPatch as categoryEdit } from "../functions/api/admin/kiosk-categories.js";
 import { onRequestPost as imageUpload, onRequestDelete as imageDelete } from "../functions/api/admin/kiosk-product-images.js";
 import { onRequestGet as publicImage } from "../functions/api/kiosk/product-images/[id].js";
+import { onRequestPost as categoryImageUpload, onRequestDelete as categoryImageDelete } from "../functions/api/admin/kiosk-category-images.js";
+import { onRequestGet as publicCategoryImage } from "../functions/api/kiosk/category-images/[id].js";
 
 function fixture() {
   const sqlite = new DatabaseSync(":memory:");
@@ -151,4 +153,29 @@ test("admin can add and edit front categories; discount and image reach the kios
   assert.deepEqual(Buffer.from(await served.arrayBuffer()), bytes);
   assert.equal((await imageDelete({ request: imageReq("DELETE", { productId: p.id }), env })).status, 200);
   assert.equal((await publicImage({ params: { id: p.id }, env })).status, 404);
+});
+
+test("uploaded category image appears in front catalog and falls back when deleted", async () => {
+  const { sqlite, env } = fixture();
+  const token = "sfk_category-image-token-long-enough";
+  sqlite.prepare("INSERT INTO kiosk_devices (id,name,status,token_hash) VALUES (1,'Test front','active',?)").run(await deviceTokenHash(token));
+  const categories = await (await frontList({ request: deviceReq("GET", token, "products"), env })).json();
+  assert.equal(categories.categories.find((c) => c.id === "day").imageUrl, null);
+  const bytes = Buffer.alloc(30); bytes.write("RIFF", 0); bytes.writeUInt32LE(22, 4); bytes.write("WEBPVP8 ", 8);
+  const body = { categoryId: "day", base64: bytes.toString("base64") };
+  const req = (method, value) => new Request("https://example.test/api/admin/kiosk-category-images", {
+    method, headers: { authorization: "Bearer test-admin", "content-type": "application/json" }, body: JSON.stringify(value)
+  });
+  assert.equal((await categoryImageUpload({ request: new Request("https://example.test/api/admin/kiosk-category-images", { method: "POST" }), env })).status, 401);
+  assert.equal((await categoryImageUpload({ request: req("POST", { ...body, base64: "bad" }), env })).status, 400);
+  assert.equal((await categoryImageUpload({ request: req("POST", body), env })).status, 200);
+  const changed = await (await frontList({ request: deviceReq("GET", token, "products"), env })).json();
+  assert.match(changed.categories.find((c) => c.id === "day").imageUrl, /\/api\/kiosk\/category-images\/day\?v=/);
+  const response = await publicCategoryImage({ params: { id: "day" }, env });
+  assert.equal(response.headers.get("content-type"), "image/webp");
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
+  assert.equal((await categoryImageDelete({ request: req("DELETE", { categoryId: "day" }), env })).status, 200);
+  const fallback = await (await frontList({ request: deviceReq("GET", token, "products"), env })).json();
+  assert.equal(fallback.categories.find((c) => c.id === "day").imageUrl, null);
+  assert.equal((await publicCategoryImage({ params: { id: "day" }, env })).status, 404);
 });
