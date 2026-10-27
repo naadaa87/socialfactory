@@ -38,12 +38,12 @@
   var custCell = function (r) { return '<button class="linkbtn" type="button" data-cust="' + esc(r.customer_id) + '"><b>' + esc(r.phone_fmt || "") + "</b></button>" + (r.customer_name ? "<small>" + esc(r.customer_name) + "</small>" : ""); };
 
   /* ---------- 탭 ---------- */
-  var TAB = "passes";
+  var TAB = new URLSearchParams(location.search).get("front-ui") === "1" ? "ui" : "passes";
   function setTab(t) {
     TAB = t;
     $$("#ps-tabs [data-tab]").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === t); });
     $$("#view-pass .ps-pane").forEach(function (p) { p.hidden = p.dataset.pane !== t; });
-    ({ passes: loadPasses, customers: loadCustomers, payments: loadPayments, jobs: loadJobs, devices: loadDevices, logs: loadLogs })[t]();
+    ({ passes: loadPasses, customers: loadCustomers, payments: loadPayments, jobs: loadJobs, devices: loadDevices, logs: loadLogs, ui: A.loadKioskUi })[t]();
   }
   $("#ps-tabs").addEventListener("click", function (e) { var b = e.target.closest("[data-tab]"); if (b) setTab(b.dataset.tab); });
   A.LOAD.pass = function () { setTab(TAB); };
