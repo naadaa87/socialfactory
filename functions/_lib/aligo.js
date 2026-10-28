@@ -32,9 +32,14 @@ export async function sendAligo(env, job, message, template) {
         method: "POST", signal: ctrl.signal, redirect: "error",
         headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: form
       });
+    } catch {
+      throw Object.assign(new Error("알리고 연결 실패 — 전송내역 확인 후 수동 재시도"), { retryable: false });
+    }
+    try {
       data = await response.json();
     } catch {
-      throw Object.assign(new Error("알리고 요청 결과 미확인 — 전송내역 확인 후 수동 재시도"), { retryable: false });
+      const type = String(response.headers.get("content-type") || "없음").slice(0, 60);
+      throw Object.assign(new Error("알리고 응답 해석 실패 (HTTP " + response.status + ", 유형 " + type + ") — 전송내역 확인 후 수동 재시도"), { retryable: false });
     }
     if (!response.ok || !data || data.code === undefined || data.code === null || data.code === "") {
       throw Object.assign(new Error("알리고 응답 미확인 (HTTP " + response.status + ") — 전송내역 확인 후 수동 재시도"), { retryable: false });
