@@ -1,0 +1,52 @@
+/** 알리고 알림톡 API: https://smartsms.aligo.in/alimapi.html
+ * API의 성공은 발송 요청 접수입니다. 실제 도착 결과는 알리고 전송내역에서 확인합니다.
+ * 응답을 받지 못한 요청은 접수됐을 수 있으므로 자동 재발송하지 않습니다.
+ */
+const ENDPOINT = "https://kakaoapi.aligo.in/akv10/alimtalk/send/";
+
+export async function sendAligo(env, job, message, template) {
+  const required = ["ALIGO_API_KEY", "ALIGO_USER_ID", "ALIGO_SENDER_KEY", "ALIGO_SENDER"];
+  for (const key of required) {
+    if (!String(env[key] || "").trim()) throw Object.assign(new Error(key + " 설정 없음"), { retryable: false });
+  }
+  const sender = String(env.ALIGO_SENDER).replace(/\D/g, "");
+  const receiver = String(job.phone || "").replace(/\D/g, "");
+  if (!/^\d{8,16}$/.test(sender) || !/^01[016789]\d{7,8}$/.test(receiver)) {
+    throw Object.assign(new Error("알리고 발신번호 또는 수신번호 형식 오류"), { retryable: false });
+  }
+  const testMode = String(env.ALIGO_TEST_MODE || "N").toUpperCase();
+  if (!["Y", "N"].includes(testMode)) throw Object.assign(new Error("ALIGO_TEST_MODE 는 Y 또는 N"), { retryable: false });
+  if (!String(env[template.env] || template.code || "").trim()) throw Object.assign(new Error("알림톡 템플릿 코드 없음"), { retryable: false });
+  const form = new URLSearchParams({
+    apikey: env.ALIGO_API_KEY, userid: env.ALIGO_USER_ID, senderkey: env.ALIGO_SENDER_KEY,
+    tpl_code: env[template.env] || template.code, sender, receiver_1: receiver,
+    subject_1: message.title, message_1: message.text, failover: "N", testMode
+  });
+  if (message.buttons) form.set("button_1", JSON.stringify(message.buttons));
+  if (message.emtitle) form.set("emtitle_1", message.emtitle);
+  const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    let response, data;
+    try {
+      response = await fetch(ENDPOINT, {
+        method: "POST", signal: ctrl.signal, redirect: "error",
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: form
+      });
+      data = await response.json();
+    } catch {
+      throw Object.assign(new Error("알리고 요청 결과 미확인 — 전송내역 확인 후 수동 재시도"), { retryable: false });
+    }
+    if (!response.ok || !data || data.code === undefined || data.code === null || data.code === "") {
+      throw Object.assign(new Error("알리고 응답 미확인 (HTTP " + response.status + ") — 전송내역 확인 후 수동 재시도"), { retryable: false });
+    }
+    if (Number(data.code) !== 0) {
+      // 업체 응답에 전화번호나 인증정보가 섞여도 대기열 오류에 남기지 않습니다.
+      throw new Error("알리고 요청 거절 (코드 " + String(data.code).slice(0, 12) + ") — 알리고 전송내역·설정 확인");
+    }
+    if (testMode === "Y") return { messageId: String(data.info?.mid || ""), test: true };
+    if (!data.info?.mid || Number(data.info.scnt) !== 1 || Number(data.info.fcnt) !== 0) {
+      throw Object.assign(new Error("알리고 접수 건수 미확인 — 전송내역 확인 후 수동 재시도"), { retryable: false });
+    }
+    return { messageId: String(data.info.mid) };
+  } finally { clearTimeout(timer); }
+}

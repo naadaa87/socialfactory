@@ -10,8 +10,8 @@
   var PAYM = { CARD: "카드", CASH: "현금", BARCODE: "간편결제", card_offline: "카드(POS · 현장)", bank_other: "계좌이체", cash: "현금", free: "무료 · 보상" };
   var CHAN = { toss_front: "토스프론트", admin: "관리자 등록" };
   var PPST = { pending: ["결제 대기", ""], paid: ["결제 완료", "ok"], canceled: ["고객 취소", "gray"], timeout: ["시간 초과", "gray"], failed: ["실패", "bad"], refunded: ["환불", "warn"] };
-  var JST = { queued: ["보낼 예정", "blue"], sending: ["보내는 중", "blue"], sent: ["보냄", "ok"], logged: ["기록만", "gray"], failed: ["실패", "bad"], cancelled: ["취소", "gray"] };
-  var JKIND = { purchase: "구매 완료", expire_soon: "만료 예정" };
+  var JST = { queued: ["보낼 예정", "blue"], sending: ["보내는 중", "blue"], sent: ["발송 접수", "ok"], logged: ["기록만", "gray"], failed: ["실패", "bad"], cancelled: ["취소", "gray"] };
+  var JKIND = { purchase: "구매 완료", expire_soon: "만료 예정", renewal: "연장 완료", refund: "취소·환불 완료" };
   var toMs = function (s) { return Date.parse(String(s || "").replace(" ", "T") + "+09:00"); };
   var short = function (s) { return s ? (+s.slice(5, 7)) + "/" + (+s.slice(8, 10)) + " " + s.slice(11, 16) : ""; };
   function leftText(ends) {
@@ -78,7 +78,7 @@
           + "<td>" + custCell(p) + "</td>"
           + '<td class="nw">' + passState(p) + " <small>" + esc(short(p.starts_at)) + " ~ <b>" + esc(short(p.ends_at)) + "</b></small>" + (p.status === "active" && toMs(p.ends_at) > Date.now() ? "<small>" + esc(leftText(p.ends_at)) + "</small>" : "") + bar(p) + "</td>"
           + '<td class="nw"><b>' + won(p.amount) + "</b><small>" + esc(CHAN[p.channel] || p.channel || "") + " · " + esc(PAYM[p.pay_method] || p.pay_method || "") + "</small>" + (p.refund_amount ? '<small class="bad">환불 ' + won(p.refund_amount) + "</small>" : "") + "</td>"
-          + '<td><div class="row-actions">' + (p.status === "active" ? '<button class="btn btn-light btn-xs" type="button" data-pa="adjust" data-id="' + p.id + '">만료 변경</button><button class="btn btn-light btn-xs" type="button" data-pa="move" data-id="' + p.id + '">번호 옮기기</button><button class="btn btn-danger btn-xs" type="button" data-pa="cancel" data-id="' + p.id + '">취소</button>' : "") + '<button class="btn btn-light btn-xs" type="button" data-pa="memo" data-id="' + p.id + '">메모</button></div></td></tr>';
+          + '<td><div class="row-actions">' + (p.status === "active" ? '<button class="btn btn-light btn-xs" type="button" data-pa="adjust" data-id="' + p.id + '">만료 변경</button><button class="btn btn-light btn-xs" type="button" data-pa="move" data-id="' + p.id + '">번호 옮기기</button><button class="btn btn-danger btn-xs" type="button" data-pa="cancel" data-id="' + p.id + '">취소</button>' : "") + (p.status === "cancelled" && p.refund_amount > 0 ? '<button class="btn btn-light btn-xs" type="button" data-pa="refund-notify" data-id="' + p.id + '">환불 완료 알림</button>' : "") + '<button class="btn btn-light btn-xs" type="button" data-pa="memo" data-id="' + p.id + '">메모</button></div></td></tr>';
       }).join("") : '<tr><td colspan="5">' + emptyMsg("해당하는 이용권이 없습니다.") + "</td></tr>";
     }).catch(function (e) { if (!guard(e)) box.innerHTML = '<tr><td colspan="5">' + emptyMsg(e.message) + "</td></tr>"; });
   }
@@ -114,6 +114,10 @@
       body.refundAmount = parseInt(String(rf).replace(/[^0-9]/g, ""), 10) || 0;
       body.rechain = true;
       if (!confirm("이용권을 취소할까요? 뒤에 이어 붙은 이용권이 있으면 앞당겨집니다." + (body.refundAmount ? "\n환불 " + won(body.refundAmount) + " 기록" : ""))) return;
+      if (body.refundAmount > 0) body.refundConfirmed = confirm("실제 환불 처리를 완료하셨나요?\n\n확인: 취소·환불 완료 알림도 대기열에 등록합니다.\n취소: 금액만 기록하고 완료 알림은 등록하지 않습니다.");
+    } else if (act === "refund-notify") {
+      if (!confirm("실제 환불 처리가 완료됐음을 확인하고 취소·환불 완료 알림을 등록할까요?\n같은 결제의 알림이 이미 있으면 중복 등록하지 않습니다.")) return;
+      body.refundConfirmed = true;
     } else if (act === "memo") {
       var m = prompt("이용권 메모", p.memo || ""); if (m === null) return; body.memo = m;
     }
@@ -241,10 +245,10 @@
     api("/api/admin/passes?view=jobs&status=" + encodeURIComponent($("#pj-filter").value)).then(function (j) {
       var c = j.counts || {};
       $("#pj-status").innerHTML = (j.provider === "log"
-        ? "<b>발송 업체 연결 전</b> — 알림은 만들어지지만 실제로 보내지 않고 문구만 기록합니다(‘기록만’). 업체를 정하면 Cloudflare 설정값 <code>ALIMTALK_PROVIDER</code> 를 넣어 켭니다."
+        ? "<b>실제 발송 꺼짐</b> — 문구만 기록합니다. 검수 승인 후 발송 설정과 템플릿을 확인하고 실제 발송을 켜 주세요."
         : "발송 방식: <b>" + esc(j.provider) + "</b>")
         + (j.cron ? "" : " · 5분마다 도는 발송기(<code>CRON_KEY</code> · workers/notify-cron)가 아직 없어 만료 알림은 이 화면의 '지금 보내기'로만 나갑니다.")
-        + "<br><small>보낼 예정 " + num(c.queued) + " · 보냄 " + num(c.sent) + " · 기록만 " + num(c.logged) + " · 실패 " + num(c.failed) + "</small>";
+        + "<br><small>보낼 예정 " + num(c.queued) + " · 발송 접수 " + num(c.sent) + " · 기록만 " + num(c.logged) + " · 실패 " + num(c.failed) + " · 실제 도착 여부는 발송 업체 전송내역에서 확인해 주세요.</small>";
       var list = j.results || [];
       box.innerHTML = list.length ? list.map(function (x) {
         var s = JST[x.status] || [x.status, ""];

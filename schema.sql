@@ -226,7 +226,7 @@ CREATE INDEX IF NOT EXISTS idx_passes_ends     ON passes (status, ends_at);
 CREATE TABLE IF NOT EXISTS notification_jobs (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   dedupe_key      TEXT    NOT NULL UNIQUE,                           -- purchase:이용권번호 · expire:고객:그룹:만료시각:몇분전
-  kind            TEXT    NOT NULL,                                  -- purchase(구매 완료) | expire_soon(만료 예정)
+  kind            TEXT    NOT NULL,                                  -- purchase(구매 완료) | expire_soon(만료 예정) | renewal(연장 완료) | refund(취소·환불 완료)
   customer_id     INTEGER,
   pass_id         INTEGER,
   pass_group      TEXT,

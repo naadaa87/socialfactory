@@ -78,7 +78,8 @@ test("admin product registration reaches kiosk list and intent; later edits do n
   assert.equal(pay.amount, 30000);
   const terms = await termsForPayment(env, pay);
   assert.equal(terms.duration.days, 15);
-  const { pass } = await issuePassForPayment(env, pay, { startAt: "2026-10-27 12:00:00", purchaseNotice: false });
+  sqlite.prepare("UPDATE pass_payments SET status = 'paid' WHERE id = ?").run(pay.id);
+  const { pass } = await issuePassForPayment(env, { ...pay, status: 'paid' }, { startAt: "2026-10-27 12:00:00", purchaseNotice: false });
   assert.equal(pass.ends_at, "2026-11-11 12:00:00");
   const blocked = await intent({ request: deviceReq("POST", token, "intents", {
     productId: created.id, phone: "01012345678", agreePrivacy: true

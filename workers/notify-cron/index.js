@@ -2,7 +2,7 @@
  * 소셜팩토리 알림 발송기 (Cloudflare Worker · Cron Trigger)
  * ------------------------------------------------------------------
  * Pages Functions 에는 정해진 시각에 저절로 도는 기능이 없어, 이 작은 Worker 가 5분마다 홈페이지의
- * /api/notify/run 을 불러 '보낼 때가 된 알림'(구매 완료 재시도 · 만료 예정)을 보내게 합니다. 발송 내용은 모두 홈페이지 쪽 코드에 있습니다.
+ * /api/notify/run 을 불러 '보낼 때가 된 알림'(구매 · 만료 · 연장 · 환불)을 보내게 합니다. 발송 내용은 모두 홈페이지 쪽 코드에 있습니다.
  *
  * 설정 (Cloudflare 대시보드 → Workers & Pages → 이 Worker → Settings)
  *  - Variables: SITE_URL = https://socialfactory.co.kr  (끝에 / 없이)

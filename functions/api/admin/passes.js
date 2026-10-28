@@ -5,7 +5,8 @@
  * GET   ?view=jobs&status=                                                 : 알림 대기열
  * POST  { phone, name, productId, amount, payMethod, paidAt, startsAt, notify, memo } : 관리자 직접 발급 (POS · 계좌이체 등 프론트 밖에서 판 이용권)
  * PATCH { id, action: "adjust", endsAt, memo }            : 만료 시각 바꾸기 (연장 · 단축)
- * PATCH { id, action: "cancel", refundAmount, rechain }   : 이용권 취소 (+ 환불 금액 기록, 뒤에 이어 붙은 이용권 앞당기기)
+ * PATCH { id, action: "cancel", refundAmount, refundConfirmed, rechain } : 이용권 취소 (+ 실제 환불 완료 확인 시에만 환불 알림)
+ * PATCH { id, action: "refund-notify", refundConfirmed: true } : 취소된 이용권의 환불 완료를 나중에 확인하고 알림 등록
  * PATCH { id, action: "move", phone }                     : 다른 전화번호로 옮기기 (번호를 잘못 누른 경우)
  * PATCH { id, action: "memo", memo }
  * PATCH { jobId, action: "job-retry" | "job-cancel" }     : 알림 다시 보내기 · 보내지 않기
@@ -15,7 +16,8 @@ import { json, clean, phoneDigits } from "../../_lib/auth.js";
 import { adminGate, kstNow } from "../../_lib/admin.js";
 import { splitVat } from "../../_lib/kiosk-products.js";
 import { getKioskProducts, getKioskProduct, termsJson, termsForPayment } from "../../_lib/kiosk-catalog.js";
-import { issuePassForPayment, expiryNoticeStmts, upsertCustomer, validMobile, addDuration, nextStart, toMs, fromMs, cancelPass } from "../../_lib/kiosk.js";
+import { issuePassForPayment, expiryNoticeStmts, upsertCustomer, validMobile, addDuration, nextStart, toMs, fromMs, cancelPass, queueRefundNotice } from "../../_lib/kiosk.js";
+import { deliveryEnabled } from "../../_lib/notify.js";
 
 const TS = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
 const normTs = (s) => { s = clean(s, 19).replace("T", " "); if (!TS.test(s)) return ""; s = s.length === 16 ? s + ":00" : s; return isNaN(toMs(s)) ? "" : fromMs(toMs(s)); };
@@ -49,7 +51,7 @@ export async function onRequestGet({ request, env }) {
       ).bind(...(st ? [st] : [])).all();
       const counts = {};
       for (const r of (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM notification_jobs GROUP BY status").all()).results) counts[r.status] = r.n;
-      return json({ ok: true, results, counts, provider: String(env.ALIMTALK_PROVIDER || "") || "log", cron: !!env.CRON_KEY });
+      return json({ ok: true, results, counts, provider: deliveryEnabled(env) ? String(env.ALIMTALK_PROVIDER).trim() : "log", configuredProvider: String(env.ALIMTALK_PROVIDER || ""), enabled: deliveryEnabled(env), cron: !!env.CRON_KEY });
     }
     // 이용권 목록
     const state = u.searchParams.get("state") || "active";
@@ -143,7 +145,13 @@ export async function onRequestPatch({ request, env }) {
       await renotice(p.customer_id);
     } else if (action === "cancel") {
       if (p.status === "cancelled") return json({ ok: false, error: "invalid", message: "이미 취소된 이용권입니다." }, 400);
-      await cancelPass(env, p, { refundAmount: parseInt(b.refundAmount, 10) || 0, rechain: b.rechain !== false, memo });
+      await cancelPass(env, p, { refundAmount: parseInt(b.refundAmount, 10) || 0, refundConfirmed: b.refundConfirmed === true, rechain: b.rechain !== false, memo });
+    } else if (action === "refund-notify") {
+      const pay = await env.DB.prepare("SELECT * FROM pass_payments WHERE id = ?1").bind(p.payment_id).first();
+      if (b.refundConfirmed !== true || p.status !== "cancelled" || pay?.status !== "refunded" || !(pay.refund_amount > 0)) {
+        return json({ ok: false, error: "invalid", message: "취소된 이용권의 실제 환불 완료를 확인해 주세요." }, 400);
+      }
+      await queueRefundNotice(env, p);
     } else if (action === "move") {
       if (!validMobile(b.phone)) return json({ ok: false, error: "invalid", message: "옮길 휴대폰 번호를 확인해 주세요." }, 400);
       const to = await upsertCustomer(env, b.phone);
