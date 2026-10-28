@@ -267,6 +267,15 @@
     var b = this; b.disabled = true;
     api("/api/notify/run", { method: "POST", body: {} }).then(function (r) { toast("처리 " + r.picked + "건 · 보냄 " + r.sent + " · 기록만 " + r.logged + " · 재시도 " + r.retry + " · 실패 " + r.failed); loadJobs(); A.refreshCounts(); }).catch(onErr).then(function () { b.disabled = false; });
   });
+  $("#pj-test").addEventListener("click", function () {
+    var b = this, status = $("#pj-test-status"); b.disabled = true;
+    status.textContent = "알리고 테스트 모드로 연결 확인 중…";
+    api("/api/admin/alimtalk-test", { method: "POST", body: {} }).then(function (r) {
+      status.textContent = r.test && r.accepted ? "알리고 API가 테스트 요청을 받았습니다. 실제 알림톡은 발송되지 않았습니다." : "테스트 결과를 확인해 주세요.";
+    }).catch(function (e) {
+      if (!guard(e)) status.textContent = "연결 시험 실패: " + (e.data && e.data.error || e.message);
+    }).then(function () { b.disabled = false; });
+  });
   $("#pj-rows").addEventListener("click", function (e) {
     var b = e.target.closest("[data-job]"); if (!b) return;
     api("/api/admin/passes", { method: "PATCH", body: { jobId: +b.dataset.id, action: b.dataset.job } }).then(function () { toast(b.dataset.job === "job-retry" ? "다시 보낼 목록에 넣었습니다." : "보내지 않기로 했습니다."); loadJobs(); }).catch(onErr);
