@@ -75,8 +75,8 @@ window.SF_CONFIG = {
      - key 는 바꾸지 마세요. 새 브랜드를 더하려면 화면 배치를 함께 만들어야 합니다 (README 2번 '패밀리 브랜드'). */
   family: [
     { key: "socialfactory", name: "소셜팩토리", en: "SOCIAL FACTORY", url: "https://socialfactory.co.kr", tag: "모임공간 · 코워킹 · 독립사무실", where: "같은 건물 4층",
-      desc: "최대 20~48명이 쓰는 룸 5개와 24시간 코워킹 50석, 1~3인 독립사무실. 강의 · 세미나 · 스터디 · 회의에 맞습니다.",
-      uses: ["20~48명 강의 · 세미나", "스터디 · 회의 · 면접", "코워킹 · 1인 사무실"] },
+      desc: "최대 16~48명이 쓰는 룸 5개와 24시간 코워킹 50석, 1~3인 독립사무실. 강의 · 세미나 · 스터디 · 회의에 맞습니다.",
+      uses: ["16~48명 강의 · 세미나", "스터디 · 회의 · 면접", "코워킹 · 1인 사무실"] },
     { key: "megaspot", name: "메가스팟", en: "MEGASPOT", url: "https://megaspot.kr", tag: "대형 행사장 대관", where: "같은 건물 2층",
       desc: "한 층 전체를 한 팀이 쓰는 190평 대형 공간입니다. 최대 200명까지 세미나 · 워크숍 · 네트워킹 · 파티 · 공연 · 팝업 · 촬영을 진행할 수 있습니다.",
       uses: ["48명이 넘는 세미나 · 행사", "네트워킹 · 파티 · 공연", "팝업 · 촬영"] },
@@ -134,7 +134,7 @@ window.SF_CONFIG = {
     rooms: {
       r1: { max: 36, wdEarly: 15000, wdStd: 20000, hdEarly: 20000, hdStd: 30000 },
       r2: { max: 40, wdEarly: 20000, wdStd: 30000, hdEarly: 25000, hdStd: 40000 },
-      r3: { max: 20, wdEarly: 10000, wdStd: 15000, hdEarly: 15000, hdStd: 20000 },
+      r3: { max: 16, wdEarly: 10000, wdStd: 15000, hdEarly: 15000, hdStd: 20000 },
       r4: { max: 48, wdEarly: 25000, wdStd: 35000, hdEarly: 30000, hdStd: 45000 },
       r5: { max: 30, wdEarly: 20000, wdStd: 30000, hdEarly: 25000, hdStd: 40000 }
     },
