@@ -108,15 +108,17 @@ export async function nextStart(env, customerId, group, now = kstNow()) {
 
 /**
  * 결제 1건(pass_payments)에 이용권 1장을 발급합니다. 이미 발급됐으면 그 이용권을 그대로 돌려줍니다.
- * 새로 발급한 경우에만 알림(구매 완료 · 만료 예정)을 대기열에 넣습니다.
+ * 새로 발급한 경우에만 알림(구매/연장 완료 · 만료 예정)을 대기열에 넣습니다.
  */
 export async function issuePassForPayment(env, pay, { startAt = null, purchaseNotice = true } = {}) {
   const found = await env.DB.prepare("SELECT * FROM passes WHERE payment_id = ?1").bind(pay.id).first();
   if (found) return { pass: found, created: false };
   const product = await termsForPayment(env, pay);
   if (!product) throw new Error("unknown-product");
+  if (pay.status !== "paid") throw new Error("payment-not-paid");
   const now = kstNow();
-  const starts = startAt || await nextStart(env, pay.customer_id, product.group, now);
+  const previousEnd = await nextStart(env, pay.customer_id, product.group, now);
+  const starts = startAt || previousEnd;
   const ends = addDuration(starts, product.duration);
   const res = await env.DB.prepare(
     `INSERT OR IGNORE INTO passes (code, payment_id, customer_id, product_id, product_name, pass_group, starts_at, ends_at, source)
@@ -124,22 +126,24 @@ export async function issuePassForPayment(env, pay, { startAt = null, purchaseNo
   ).bind(makePassCode(), pay.id, pay.customer_id, product.id, pay.product_name || product.name, product.group, starts, ends, pay.channel || "toss_front").run();
   const pass = await env.DB.prepare("SELECT * FROM passes WHERE payment_id = ?1").bind(pay.id).first();
   const created = !!(res.meta && res.meta.changes);
-  if (created) await queuePassNotices(env, pass, pay, { purchaseNotice }).catch((e) => console.error("queue-notice", e && e.message));
+  if (created) await queuePassNotices(env, pass, pay, { purchaseNotice, previousEnd: previousEnd > now && starts === previousEnd ? previousEnd : null }).catch((e) => console.error("queue-notice", e && e.message));
   return { pass, created };
 }
 
 /* ---------- 알림 대기열 ---------- */
-/** 구매 완료 알림 1건 + 만료 예정 알림(마지막 만료 시각 기준)을 다시 계산해 넣습니다. */
-export async function queuePassNotices(env, pass, pay, { purchaseNotice = true } = {}) {
+/** 구매 또는 연장 완료 중 1건 + 만료 예정 알림(마지막 만료 시각 기준). */
+export async function queuePassNotices(env, pass, pay, { purchaseNotice = true, previousEnd = null } = {}) {
   const c = await env.DB.prepare("SELECT * FROM customers WHERE id = ?1").bind(pass.customer_id).first();
   if (!c) return;
   const now = kstNow();
   const stmts = [];
   if (pay && purchaseNotice) {
+    const kind = previousEnd ? "renewal" : "purchase";
     stmts.push(env.DB.prepare(
-      `INSERT OR IGNORE INTO notification_jobs (dedupe_key, kind, customer_id, pass_id, phone, vars, send_after) VALUES (?1, 'purchase', ?2, ?3, ?4, ?5, ?6)`
-    ).bind("purchase:" + pass.id, c.id, pass.id, c.phone, JSON.stringify({
+      `INSERT OR IGNORE INTO notification_jobs (dedupe_key, kind, customer_id, pass_id, phone, vars, send_after) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+    ).bind("purchase:" + pass.id, kind, c.id, pass.id, c.phone, JSON.stringify({
       고객: c.name || "고객", 이용권: pass.product_name, 시작: kTime(pass.starts_at), 만료: kTime(pass.ends_at),
+      ...(previousEnd ? { 기존종료일시: kTime(previousEnd), 최종종료일시: kTime(pass.ends_at) } : {}),
       금액: Number(pay.amount || 0).toLocaleString("ko-KR")
     }), now));
   }
@@ -162,7 +166,7 @@ export async function expiryNoticeStmts(env, c, group, now = kstNow()) {
        ON CONFLICT(dedupe_key) DO UPDATE SET status = 'queued', send_after = excluded.send_after, vars = excluded.vars, updated_at = datetime('now', '+9 hours')
        WHERE notification_jobs.status = 'cancelled'`
     ).bind(`expire:${c.id}:${group}:${last.ends_at}:${before}`, c.id, last.id, group, c.phone, JSON.stringify({
-      고객: c.name || "고객", 이용권: last.product_name, 만료: kTime(last.ends_at), 남은시간: beforeText(before)
+      고객: c.name || "고객", 이용권: last.product_name, 만료: kTime(last.ends_at), 남은시간: beforeText(before), __endsAt: last.ends_at
     }), at));
   }
   return out;
@@ -195,13 +199,19 @@ export function paymentFields(response) {
  * 이용권을 취소하고, 환불 금액이 있으면 결제를 환불로 기록합니다.
  * rechain 이면 뒤에 이어 붙어 있던 같은 그룹 이용권을 취소한 자리로 앞당기고(기간은 상품 규칙대로 다시 계산), 만료 알림을 다시 계산합니다.
  */
-export async function cancelPass(env, p, { refundAmount = 0, rechain = true, memo = null, refundNote = null } = {}) {
+export async function cancelPass(env, p, { refundAmount = 0, rechain = true, memo = null, refundNote = null, refundConfirmed = false } = {}) {
   const pay = await env.DB.prepare("SELECT * FROM pass_payments WHERE id = ?1").bind(p.payment_id).first();
+  const current = await env.DB.prepare("SELECT status FROM passes WHERE id = ?1").bind(p.id).first();
+  if (!current || current.status === "cancelled") return;
   const refund = Math.max(0, Math.min(refundAmount || 0, pay ? pay.amount : 0));
+  const now = kstNow();
+  const c = await env.DB.prepare("SELECT * FROM customers WHERE id = ?1").bind(p.customer_id).first();
   const stmts = [env.DB.prepare("UPDATE passes SET status = 'cancelled', memo = COALESCE(?1, memo), updated_at = datetime('now', '+9 hours') WHERE id = ?2 AND status <> 'cancelled'").bind(memo, p.id)];
+  stmts.push(env.DB.prepare("UPDATE notification_jobs SET status = 'cancelled', updated_at = datetime('now', '+9 hours') WHERE pass_id = ?1 AND status = 'queued' AND kind IN ('purchase', 'renewal', 'expire_soon')").bind(p.id));
   if (refund > 0) stmts.push(env.DB.prepare(
     "UPDATE pass_payments SET status = 'refunded', refund_amount = ?1, refunded_at = datetime('now', '+9 hours'), admin_memo = CASE WHEN ?2 IS NULL THEN admin_memo ELSE TRIM(COALESCE(admin_memo, '') || ' ' || ?2) END, updated_at = datetime('now', '+9 hours') WHERE id = ?3"
   ).bind(refund, refundNote, p.payment_id));
+  if (refundConfirmed && refund > 0 && c) stmts.push(refundNoticeStmt(env, p, { ...pay, refund_amount: refund, refunded_at: now }, c));
   if (rechain) {
     const { results: later } = await env.DB.prepare("SELECT * FROM passes WHERE customer_id = ?1 AND pass_group = ?2 AND status = 'active' AND id <> ?3 AND starts_at >= ?4 ORDER BY starts_at").bind(p.customer_id, p.pass_group, p.id, p.ends_at).all();
     let cursor = p.starts_at > kstNow() ? p.starts_at : kstNow();
@@ -214,8 +224,27 @@ export async function cancelPass(env, p, { refundAmount = 0, rechain = true, mem
     }
   }
   await env.DB.batch(stmts);
-  const c = await env.DB.prepare("SELECT * FROM customers WHERE id = ?1").bind(p.customer_id).first();
   if (c) await env.DB.batch(await expiryNoticeStmts(env, c, p.pass_group));
+}
+
+// 취소·환불 상태를 저장한 뒤에만 생성되며 결제 1건에 알림 1건으로 제한합니다.
+function refundNoticeStmt(env, p, pay, customer) {
+  return env.DB.prepare(
+    `INSERT OR IGNORE INTO notification_jobs (dedupe_key, kind, customer_id, pass_id, phone, vars, send_after)
+     SELECT ?1, 'refund', ?2, ?3, ?4, ?5, ?6
+     WHERE EXISTS (SELECT 1 FROM pass_payments WHERE id = ?7 AND status = 'refunded' AND refund_amount > 0)
+       AND EXISTS (SELECT 1 FROM passes WHERE id = ?3 AND status = 'cancelled')`
+  ).bind("refund:" + pay.id, customer.id, p.id, customer.phone, JSON.stringify({
+    고객: customer.name || "고객", 이용권: p.product_name,
+    환불금액: Number(pay.refund_amount).toLocaleString("ko-KR"), 처리일시: kTime(pay.refunded_at)
+  }), kstNow(), pay.id);
+}
+
+/** 프론트 SUCCESS 결과 재전송 시에도 누락된 환불 알림을 복구합니다(중복 생성 없음). */
+export async function queueRefundNotice(env, p) {
+  const pay = await env.DB.prepare("SELECT * FROM pass_payments WHERE id = ?1").bind(p.payment_id).first();
+  const customer = await env.DB.prepare("SELECT * FROM customers WHERE id = ?1").bind(p.customer_id).first();
+  if (pay?.status === "refunded" && pay.refund_amount > 0 && customer) await refundNoticeStmt(env, p, pay, customer).run();
 }
 
 /* ---------- 매장 직원 확인 (프론트의 '관리' → 결제 취소) ---------- */

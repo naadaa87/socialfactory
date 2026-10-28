@@ -6,9 +6,10 @@
  * 플러그인 결제는 토스 POS 에 기록되지 않아 POS 에서 취소할 수 없으므로, 결제한 그 단말기에서 이 기능으로 취소합니다.
  */
 import { json, clean } from "../../_lib/auth.js";
-import { deviceGate, staffTokenOk, cancelPass } from "../../_lib/kiosk.js";
+import { deviceGate, staffTokenOk, cancelPass, queueRefundNotice } from "../../_lib/kiosk.js";
+import { runQueue } from "../../_lib/notify.js";
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, waitUntil }) {
   const { deny, device } = await deviceGate(request, env); if (deny) return deny;
   let b;
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
@@ -35,11 +36,15 @@ export async function onRequestPost({ request, env }) {
     if (type !== "SUCCESS") return json({ ok: true, status: "unchanged" });            // 취소 안 됨 → 그대로 둡니다
     const r = b.response || {}, d = r.card || r.barcode || {};
     const note = "[프론트 취소 " + (clean(String(d.approvalNumber || ""), 40) || "승인번호 없음") + "]";
+    if (!["paid", "refunded"].includes(pay.status)) return json({ ok: false, error: "not-paid" }, 409);
+    const pass = await env.DB.prepare("SELECT * FROM passes WHERE payment_id = ?1").bind(pay.id).first();
     if (pay.status !== "refunded") {
-      const pass = await env.DB.prepare("SELECT * FROM passes WHERE payment_id = ?1").bind(pay.id).first();
-      if (pass && pass.status !== "cancelled") await cancelPass(env, pass, { refundAmount: pay.amount, rechain: true, refundNote: note, memo: "프론트에서 결제 취소" });
+      if (pass && pass.status !== "cancelled") await cancelPass(env, pass, { refundAmount: pay.amount, rechain: true, refundNote: note, memo: "프론트에서 결제 취소", refundConfirmed: true });
       else await env.DB.prepare("UPDATE pass_payments SET status = 'refunded', refund_amount = amount, refunded_at = datetime('now', '+9 hours'), admin_memo = TRIM(COALESCE(admin_memo, '') || ' ' || ?1), updated_at = datetime('now', '+9 hours') WHERE id = ?2").bind(note, pay.id).run();
     }
+    if (pass) await queueRefundNotice(env, pass);
+    const after = runQueue(env, { limit: 3 }).catch(e => console.error("refund-notify", e && e.message));
+    if (waitUntil) waitUntil(after); else await after;
     return json({ ok: true, status: "refunded" });
   }
   return json({ ok: false, error: "invalid" }, 400);
