@@ -32,7 +32,11 @@ export async function sendAligo(env, job, message, template) {
         method: "POST", signal: ctrl.signal, redirect: "error",
         headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: form
       });
-    } catch {
+    } catch (e) {
+      if (testMode === "Y") {
+        const safe = value => String(value || "").replace(/\b(apikey|senderkey|userid)=\S+/gi, "$1=[redacted]").slice(0, 160);
+        console.error("aligo-connect", safe(e?.name), safe(e?.message), safe(e?.cause?.name), safe(e?.cause?.message));
+      }
       throw Object.assign(new Error("알리고 연결 실패 — 전송내역 확인 후 수동 재시도"), { retryable: false });
     }
     try {
