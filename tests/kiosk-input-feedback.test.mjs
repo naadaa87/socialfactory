@@ -28,7 +28,7 @@ test('조회 버튼의 pointerup 뒤 click이 끝날 때까지 입력 화면을 
  assert.equal(h.current.name,'renderIdlePage');
  h.runTimers(0);
  assert.equal(h.current.name,'renderInputPage');assert.equal(h.current.params.type,'phone');
- assert.equal(h.current.params.input.placeholder,'010-');assert.equal(h.timers.size,0);assert.equal(h.sounds,1);
+ assert.equal(h.current.params.input.placeholder,'010-');assert.equal([...h.timers.values()].filter(t=>t.ms===120000).length,1);assert.equal(h.sounds,1);
 });
 test('click을 전달하지 않는 단말기에서도 대기 버튼 동작을 수행',async()=>{
  const h=await harness();h.current.params.secondaryButton.onClick();h.runTimers(40);
@@ -61,4 +61,17 @@ test('지연 click이 새 키패드로 넘어가면 차단하고 실제 다음 �
  assert.equal(stopped,true);assert.equal(prevented,true);
  h.pointerdown(zero);stopped=false;h.click(zero,{detail:1,preventDefault(){},stopPropagation(){stopped=true}});
  assert.equal(stopped,false);
+});
+
+test('조회 입력을 두고 떠나면 2분 뒤 첫 화면으로 복귀하고 기존 입력 화면 제거',async()=>{
+ const h=await harness();h.current.params.secondaryButton.onClick();h.runTimers(40);
+ assert.equal(h.current.name,'renderInputPage');h.runTimers(120000);
+ assert.equal(h.current.name,'renderIdlePage');assert.equal(h.timers.size,0);
+});
+test('입력 중 터치는 자동 복귀 타이머를 갱신하고 진행 화면에서는 타이머 해제',async()=>{
+ const h=await harness();h.current.params.secondaryButton.onClick();h.runTimers(40);
+ const before=[...h.timers.keys()][0];h.pointerdown(control('TD','1'));
+ assert(!h.timers.has(before));assert.equal(h.timers.size,1);
+ h.current.params.onBack();h.current.params.primaryButton.onClick();h.runTimers(40);
+ assert.equal(h.current.name,'renderSelectPage');assert.equal([...h.timers.values()].filter(t=>t.ms===120000).length,0);await tick();
 });
