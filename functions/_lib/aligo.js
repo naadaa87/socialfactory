@@ -29,7 +29,7 @@ export async function sendAligo(env, job, message, template) {
     let response, data;
     try {
       response = await fetch(ENDPOINT, {
-        method: "POST", signal: ctrl.signal, redirect: "error",
+        method: "POST", signal: ctrl.signal, redirect: "manual",
         headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: form
       });
     } catch (e) {
@@ -38,6 +38,9 @@ export async function sendAligo(env, job, message, template) {
         console.error("aligo-connect", safe(e?.name), safe(e?.message), safe(e?.cause?.name), safe(e?.cause?.message));
       }
       throw Object.assign(new Error("알리고 연결 실패 — 전송내역 확인 후 수동 재시도"), { retryable: false });
+    }
+    if (response.status >= 300 && response.status < 400) {
+      throw Object.assign(new Error("알리고 리다이렉트 응답 (HTTP " + response.status + ") — 전송내역 확인 후 수동 재시도"), { retryable: false });
     }
     try {
       data = await response.json();
