@@ -171,6 +171,19 @@ test('알리고 테스트 모드 응답은 실제 발송 접수가 아닌 기록
   assert.equal(f.one("SELECT provider FROM notification_jobs WHERE kind = 'purchase'").provider, 'aligo-test');
 });
 
+test('테스트 모드에서 알리고 오류 사유를 보이되 인증정보와 전화번호는 가림', async t => {
+  const f = fixture(t, true);
+  f.env.ALIGO_TEST_MODE = 'Y';
+  apiMock(t, { code: -99, message: '발신 프로파일 키를 확인하세요 test-only-api-key 01012345678' });
+  await issuePassForPayment(f.env, f.pay());
+  const result = await runQueue(f.env);
+  assert.equal(result.retry, 1);
+  const reason = f.one("SELECT last_error FROM notification_jobs WHERE kind = 'purchase'").last_error;
+  assert.match(reason, /발신 프로파일 키를 확인하세요/);
+  assert(!reason.includes('test-only-api-key'));
+  assert(!reason.includes('01012345678'));
+});
+
 test('알리고 리다이렉트는 따라가지 않고 자동 재발송하지 않음', async t => {
   const f = fixture(t, true);
   let calls = 0;

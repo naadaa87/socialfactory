@@ -4,6 +4,14 @@
  */
 const ENDPOINT = "https://kakaoapi.aligo.in/akv10/alimtalk/send/";
 
+function safeTestReason(value, env) {
+  let reason = String(value || "").slice(0, 180);
+  for (const key of ["ALIGO_API_KEY", "ALIGO_SENDER_KEY", "ALIGO_USER_ID", "ALIGO_SENDER"]) {
+    if (env[key]) reason = reason.replaceAll(String(env[key]), "[가림]");
+  }
+  return reason.replace(/01[016789][- ]?\d{3,4}[- ]?\d{4}/g, "[전화번호]").replace(/[A-Za-z0-9_-]{32,}/g, "[가림]");
+}
+
 export async function sendAligo(env, job, message, template) {
   const required = ["ALIGO_API_KEY", "ALIGO_USER_ID", "ALIGO_SENDER_KEY", "ALIGO_SENDER"];
   for (const key of required) {
@@ -53,7 +61,8 @@ export async function sendAligo(env, job, message, template) {
     }
     if (Number(data.code) !== 0) {
       // 업체 응답에 전화번호나 인증정보가 섞여도 대기열 오류에 남기지 않습니다.
-      throw new Error("알리고 요청 거절 (코드 " + String(data.code).slice(0, 12) + ") — 알리고 전송내역·설정 확인");
+      const detail = testMode === "Y" ? safeTestReason(data.message, env) : "";
+      throw new Error("알리고 요청 거절 (코드 " + String(data.code).slice(0, 12) + ")" + (detail ? ": " + detail : " — 알리고 전송내역·설정 확인"));
     }
     if (testMode === "Y") return { messageId: String(data.info?.mid || ""), test: true };
     if (!data.info?.mid || Number(data.info.scnt) !== 1 || Number(data.info.fcnt) !== 0) {
