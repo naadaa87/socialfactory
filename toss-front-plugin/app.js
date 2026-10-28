@@ -27,9 +27,18 @@
   var imageUrl = function (name) { return name ? new URL("images/" + name, location.href).href : undefined; };
   var toast = function (message, icon) { try { sdk.template.openToast(icon ? { message: message, icon: icon } : { message: message }); } catch (e) { console.log(message); } };
 
-  var screenVersion = 0, selectedGroup = null;
+  var screenVersion = 0, selectedGroup = null, inactivityTimer = null, privateScreen = false;
+  function renewInactivity() {
+    clearTimeout(inactivityTimer); inactivityTimer = null;
+    if (!privateScreen || typeof document === "undefined") return;
+    inactivityTimer = setTimeout(function () { if (!paying) renderIdle(); }, 120000);
+  }
   function render(method, params) {
     var version = ++screenVersion;
+    // 고객 번호와 직원 결제 목록을 두고 떠나면 2분 뒤 지웁니다. 카드 승인·보고 중에는 적용하지 않습니다.
+    privateScreen = method === "renderInputPage" || method === "renderAgreementPage" || method === "renderOrderPage" ||
+      ((method === "renderSelectPage" || method === "renderSelectGridPage") && params.options && params.options.length > 0);
+    renewInactivity();
     sdk.template[method](params);
     return version;
   }
@@ -64,6 +73,7 @@
     touchFeedbackReady = true;
     var gestureControl = null;
     document.addEventListener("pointerdown", function (event) {
+      renewInactivity();
       var target = event.target && event.target.closest ? event.target : null;
       gestureControl = target && app.contains(target) ? target.closest("button, [role='button']") : null;
     }, true);
@@ -71,6 +81,7 @@
     document.addEventListener("click", function (event) {
       var target = event.target && (event.target.closest ? event.target : event.target.parentElement);
       if (!target || !app.contains(target)) { gestureControl = null; return; }
+      renewInactivity();
       var clickedControl = target.closest("button, [role='button']");
       if (event.detail > 0 && gestureControl && gestureControl.isConnected === false && clickedControl !== gestureControl) {
         // 이전 화면에서 시작한 터치가 새 키패드에 숫자를 넣는 것을 막습니다.
@@ -98,19 +109,20 @@
   /* ---------- 저장소 (sdk.storage: 문자열만 저장) ---------- */
   var storedValues = {}, storageReads = {}, storageVersions = {};
   function cacheStorage(key) { return key === K_PENDING || key === K_CANCEL || key === K_LOGS; }
-  function sget(key) {
+  function storageError() { var e = new Error("단말기 저장소를 확인하지 못했어요.\n재시작 후 다시 시도해 주세요."); e.code = "STORAGE_UNAVAILABLE"; return e; }
+  function sget(key, required) {
     if (cacheStorage(key) && Object.prototype.hasOwnProperty.call(storedValues, key)) return Promise.resolve(storedValues[key]);
-    if (cacheStorage(key) && storageReads[key]) return storageReads[key];
+    if (cacheStorage(key) && storageReads[key]) return required ? storageReads[key].then(function () { return sget(key, true); }) : storageReads[key];
     var version = storageVersions[key] || 0;
     var read = sdk.storage.get({ key: key }).then(function (r) {
       var value = r && r.value != null ? r.value : null;
       if (cacheStorage(key) && version === (storageVersions[key] || 0)) storedValues[key] = value;
       return value;
-    }).catch(function () { return null; }).finally(function () { if (storageReads[key] === read) delete storageReads[key]; });
+    }).catch(function () { if (required) throw storageError(); return null; }).finally(function () { if (storageReads[key] === read) delete storageReads[key]; });
     if (cacheStorage(key)) storageReads[key] = read;
     return read;
   }
-  function changeStored(key, value, remove) {
+  function changeStored(key, value, remove, required) {
     var version = storageVersions[key] = (storageVersions[key] || 0) + 1;
     delete storedValues[key]; delete storageReads[key];
     var write = remove ? sdk.storage.remove({ key: key }) : sdk.storage.set({ key: key, value: value });
@@ -119,10 +131,18 @@
     }).catch(function (e) {
       if (version === storageVersions[key]) delete storedValues[key];
       if (!remove) console.error("storage.set", e);
+      if (required) throw storageError();
     });
   }
-  function sset(key, value) { return changeStored(key, value, false); }
+  function sset(key, value, required) { return changeStored(key, value, false, required); }
   function sdel(key) { return changeStored(key, null, true); }
+  // 복구가 끝나지 않은 거래를 다음 거래로 덮지 않습니다. 저장 확인 전에는 카드창을 열지 않습니다.
+  function reserveRecovery(key, value) {
+    return sget(key, true).then(function (previous) {
+      if (previous) { var e = new Error("이전 거래를 확인하고 있어요.\n다시 결제하지 말고\n직원에게 문의해 주세요."); e.code = "RECOVERY_PENDING"; throw e; }
+      return sset(key, value, true);
+    });
+  }
 
   /* ---------- 서버 ---------- */
   var token = null;
@@ -192,6 +212,7 @@
     return once();
   }
   function onAuthError(e) {
+    if (e && e.code === "staff-auth") { staffToken = null; toast("관리 화면에 다시 들어가 주세요.", "error"); startStaff(); return true; }
     if (e && (e.status === 401 || e.code === "DEVICE_AUTH")) { token = null; sdel(K_TOKEN); toast("단말기 연결이 해제됐어요. 다시 연결해 주세요.", "error"); renderPair(); return true; }
     return false;
   }
@@ -207,7 +228,7 @@
         return sdk.app.getSerialNumber().catch(function () { return {}; }).then(function (sn) {
           return api("/api/kiosk/pair", { code: code, serialNumber: (sn && sn.serialNumber) || "" }, { noAuth: true });
         }).then(function (j) {
-          token = j.token; return sset(K_TOKEN, j.token).then(function () { toast("단말기를 연결했어요.", "success"); renderIdle(); });
+          return sset(K_TOKEN, j.token, true).then(function () { token = j.token; toast("단말기를 연결했어요.", "success"); renderIdle(); });
         }).catch(function (e) {
           toast(e.code === "bad-code" ? "연결 코드가 맞지 않거나 시간이 지났어요." : e.code === "too-many" ? "잠시 뒤 다시 시도해 주세요." : (e.message || "연결하지 못했어요."), "error");
         });
@@ -217,6 +238,7 @@
 
   /* ---------- 대기 화면 ---------- */
   function renderIdle() {
+    staffToken = null;
     flushLogs();
     render("renderIdlePage", {
       type: "twoButton",
@@ -341,15 +363,16 @@
     render("renderSelectPage", {
       title: "결제를 진행하고 있어요", subtitle: "결제창의 안내를 따라 주세요", options: []
     });
+    var paymentStarted = false;
     var pending = JSON.stringify({ paymentKey: it.paymentKey, productName: it.productName, at: Date.now() });
-    sset(K_PENDING, pending).then(function () {
-      return sdk.payment.requestPayment({
+    reserveRecovery(K_PENDING, pending).then(function () {
+      return Promise.resolve().then(function () { paymentStarted = true; return sdk.payment.requestPayment({
         paymentKey: it.paymentKey, tax: it.payment.tax, supplyValue: it.payment.supplyValue,
         taxExemptValue: 0, tip: 0, localeCode: "ko",
         excludePaymentTypes: ["CASH"]          // 무인 매장이라 현금은 받지 않습니다
-      }).catch(function (e) { return { type: "FAILED", message: (e && e.message) || "결제 오류" }; });
+      }); }).catch(function (e) { logFailure("PAYMENT_RECOVERY_FAILED", it.paymentKey, e); return { type: "TIMEOUT", message: "결제 응답 확인 필요" }; });
     }).then(function (result) {
-      result = result || { type: "FAILED", message: "결제 결과 없음" };
+      result = result || { type: "TIMEOUT", message: "결제 결과 없음" };
       if (result.type === "SUCCESS") {
         // 승인 성공 직후 완료 안내로 바꾸고, 서버 저장 뒤 확정 종료 시각을 표시합니다.
         showDone(it.productName, null, true);
@@ -364,15 +387,18 @@
         });
       }
       // 시간 초과는 실제로 승인됐을 수도 있어 저장소에 남겨 두고 나중에 getPayment 로 확인합니다.
-      if (result.type !== "TIMEOUT") sdel(K_PENDING);
+      if (result.type === "CANCELED" || result.type === "FAILED") sdel(K_PENDING);
+      if (["CANCELED", "FAILED", "TIMEOUT"].indexOf(result.type) < 0) result = { type: "TIMEOUT", message: "알 수 없는 결제 응답" };
       report(it.paymentKey, result).catch(function (e) { logFailure("PAYMENT_RESULT_REPORT_FAILED", it.paymentKey, e); console.error("report", e); });
       render("renderResultPage", {
         type: "image", status: "error",
         title: result.type === "CANCELED" ? "결제를 취소했어요" : result.type === "TIMEOUT" ? "결제 시간이 지났어요" : "결제하지 못했어요",
-        description: "처음 화면으로 돌아가요",
+        description: result.type === "TIMEOUT" ? "승인 여부를 확인하고 있어요.\n다시 결제하지 말고\n직원에게 문의해 주세요." : "처음 화면으로 돌아가요",
         timerMs: 5000, onTimeout: renderIdle, localeCode: "ko",
         buttons: [{ label: "처음으로", onClick: renderIdle, closeOnClick: true }]
       });
+    }).catch(function (e) {
+      render("renderResultPage", { type: "image", status: "error", title: paymentStarted ? "거래 결과를 확인해 주세요" : "결제를 시작하지 않았어요", description: e.code === "RECOVERY_PENDING" || e.code === "STORAGE_UNAVAILABLE" ? e.message : "다시 결제하지 말고\n직원에게 문의해 주세요.", timerMs: 10000, onTimeout: renderIdle, localeCode: "ko", buttons: [{ label: "처음으로", onClick: renderIdle, closeOnClick: true }] });
     }).finally(function () { paying = false; });
   }
   // text 타입은 짧은 대기번호용 초대형 글자라 날짜가 겹칩니다.
@@ -476,14 +502,15 @@
     if (paying) return; paying = true;
     waiting("취소를 준비하고 있어요", "잠시만 기다려 주세요");
     api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: x.paymentKey, stage: "start" }).then(function (j) {
-      return sset(K_CANCEL, x.paymentKey).then(function () {
-        return sdk.payment.requestPaymentCancel(j.params).catch(function (e) { return { type: "FAILED", message: (e && e.message) || "취소 오류" }; });
+      return reserveRecovery(K_CANCEL, x.paymentKey).then(function () {
+        return Promise.resolve().then(function () { return sdk.payment.requestPaymentCancel(j.params); }).catch(function (e) { logFailure("CANCEL_RECOVERY_FAILED", x.paymentKey, e); return { type: "TIMEOUT" }; });
       });
     }).then(function (result) {
-      result = result || { type: "FAILED" };
+      result = result || { type: "TIMEOUT" };
       if (result.type !== "SUCCESS") {
-        sdel(K_CANCEL);
-        render("renderResultPage", { type: "image", status: "error", title: "결제를 취소하지 못했어요", description: result.type === "CANCELED" ? "취소 화면을 닫았어요" : "다시 시도해 주세요", timerMs: 6000, onTimeout: renderIdle, localeCode: "ko" });
+        var confirmedFailure = result.type === "CANCELED" || result.type === "FAILED";
+        if (confirmedFailure) sdel(K_CANCEL);
+        render("renderResultPage", { type: "image", status: "error", title: confirmedFailure ? "결제를 취소하지 못했어요" : "취소 결과를 확인하고 있어요", description: confirmedFailure ? "취소 화면을 닫았거나\n승인되지 않았어요" : "다시 취소하지 말고\n직원 관리에서 결과를 확인해 주세요", timerMs: 10000, onTimeout: renderIdle, localeCode: "ko" });
         return;
       }
       waiting("카드 취소가 완료됐어요", "이용권 취소 내역을 저장하고 있어요");
@@ -492,7 +519,7 @@
         render("renderResultPage", { type: "image", status: "success", title: "결제를 취소했어요", description: x.productName + " · " + won(x.amount) + "\n이용권도 취소했어요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
       }, function (e) {
         logFailure("CANCEL_RECOVERY_FAILED", x.paymentKey, e);
-        render("renderResultPage", { type: "image", status: "success", title: "카드 취소는 됐어요", description: "서버 기록은 다음에 관리 화면에 들어올 때 다시 맞춰요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
+        render("renderResultPage", { type: "image", status: "success", title: "카드 취소는 됐어요", description: "직원 관리에 다시 들어가면\n서버 기록을 다시 확인해요", timerMs: 8000, onTimeout: renderIdle, localeCode: "ko" });
       });
     }).catch(function (e) {
       if (!onAuthError(e)) { toast(e.message || "취소를 준비하지 못했어요.", "error"); renderIdle(); }
@@ -506,7 +533,7 @@
       recoveryKey = key;
       return sdk.payment.getPaymentCancel({ paymentKey: key }).then(function (res) {
         if (res && res.type === "SUCCESS") return api("/api/kiosk/refund", { staffToken: staffToken, paymentKey: key, stage: "result", type: "SUCCESS", response: res.response }).then(function () { toast("지난 결제 취소를 기록했어요.", "success"); return sdel(K_CANCEL).then(function () { return key; }); });
-        return sdel(K_CANCEL);
+        if (res && (res.type === "CANCELED" || res.type === "FAILED")) return sdel(K_CANCEL);
       }, function (e) {
         if (/PAYMENT_NOT_FOUND/.test(String(e && (e.code || e.message) || e))) return sdel(K_CANCEL);
         logFailure("CANCEL_RECOVERY_FAILED", key, e);
