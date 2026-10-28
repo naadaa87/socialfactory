@@ -112,7 +112,7 @@ test('4종 모두 알리고 폼 형식으로 요청하고 접수 ID 저장, 문�
     assert.equal(request.form.get('receiver_1'), '01000000000');
     assert.equal(request.form.get('failover'), 'N');
     assert(!request.form.get('message_1').includes('#{'));
-    assert.equal(request.options.redirect, 'error');
+    assert.equal(request.options.redirect, 'manual');
   }
   assert.equal(f.rows("SELECT * FROM notification_jobs WHERE status = 'sent' AND provider_msg_id = '123'").length, 4);
 });
@@ -167,7 +167,19 @@ test('알리고 테스트 모드 응답은 실제 발송 접수가 아닌 기록
   const result = await runQueue(f.env);
   assert.equal(result.logged, 1); assert.equal(result.sent, 0);
   assert.equal(api.requests[0].form.get('testMode'), 'Y');
+  assert.equal(api.requests[0].options.redirect, 'manual');
   assert.equal(f.one("SELECT provider FROM notification_jobs WHERE kind = 'purchase'").provider, 'aligo-test');
+});
+
+test('알리고 리다이렉트는 따라가지 않고 자동 재발송하지 않음', async t => {
+  const f = fixture(t, true);
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return new Response(null, { status: 302, headers: { Location: 'https://example.com/' } }); });
+  await issuePassForPayment(f.env, f.pay());
+  const result = await runQueue(f.env);
+  assert.equal(result.failed, 1); assert.equal(result.retry, 0);
+  assert.equal(calls, 1);
+  assert.match(f.one("SELECT last_error FROM notification_jobs WHERE kind = 'purchase'").last_error, /리다이렉트 응답/);
 });
 
 test('승인 템플릿 코드는 코드 기본값으로 사용하고 승인 문구와 버튼을 렌더링', async t => {
