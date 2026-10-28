@@ -3,10 +3,24 @@
  * 응답을 받지 못한 요청은 접수됐을 수 있으므로 자동 재발송하지 않습니다.
  */
 const ENDPOINT = "https://kakaoapi.aligo.in/akv10/alimtalk/send/";
+const RELAY_ENDPOINT = "https://relay.naranhistory.com/socialfactory/aligo/send";
+
+function deliveryTarget(env) {
+  const url = String(env.ALIGO_RELAY_URL || "").trim();
+  const secret = String(env.ALIGO_RELAY_SECRET || "");
+  const headers = { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" };
+  if (!url && !secret) return { url: ENDPOINT, headers };
+  // 설정이 일부만 있거나 목적지가 다르면 인증정보를 보내지 않고 중단합니다.
+  if (url.replace(/\/+$/, "") !== RELAY_ENDPOINT || !/^[A-Za-z0-9_-]{43,128}$/.test(secret)) {
+    throw Object.assign(new Error("알리고 중계 URL·전용 인증키 설정 확인 필요"), { retryable: false });
+  }
+  headers.Authorization = "Bearer " + secret;
+  return { url: RELAY_ENDPOINT, headers };
+}
 
 function safeTestReason(value, env) {
   let reason = String(value || "").slice(0, 180);
-  for (const key of ["ALIGO_API_KEY", "ALIGO_SENDER_KEY", "ALIGO_USER_ID", "ALIGO_SENDER"]) {
+  for (const key of ["ALIGO_API_KEY", "ALIGO_SENDER_KEY", "ALIGO_USER_ID", "ALIGO_SENDER", "ALIGO_RELAY_SECRET"]) {
     if (env[key]) reason = reason.replaceAll(String(env[key]), "[가림]");
   }
   return reason.replace(/01[016789][- ]?\d{3,4}[- ]?\d{4}/g, "[전화번호]").replace(/[A-Za-z0-9_-]{32,}/g, "[가림]");
@@ -32,17 +46,18 @@ export async function sendAligo(env, job, message, template) {
   });
   if (message.buttons) form.set("button_1", JSON.stringify(message.buttons));
   if (message.emtitle) form.set("emtitle_1", message.emtitle);
+  const target = deliveryTarget(env);
   const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 10000);
   try {
     let response, data;
     try {
-      response = await fetch(ENDPOINT, {
+      response = await fetch(target.url, {
         method: "POST", signal: ctrl.signal, redirect: "manual",
-        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: form
+        headers: target.headers, body: form
       });
     } catch (e) {
       if (testMode === "Y") {
-        const safe = value => String(value || "").replace(/\b(apikey|senderkey|userid)=\S+/gi, "$1=[redacted]").slice(0, 160);
+        const safe = value => safeTestReason(value, env).replace(/\b(apikey|senderkey|userid)=\S+/gi, "$1=[redacted]").slice(0, 160);
         console.error("aligo-connect", safe(e?.name), safe(e?.message), safe(e?.cause?.name), safe(e?.cause?.message));
       }
       throw Object.assign(new Error("알리고 연결 실패 — 전송내역 확인 후 수동 재시도"), { retryable: false });

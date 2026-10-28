@@ -195,6 +195,65 @@ test('알리고 리다이렉트는 따라가지 않고 자동 재발송하지 �
   assert.match(f.one("SELECT last_error FROM notification_jobs WHERE kind = 'purchase'").last_error, /리다이렉트 응답/);
 });
 
+test('고정 IP 중계는 전용 Bearer 인증을 쓰고 승인 문구·수신자·테스트 모드를 보존', async t => {
+  const f = fixture(t, true), api = apiMock(t, { code: 0 });
+  f.env.ALIGO_RELAY_URL = 'https://relay.naranhistory.com/socialfactory/aligo/send';
+  f.env.ALIGO_RELAY_SECRET = 'S'.repeat(43);
+  f.env.ALIGO_TEST_MODE = 'Y';
+  await issuePassForPayment(f.env, f.pay());
+  assert.equal((await runQueue(f.env)).logged, 1);
+  assert.equal(api.requests.length, 1);
+  const request = api.requests[0];
+  assert.equal(request.url, f.env.ALIGO_RELAY_URL);
+  assert.equal(request.options.headers.Authorization, 'Bearer ' + f.env.ALIGO_RELAY_SECRET);
+  assert.equal(request.options.redirect, 'manual');
+  assert.equal(request.form.get('receiver_1'), '01000000000');
+  assert.equal(request.form.get('apikey'), f.env.ALIGO_API_KEY);
+  assert.equal(request.form.get('testMode'), 'Y');
+  assert.equal(request.form.get('failover'), 'N');
+  assert.equal(request.form.get('tpl_code'), 'PURCHASE');
+});
+
+test('중계 설정 누락·임의 목적지·짧은 키는 직접 발송으로 우회하지 않고 네트워크 호출 전 차단', async t => {
+  const f = fixture(t, true);
+  const { sendAligo } = await import('../functions/_lib/aligo.js');
+  const message = { title: '연결 확인', text: '연결 확인' }, template = { code: 'PURCHASE', env: 'ALIMTALK_TPL_PURCHASE' };
+  for (const config of [
+    { ALIGO_RELAY_URL: 'https://relay.naranhistory.com/socialfactory/aligo/send' },
+    { ALIGO_RELAY_SECRET: 'S'.repeat(43) },
+    { ALIGO_RELAY_URL: 'https://example.com/socialfactory/aligo/send', ALIGO_RELAY_SECRET: 'S'.repeat(43) },
+    { ALIGO_RELAY_URL: 'http://relay.naranhistory.com/socialfactory/aligo/send', ALIGO_RELAY_SECRET: 'S'.repeat(43) },
+    { ALIGO_RELAY_URL: 'https://relay.naranhistory.com/socialfactory/aligo/send?other=1', ALIGO_RELAY_SECRET: 'S'.repeat(43) },
+    { ALIGO_RELAY_URL: 'https://relay.naranhistory.com/socialfactory/aligo/send', ALIGO_RELAY_SECRET: 'short' }
+  ]) {
+    await assert.rejects(sendAligo({ ...f.env, ...config }, { phone: '01000000000' }, message, template), e => e.retryable === false && /중계/.test(e.message));
+  }
+  assert.equal(f.noNetwork.mock.callCount(), 0);
+});
+
+test('중계 403 응답은 성공으로 오인하거나 자동 재전송하지 않음', async t => {
+  const f = fixture(t, true);
+  f.env.ALIGO_RELAY_URL = 'https://relay.naranhistory.com/socialfactory/aligo/send';
+  f.env.ALIGO_RELAY_SECRET = 'S'.repeat(43);
+  const mock = t.mock.method(globalThis, 'fetch', async () => new Response('Forbidden', { status: 403 }));
+  await issuePassForPayment(f.env, f.pay());
+  assert.equal((await runQueue(f.env)).failed, 1);
+  await runQueue(f.env);
+  assert.equal(mock.mock.callCount(), 1);
+  assert.equal(f.one("SELECT status FROM notification_jobs WHERE kind = 'purchase'").status, 'failed');
+});
+
+test('테스트 오류에 중계 인증키가 되돌아와도 관리자 기록에는 노출하지 않음', async t => {
+  const f = fixture(t, true);
+  f.env.ALIGO_RELAY_URL = 'https://relay.naranhistory.com/socialfactory/aligo/send';
+  f.env.ALIGO_RELAY_SECRET = 'S'.repeat(43);
+  f.env.ALIGO_TEST_MODE = 'Y';
+  apiMock(t, { code: -99, message: '인증 오류 ' + f.env.ALIGO_RELAY_SECRET });
+  await issuePassForPayment(f.env, f.pay());
+  assert.equal((await runQueue(f.env)).retry, 1);
+  assert(!f.one("SELECT last_error FROM notification_jobs WHERE kind = 'purchase'").last_error.includes(f.env.ALIGO_RELAY_SECRET));
+});
+
 test('승인 템플릿 코드는 코드 기본값으로 사용하고 승인 문구와 버튼을 렌더링', async t => {
   const f = fixture(t, true);
   delete f.env.ALIMTALK_TPL_PURCHASE;

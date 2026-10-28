@@ -372,6 +372,7 @@ KG이니시스 가입이 끝나면 **가맹점관리자(iniweb.inicis.com)** →
 - 승인 템플릿: 구매 완료 `UM_9903`, 만료 예정 `UM_9905`, 연장 완료 `UM_9906`, 취소 완료 `UM_9907` (`@소셜팩토리대표`). 승인 본문과 구매·만료 버튼은 `functions/_lib/notify.js`에 넣었습니다. 실제 발송에는 알리고 API 인증정보와 Cloudflare Pages 설정이 필요합니다.
 - 첫 구매는 구매 완료, 남은 기간에 이어 붙는 구매는 연장 완료 알림 1건을 예약합니다. 만료 알림은 최종 종료 시각으로 다시 계산합니다. 프론트 결제 취소 또는 관리자가 실제 환불 완료를 확인한 경우에만 취소 완료 알림을 예약합니다. 동일 결제·환불 이벤트는 중복 등록하지 않습니다.
 - Pages `Variables and secrets`의 **Production** 환경에 `ALIMTALK_PROVIDER=aligo`, `ALIGO_USER_ID`, `ALIGO_API_KEY`(Secret), `ALIGO_SENDER_KEY`(Secret), `ALIGO_SENDER`(등록 발신번호)를 설정합니다. 승인 코드 네 개는 코드의 기본값으로 포함되어 있고 `ALIMTALK_TPL_PURCHASE`, `ALIMTALK_TPL_EXPIRE`, `ALIMTALK_TPL_RENEWAL`, `ALIMTALK_TPL_REFUND`로 재정의할 수 있습니다.
+- 고정 IP 중계는 `ALIGO_RELAY_URL=https://relay.naranhistory.com/socialfactory/aligo/send`와 `ALIGO_RELAY_SECRET`(Secret)을 함께 설정합니다. 나란히의 기존 서울 서버에서 전용 경로·전용 키만 사용하며 알리고의 발송 서버 IP에 해당 서버 한 개를 등록해야 합니다. 중계 설정이 잘못되면 직접 발송으로 우회하지 않습니다. 설치·보존 검사·복구 방법은 `tools/aligo-relay/README.md`를 따릅니다.
 - `ALIMTALK_ENABLED`를 비우거나 `0`으로 두면 **문구만 기록**합니다. 승인 문구와 인증정보를 확인한 뒤 `ALIGO_TEST_MODE=Y`로 API 테스트 요청을 먼저 검증하고, 실발송 시험 시 `ALIGO_TEST_MODE=N` 및 `ALIMTALK_ENABLED=1`로 설정합니다. 시험 결제의 알림은 발송하지 않습니다. 과거 `기록만` 알림을 자동 재발송하지 않습니다.
 - Pages의 `CRON_KEY`와 같은 Secret을 `workers/notify-cron` Worker에 설정하고 `*/5 * * * *` Cron을 배포해야 만료 알림이 자동 발송됩니다. Worker가 없으면 관리자 화면의 **지금 보내기**로 처리할 수 있습니다. 알리고 접수 성공은 최종 도착을 뜻하지 않으므로 전송내역에서 수신 결과를 확인합니다.
 - `node --test tests/alimtalk.test.mjs`로 발송 형식, 중복 방지, 환불 조건과 재시도를 검증합니다.
