@@ -228,7 +228,9 @@
           <select class="select" id="pj-filter" aria-label="상태"><option value="">전체</option><option value="queued">보낼 예정</option><option value="sent">보냄</option><option value="logged">기록만 (업체 연결 전)</option><option value="failed">실패</option><option value="cancelled">취소</option></select>
           <button class="btn btn-light btn-sm" type="button" id="pj-reload">새로고침</button>
           <button class="btn btn-light btn-sm" type="button" id="pj-run">보낼 때가 된 알림 지금 보내기</button>
+          <button class="btn btn-light btn-sm" type="button" id="pj-test">알리고 연결 시험</button>
         </div>
+        <p class="tiny muted" id="pj-test-status" role="status" aria-live="polite"></p>
         <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>보낼 시각</th><th>종류 · 상태</th><th>받는 사람</th><th>문구</th><th></th></tr></thead><tbody id="pj-rows"></tbody></table></div></div>
       </div>
 
@@ -539,7 +541,7 @@
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
 <script src="/toss-front-plugin/ui.js?v=9aa875d6bc"></script>
 <script src="/js/admin-kiosk-ui.js?v=749a2de995"></script>
-<script src="/js/admin-passes.js?v=20261028-alimtalk"></script>
+<script src="/js/admin-passes.js?v=20261028-alimtalk-test"></script>
 <script src="/js/admin-kiosk-products.js?v=20261027-category-drawer"></script>
 </body>
 </html>
