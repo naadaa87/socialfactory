@@ -15,6 +15,9 @@ export async function onRequestPost({ request, env }) {
     const result = await sendAligo(env, { phone: env.ALIGO_SENDER }, message, TEMPLATES.purchase);
     return json({ ok: true, provider: "aligo", test: result.test === true, accepted: true });
   } catch (e) {
-    return json({ ok: false, provider: "aligo", test: true, error: String(e?.message || e).slice(0, 200) }, 502);
+    const reason = String(e?.message || e).slice(0, 200);
+    // 발송 시험 실패는 의도적으로 처리한 결과다. 5xx는 일부 엣지에서 본문이 대체되어 원인 진단이 어렵다.
+    console.error("aligo-test", reason);
+    return json({ ok: false, provider: "aligo", test: true, error: reason }, 424);
   }
 }
