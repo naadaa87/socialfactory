@@ -1,0 +1,27 @@
+# relay.naranhistory.com 블록 내부에만 import합니다.
+# Authorization은 Caddy 기본 접근 로그에서 가려지며 알리고에는 전달하지 않습니다.
+@socialfactory_aligo {
+    path /socialfactory/aligo/send
+    method POST
+    header Authorization "Bearer __SOCIALFACTORY_RELAY_SECRET__"
+    header Content-Type application/x-www-form-urlencoded*
+}
+handle @socialfactory_aligo {
+    request_body {
+        max_size 32KB
+    }
+    reverse_proxy https://kakaoapi.aligo.in {
+        rewrite /akv10/alimtalk/send/
+        header_up Host kakaoapi.aligo.in
+        header_up -Authorization
+        header_up -Cookie
+        header_down -Server
+        lb_retries 0
+        transport http {
+            dial_timeout 5s
+            response_header_timeout 8s
+            read_timeout 8s
+            write_timeout 8s
+        }
+    }
+}
