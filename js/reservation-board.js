@@ -2,9 +2,12 @@ import { ROOM_IDS, roomSchedule, kstDay, formatTime, isOutdated } from './reserv
 
 const $ = id => document.getElementById(id);
 const demo = new URLSearchParams(location.search).get('demo') === '1';
+const pairingCode = new URLSearchParams(location.hash.slice(1)).get('pair');
+// The one-time code is never sent in a URL/query/referrer, and is removed before any request.
+if(pairingCode) history.replaceState(null,'',location.pathname+location.search);
 const capacities = { r1:36, r2:40, r3:16, r4:48, r5:30 };
 const images = { r1:'room-1-01-lecture-rear', r2:'room-2-01-lecture-angle', r3:'room-3-01-lecture', r4:'room-4-01-lecture-angle', r5:'room-5-01-theater' };
-let data = null, receivedAt = 0, failed = false, loginRequired = false, loading = false, selected = 'r1', page = 0;
+let data = null, receivedAt = 0, failed = false, loginRequired = false, loading = false, selected = 'r1', page = 0, pairError = '';
 // A fixed, explicitly labelled example clock makes every visual review reproducible.
 const demoDate = kstDay(Date.now());
 const now = () => demo ? Date.parse(demoDate + 'T14:25:00+09:00') : Date.now();
@@ -67,7 +70,7 @@ function render() {
   focusRoom(selected);
   $('total').textContent = unavailable ? '확인 필요' : '오늘 '+data.reservations.length+'건';
   const warnings = [];
-  if(loginRequired) warnings.push('예약 조회를 위한 관리자 로그인이 필요합니다.');
+  if(loginRequired) warnings.push(pairError || '모니터 연결이 필요합니다. 관리자에게 연결 링크를 요청해 주세요.');
   else if(obsolete && data) warnings.push('예약 정보를 갱신하지 못해 일정을 숨겼습니다. 관리자에게 문의해 주세요.');
   else if(!data) warnings.push(failed ? '예약 정보를 불러오지 못했습니다. 연결을 확인해 주세요.' : '예약 정보를 확인하고 있습니다.');
   else if(failed) warnings.push('연결이 불안정합니다. 마지막 확인 일정을 표시합니다.');
@@ -77,7 +80,6 @@ function render() {
     if(data.unassigned) warnings.push('방 번호가 없는 예약은 별도 확인이 필요합니다.');
   }
   $('notice').replaceChildren(document.createTextNode(warnings.join(' ')));
-  if(loginRequired) { const a=elem('a',' 관리자 로그인 ↗'); a.href='/admin'; a.target='_blank'; a.rel='noopener'; $('notice').append(a); }
   $('connection').textContent = demo?'예시 데이터':failed||unavailable?'연결 확인 필요':'1분마다 자동 갱신';
   document.querySelector('.schedule-bottom').classList.toggle('offline', failed||unavailable);
   $('updated').textContent = demo?'시제품 · 실제 예약과 연결되지 않은 예시 화면':receivedAt?'마지막 확인 '+new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(receivedAt):'갱신 대기 중';
@@ -101,7 +103,7 @@ async function refresh() {
   loading=true;
   const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),20000);
   try {
-    const response=await fetch('/api/admin/reservation-board',{credentials:'same-origin',cache:'no-store',signal:controller.signal});
+    const response=await fetch('/api/board/schedule',{credentials:'same-origin',cache:'no-store',signal:controller.signal});
     loginRequired=response.status===401;
     if(!response.ok) throw new Error('request');
     const fresh=await response.json();
@@ -119,7 +121,18 @@ $('fullscreen').addEventListener('click',async()=>{try {if(document.fullscreenEl
 window.addEventListener('online',refresh);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden) refresh();});
 if(demo){data=example();receivedAt=now();}
-render(); refresh();
+async function start(){
+  if(pairingCode && !demo){
+    const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),15000);
+    try{
+      const response=await fetch('/api/board/pair',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:pairingCode}),signal:controller.signal});
+      const result=await response.json();if(!response.ok)pairError=result.message||'모니터를 연결하지 못했습니다.';
+    }catch{pairError='모니터를 연결하지 못했습니다. 관리자에서 새 연결 링크를 발급해 주세요.';}
+    finally{clearTimeout(timeout);}
+  }
+  await refresh();
+}
+render(); start();
 setInterval(render,10000);
 setInterval(refresh,60000);
 if(!matchMedia('(prefers-reduced-motion: reduce)').matches) setInterval(()=>{page++;render();},12000);

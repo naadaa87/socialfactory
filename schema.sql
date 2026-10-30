@@ -370,3 +370,16 @@ CREATE TABLE IF NOT EXISTS kiosk_ui_settings (
   product_layout TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+-- Public-facing reservation monitor: read-only credentials, never admin credentials.
+CREATE TABLE IF NOT EXISTS board_devices (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pairing',
+  pair_hash TEXT UNIQUE,
+  pair_until INTEGER,
+  token_hash TEXT UNIQUE,
+  token_until INTEGER,
+  created_at INTEGER NOT NULL,
+  paired_at INTEGER,
+  last_seen_at INTEGER
+);
