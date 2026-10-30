@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="same-origin">
+  <title>오늘의 예약 안내 | 소셜팩토리 건대</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/reservation-board.css?v=5">
+  <script type="module" src="/js/reservation-board.js?v=1"></script>
+</head>
+<body>
+  <div class="preview-bar" id="preview-bar" hidden><span><b>디자인 시제품</b> · 아래 이름과 일정은 예시입니다.</span><a href="/reservation-board">실제 예약 보기 ↗</a></div>
+  <header class="board-header">
+    <a class="brand" href="/" aria-label="소셜팩토리 홈페이지"><img src="/images/logo-mark.svg" alt="" width="42" height="42"><span>소셜팩토리 <small>건대 · 4F</small></span></a>
+    <div class="header-title">오늘의 예약 안내</div>
+    <div class="clock"><span id="date"></span><strong id="clock">--:--</strong><button id="fullscreen" aria-label="전체 화면으로 보기" title="전체 화면">⛶</button></div>
+  </header>
+  <main>
+    <section class="wayfinding" aria-labelledby="welcome-title">
+      <div class="welcome"><div class="eyebrow">WELCOME TO SOCIAL FACTORY</div><h1 id="welcome-title">오늘의 모임,<br>어느 방인가요?</h1><p>예약자명과 시간을 확인하고<br>지도에서 방 번호를 찾아주세요.</p></div>
+      <div class="map-heading"><h2>4층 공간 안내</h2><span>주출입구를 기준으로 확인하세요</span></div>
+      <div class="floor-map">
+        <img src="/images/aerial/03-overhead.webp" width="1600" height="900" alt="4층 조감도. 주출입구 오른쪽은 휴게 공간과 5번룸, 왼쪽 복도를 따라 1·2·3·4번룸이 있습니다.">
+        <button class="pin" data-room="r1" style="--x:37.9%;--y:71.5%" aria-label="1번룸 위치와 예약 보기">1</button>
+        <button class="pin" data-room="r2" style="--x:17.9%;--y:72.9%" aria-label="2번룸 위치와 예약 보기">2</button>
+        <button class="pin" data-room="r3" style="--x:16.3%;--y:53.1%" aria-label="3번룸 위치와 예약 보기">3</button>
+        <button class="pin" data-room="r4" style="--x:19.1%;--y:26.9%" aria-label="4번룸 위치와 예약 보기">4</button>
+        <button class="pin" data-room="r5" style="--x:76.2%;--y:46.7%" aria-label="5번룸 위치와 예약 보기">5</button>
+        <span class="entry" style="--x:64.2%;--y:85%">↑ 주출입구</span>
+      </div>
+      <div class="map-caption"><span><i class="blue-dot"></i>방 번호를 누르면 위치와 사진을 확인할 수 있어요</span><small>홈페이지 조감도 기준 · 가구 배치는 예시</small></div>
+      <div class="room-photo" id="room-photo"><img id="room-image" src="/images/space/room-1-01-lecture-rear-sm.webp" alt="1번룸 내부"><div><span class="eyebrow">YOUR ROOM</span><h3 id="photo-title">1번룸</h3><p id="photo-description">주출입구에서 왼쪽 복도 · 최대 36명</p></div><span class="photo-number" id="photo-number">01</span></div>
+    </section>
+    <section class="reservations" aria-labelledby="schedule-title">
+      <div class="schedule-heading"><div><span class="eyebrow">TODAY’S SCHEDULE</span><h2 id="schedule-title">예약하신 방을 확인하세요</h2></div><span class="count" id="total">확인 중</span></div>
+      <div class="column-labels"><span>공간</span><span>현재 예약</span><span>다음 예약</span></div>
+      <div id="rooms" class="room-list" aria-label="방별 현재 예약과 다음 예약"></div>
+      <div id="notice" class="notice" role="status">예약 정보를 확인하고 있습니다.</div>
+      <div class="schedule-bottom"><p>예약 시간 기준 안내입니다. 실제 입실 여부와는 다를 수 있습니다.</p><span><i class="live-dot"></i><span id="connection">연결 확인 중</span></span></div>
+    </section>
+    <section class="day-schedule" aria-labelledby="day-title"><div class="day-heading"><div><h2 id="day-title">오늘 전체 일정</h2><span id="day-subtitle">종료된 예약도 함께 표시합니다</span></div><div class="pages"><button id="previous" aria-label="이전 일정">←</button><span id="page-count">1 / 1</span><button id="next" aria-label="다음 일정">→</button></div></div><div class="day-items" id="day-items"></div></section>
+  </main>
+  <footer><span>반갑습니다. 소셜팩토리에서 편안한 시간 보내세요.</span><span id="updated">갱신 대기 중</span></footer>
+</body>
+</html>
