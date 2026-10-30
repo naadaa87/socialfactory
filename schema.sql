@@ -300,6 +300,14 @@ CREATE TABLE IF NOT EXISTS spacecloud_sync_audit (
  before_refund INTEGER,after_refund INTEGER,action TEXT NOT NULL,reason TEXT,created_at TEXT DEFAULT (datetime('now','+9 hours'))
 );
 -- 토스프론트 상품은 관리자에서 관리하고, 결제 당시 조건을 보존합니다.
+-- 목록에서 삭제한 상품·분류의 표식. 원본과 결제·이용권 기록은 보존합니다.
+CREATE TABLE IF NOT EXISTS kiosk_catalog_deleted (
+  kind TEXT NOT NULL,
+  id TEXT NOT NULL,
+  deleted_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')),
+  PRIMARY KEY (kind, id)
+);
+
 CREATE TABLE IF NOT EXISTS kiosk_categories (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

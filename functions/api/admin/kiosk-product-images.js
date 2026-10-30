@@ -20,7 +20,7 @@ export async function onRequestPost({ request, env }) {
       (bytes.charCodeAt(4) | bytes.charCodeAt(5) << 8 | bytes.charCodeAt(6) << 16 | bytes.charCodeAt(7) << 24) >>> 0 !== bytes.length - 8)
     return json({ ok: false, error: "invalid-image", message: "WebP 이미지 크기나 형식을 확인해 주세요." }, 400);
   try {
-    const product = await env.DB.prepare("SELECT id FROM kiosk_products WHERE id = ?1").bind(id).first();
+    const product = await env.DB.prepare("SELECT id FROM kiosk_products WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM kiosk_catalog_deleted d WHERE d.kind='product' AND d.id=kiosk_products.id)").bind(id).first();
     if (!product) return json({ ok: false, error: "not-found" }, 404);
     await env.DB.prepare(
       `INSERT INTO kiosk_product_images (product_id, data_base64, version) VALUES (?1, ?2, ?3)

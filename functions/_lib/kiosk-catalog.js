@@ -47,12 +47,16 @@ export async function getKioskCategories(env, { all = false } = {}) {
   await seedKioskCategories(env);
   const { results } = await env.DB.prepare(
     `SELECT c.id,c.name,c.description,c.image,c.sort_order,c.active,i.version AS image_version,
-      (SELECT COUNT(*) FROM kiosk_products p WHERE p.category=c.id AND p.active=1) AS active_products
-     FROM kiosk_categories c LEFT JOIN kiosk_category_images i ON i.category_id=c.id` + (all ? "" : " WHERE c.active=1") + " ORDER BY c.sort_order,c.id"
+      (SELECT COUNT(*) FROM kiosk_products p WHERE p.category=c.id AND p.active=1 AND NOT EXISTS
+        (SELECT 1 FROM kiosk_catalog_deleted d WHERE d.kind='product' AND d.id=p.id)) AS active_products,
+      (SELECT COUNT(*) FROM kiosk_products p WHERE p.category=c.id AND NOT EXISTS
+        (SELECT 1 FROM kiosk_catalog_deleted d WHERE d.kind='product' AND d.id=p.id)) AS product_count
+     FROM kiosk_categories c LEFT JOIN kiosk_category_images i ON i.category_id=c.id
+     WHERE NOT EXISTS (SELECT 1 FROM kiosk_catalog_deleted d WHERE d.kind='category' AND d.id=c.id)` + (all ? "" : " AND c.active=1") + " ORDER BY c.sort_order,c.id"
   ).all();
   return results.map((r) => ({
     id: r.id, name: r.name, description: r.description, image: r.image,
-    sortOrder: Number(r.sort_order), active: !!r.active, activeProducts: Number(r.active_products), imageVersion: r.image_version || null
+    sortOrder: Number(r.sort_order), active: !!r.active, activeProducts: Number(r.active_products), productCount: Number(r.product_count), imageVersion: r.image_version || null
   }));
 }
 
@@ -78,7 +82,9 @@ export async function getKioskProducts(env, { all = false } = {}) {
   const { results } = await env.DB.prepare(
     "SELECT p.*, i.version AS image_version, c.name AS category_name, c.active AS category_active FROM kiosk_products p" +
     " JOIN kiosk_categories c ON c.id=p.category LEFT JOIN kiosk_product_images i ON i.product_id = p.id" +
-    (all ? "" : " WHERE p.active = 1 AND c.active=1") + " ORDER BY c.sort_order,p.sort_order,p.id"
+    " WHERE NOT EXISTS (SELECT 1 FROM kiosk_catalog_deleted d WHERE d.kind='product' AND d.id=p.id)" +
+    " AND NOT EXISTS (SELECT 1 FROM kiosk_catalog_deleted d WHERE d.kind='category' AND d.id=c.id)" +
+    (all ? "" : " AND p.active = 1 AND c.active=1") + " ORDER BY c.sort_order,p.sort_order,p.id"
   ).all();
   return results.map(productFromRow);
 }
@@ -87,7 +93,9 @@ export async function getKioskProduct(env, id, { includeInactive = false } = {})
   await seedKioskProducts(env);
   const row = await env.DB.prepare(
     "SELECT p.*, i.version AS image_version, c.name AS category_name, c.active AS category_active FROM kiosk_products p" +
-    " JOIN kiosk_categories c ON c.id=p.category LEFT JOIN kiosk_product_images i ON i.product_id = p.id WHERE p.id = ?1"
+    " JOIN kiosk_categories c ON c.id=p.category LEFT JOIN kiosk_product_images i ON i.product_id = p.id WHERE p.id = ?1" +
+    " AND NOT EXISTS (SELECT 1 FROM kiosk_catalog_deleted d WHERE d.kind='product' AND d.id=p.id)" +
+    " AND NOT EXISTS (SELECT 1 FROM kiosk_catalog_deleted d WHERE d.kind='category' AND d.id=c.id)"
   ).bind(id).first();
   return row && (includeInactive || (row.active && row.category_active)) ? productFromRow(row) : null;
 }

@@ -334,7 +334,7 @@
       <div class="note">가격은 서버가 다시 검증합니다. 이미 준비된 결제와 발급된 이용권에는 구매 당시 금액·기간이 유지됩니다. 판매 중지를 하면 새 구매 화면에서만 숨겨집니다.</div>
       <div class="card mt">
         <div class="ch"><h2>카테고리</h2><button class="btn btn-light btn-sm" type="button" id="kc-new">+ 카테고리 추가</button></div>
-        <p class="tiny muted">카테고리 이름·설명·이미지·순서를 수정하면 상품 선택 화면에 반영됩니다. 판매 중인 상품이 연결된 카테고리는 비활성화할 수 없습니다.</p>
+        <p class="tiny muted">카테고리 이름·설명·이미지·순서를 수정하면 상품 선택 화면에 반영됩니다. 삭제하려면 판매 중지 상품을 포함해 연결된 상품을 먼저 이동하거나 삭제해 주세요.</p>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>카테고리</th><th>상품 수</th><th>노출</th><th>관리</th></tr></thead><tbody id="kc-rows"></tbody></table></div>
       </div>
       <div class="drawer" id="dr-kcategory" hidden>
@@ -496,6 +496,20 @@
   </div>
 </div>
 
+<!-- ===== 토스프론트 상품·카테고리 삭제 확인 ===== -->
+<div class="drawer" id="dr-kdelete" hidden>
+  <div class="drawer-bg" data-close></div>
+  <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="kd-title">
+    <div class="drawer-head"><h2 id="kd-title">삭제 확인</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+    <div class="drawer-body">
+      <p><strong id="kd-name"></strong></p>
+      <p id="kd-description"></p>
+      <p class="form-note" id="kd-msg" role="alert" hidden></p>
+      <div class="drawer-actions"><button class="btn btn-danger" type="button" id="kd-confirm">삭제</button><button class="btn btn-light" type="button" data-close>닫기</button></div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 이용권 직접 발급 ===== -->
 <div class="drawer" id="dr-pass" hidden>
   <div class="drawer-bg" data-close></div>
@@ -541,7 +555,7 @@
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
 <script src="/toss-front-plugin/ui.js?v=9aa875d6bc"></script>
 <script src="/js/admin-kiosk-ui.js?v=749a2de995"></script>
-<script src="/js/admin-passes.js?v=20261028-alimtalk-diagnostic"></script>
-<script src="/js/admin-kiosk-products.js?v=20261027-category-drawer"></script>
+<script src="/js/admin-passes.js?v=20261030-catalog-delete"></script>
+<script src="/js/admin-kiosk-products.js?v=20261030-catalog-delete"></script>
 </body>
 </html>
