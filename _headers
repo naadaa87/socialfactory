@@ -35,6 +35,14 @@
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
 
+/reservation-board
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
+/reservation-board.html
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
 # 정식 주소(socialfactory.co.kr)만 검색에 나오도록 Cloudflare 기본 주소(*.pages.dev)는 수집하지 않게 합니다
 https://:project.pages.dev/*
   X-Robots-Tag: noindex
