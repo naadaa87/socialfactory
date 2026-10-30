@@ -336,9 +336,9 @@
       render("renderOrderPage", {
         localeCode: "ko",
         order: {
-          items: [{ label: productLabel(p), value: it.listPrice || it.amount, quantity: 1, imageUrl: imageUrl(p.image),
+          items: [{ label: productLabel(p), value: it.listPrice || it.amount, quantity: 1, imageUrl: p.imageUrl || imageUrl(p.image),
             options: [{ type: "option", label: "등록 번호 " + phone.replace(/^(\d{3})(\d{4})(\d{4})$/, "$1-$2-$3"), value: 0 }] }],
-          discounts: discount ? [{ label: "친구 동반 할인", value: discount }] : [],
+          discounts: discount ? [{ label: (p.friend ? "친구 동반 " : "상품 ") + Math.round(discount / it.listPrice * 100) + "% 할인", value: discount }] : [],
           summary: {
             totalAmount: it.amount,
             discountAmount: discount || undefined,
