@@ -47,7 +47,7 @@ const ui=readFileSync(new URL('../toss-front-plugin/ui.js',import.meta.url),'utf
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve}};
 const payload=(layout='list')=>({ok:true,layout:{categoryLayout:layout,productLayout:layout},products:[{id:'seat-2h',name:'2시간권',price:4000,category:'day'}]});
-async function plugin({sdkResult='SUCCESS'}={}) {
+async function plugin({sdkResult='SUCCESS',intentFields={}}={}) {
   const pages=[],catalogRequests=[],reports=[],storage=new Map([['sf_kiosk_token','fixture-token']]);
   const nativePayment=deferred();let payments=0;
   const template={openToast(){}};
@@ -56,15 +56,28 @@ async function plugin({sdkResult='SUCCESS'}={}) {
   vm.runInNewContext(ui+'\n'+source,{window,URL,AbortController,setTimeout,clearTimeout,console:{log(){},error(){}},location:{hostname:'fixture.invalid',href:'https://fixture.invalid/index.html'},fetch:async url=>{
     const path=new URL(url).pathname;
     if(path==='/api/kiosk/products'){const d=deferred();catalogRequests.push(d);return new Response(JSON.stringify(await d.promise))}
-    if(path==='/api/kiosk/intents')return new Response(JSON.stringify({ok:true,paymentKey:'FIXTURE-KEY',amount:4000,productName:'2시간권',payment:{tax:364,supplyValue:3636},preview:{endsText:'10월 27일 20:54'}}));
+    if(path==='/api/kiosk/intents')return new Response(JSON.stringify({ok:true,paymentKey:'FIXTURE-KEY',amount:4000,productName:'2시간권',payment:{tax:364,supplyValue:3636},preview:{endsText:'10월 27일 20:54'},...intentFields}));
     if(path==='/api/kiosk/result'){const d=deferred();reports.push(d);return new Response(JSON.stringify(await d.promise))}
     throw new Error('Unexpected fixture request '+path);
   }});
   await tick();
   return {pages,catalogRequests,reports,storage,get current(){return pages.at(-1)},get payments(){return payments},
-    async toOrder(){this.current.params.primaryButton.onClick();catalogRequests.at(-1).resolve(payload());await tick();this.current.params.options[0].onClick();this.current.params.options[0].onClick();this.current.params.onSubmit('01000000000');await this.current.params.onSubmit(['privacy'])},
+    async toOrder(catalog=payload()){this.current.params.primaryButton.onClick();catalogRequests.at(-1).resolve(catalog);await tick();this.current.params.options[0].onClick();this.current.params.options[0].onClick();this.current.params.onSubmit('01000000000');await this.current.params.onSubmit(['privacy'])},
     finishNative(){nativePayment.resolve({type:sdkResult,response:{mock:true}})}};
 }
+test('할인 상품 결제 확인에서도 업로드 이미지와 할인 종류·할인율·금액을 유지',async()=>{
+  for(const friend of [false,true]){
+    const h=await plugin({intentFields:{amount:3600,listPrice:4000}});
+    const catalog=payload();Object.assign(catalog.products[0],{friend,price:3600,listPrice:4000,image:'pass-2h.webp',imageUrl:'https://fixture.invalid/api/kiosk/product-images/seat-2h?v=5'});
+    await h.toOrder(catalog);
+    const order=h.current.params.order;
+    assert.equal(h.current.method,'renderOrderPage');
+    assert.equal(order.items[0].imageUrl,catalog.products[0].imageUrl);
+    assert.equal(order.discounts[0].label,friend?'친구 동반 10% 할인':'상품 10% 할인');
+    assert.equal(order.discounts[0].value,400);
+    assert.equal(order.summary.totalAmount,3600);
+  }
+});
 test('느린 상품 응답 중에도 즉시 준비 화면, 뒤로가면 늦은 응답이 화면을 덮지 않음',async()=>{
   const h=await plugin();h.current.params.primaryButton.onClick();
   assert.equal(h.current.params.title,'이용권을 불러오고 있어요');assert.equal(h.current.params.options.length,0);
