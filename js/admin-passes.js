@@ -63,6 +63,7 @@
 
   /* ---------- 이용권 ---------- */
   var PS = { items: [], products: [], payMethods: {} };
+  A.invalidatePassProducts = function () { PS.products = []; };
   function loadPasses() {
     var box = $("#ps-rows");
     api("/api/admin/passes?state=" + encodeURIComponent($("#ps-state").value) + "&q=" + encodeURIComponent($("#ps-q").value.trim())).then(function (j) {

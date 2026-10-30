@@ -5,6 +5,7 @@
   // 예약 패널처럼 화면 영역 밖으로 옮겨, 다른 관리자 화면으로 이동해도 패널이 숨은 화면에 갇히지 않게 합니다.
   document.body.appendChild(document.getElementById("dr-kprod"));
   document.body.appendChild(document.getElementById("dr-kcategory"));
+  document.body.appendChild(document.getElementById("dr-kdelete"));
   var $ = A.$, esc = A.esc, won = A.won, api = A.api, toast = A.toast, guard = A.guard, emptyMsg = A.emptyMsg;
   var items = [], categoryItems = [], busy = false;
   function categoryName(id) { var c = categoryItems.find(function (x) { return x.id === id; }); return c ? c.name : id; }
@@ -61,8 +62,8 @@
       items = values[1].products || [];
       $("#kc-rows").innerHTML = categoryItems.map(function (c) {
         return '<tr><td><img class="kp-thumb" alt="" src="' + esc(categoryPicture(c)) + '"><b>' + esc(c.name) + '</b><small>' + esc(c.description || c.id) + '</small></td>' +
-          '<td>' + c.activeProducts + '개</td><td><span class="st ' + (c.active ? 'ok' : 'gray') + '">' + (c.active ? '노출' : '숨김') + '</span></td>' +
-          '<td><button type="button" class="btn btn-light btn-xs" data-kc-edit="' + esc(c.id) + '">수정</button></td></tr>';
+          '<td>' + c.activeProducts + '개 판매 중' + (c.productCount > c.activeProducts ? '<small>전체 ' + c.productCount + '개 · 판매 중지 포함</small>' : '') + '</td><td><span class="st ' + (c.active ? 'ok' : 'gray') + '">' + (c.active ? '노출' : '숨김') + '</span></td>' +
+          '<td><button type="button" class="btn btn-light btn-xs" data-kc-edit="' + esc(c.id) + '">수정</button> <button type="button" class="btn btn-danger btn-xs" data-kc-delete="' + esc(c.id) + '" aria-label="카테고리 삭제 · ' + esc(c.name) + '">삭제</button></td></tr>';
       }).join('') || '<tr><td colspan="4">' + emptyMsg('등록된 카테고리가 없습니다.') + '</td></tr>';
       categoryOptions($("#kp-category").value);
       box.innerHTML = items.length ? items.map(function (p) {
@@ -72,7 +73,7 @@
           "<td><b>" + won(p.price) + "</b>" + (p.listPrice ? "<small>정가 " + won(p.listPrice) + " · " + p.discountPercent + "% 할인</small>" : "") + "</td>" +
           "<td>" + esc(p.duration[unit]) + esc(units[unit]) + "</td>" +
           '<td><span class="st ' + (p.active ? "ok" : "gray") + '">' + (p.active ? "판매 중" : "판매 중지") + "</span></td>" +
-          '<td><button type="button" class="btn btn-light btn-xs" data-kp-edit="' + esc(p.id) + '">수정</button></td></tr>';
+          '<td><button type="button" class="btn btn-light btn-xs" data-kp-edit="' + esc(p.id) + '">수정</button> <button type="button" class="btn btn-danger btn-xs" data-kp-delete="' + esc(p.id) + '" aria-label="상품 삭제 · ' + esc(p.name) + '">삭제</button></td></tr>';
       }).join("") : '<tr><td colspan="6">' + emptyMsg("등록된 상품이 없습니다.") + "</td></tr>";
     }).catch(function (e) { if (!guard(e)) { box.innerHTML = '<tr><td colspan="6">' + emptyMsg(e.message) + "</td></tr>"; $("#kc-rows").innerHTML = '<tr><td colspan="4">' + emptyMsg(e.message) + '</td></tr>'; } });
   }
@@ -154,6 +155,8 @@
   $("#kc-new").addEventListener("click", function () { openCategory(null); });
   $("#kc-cancel").addEventListener("click", function () { A.closeDrawer($("#dr-kcategory")); });
   $("#kc-rows").addEventListener("click", function (e) {
+    var del = e.target.closest("[data-kc-delete]");
+    if (del) { openDelete("category", categoryItems.find(function (c) { return c.id === del.dataset.kcDelete; })); return; }
     var b = e.target.closest("[data-kc-edit]");
     if (b) openCategory(categoryItems.find(function (c) { return c.id === b.dataset.kcEdit; }));
   });
@@ -181,6 +184,8 @@
   $("#kp-reload").addEventListener("click", load);
   $("#kp-cancel").addEventListener("click", function () { A.closeDrawer($("#dr-kprod")); });
   $("#kp-rows").addEventListener("click", function (e) {
+    var del = e.target.closest("[data-kp-delete]");
+    if (del) { openDelete("product", items.find(function (p) { return p.id === del.dataset.kpDelete; })); return; }
     var b = e.target.closest("[data-kp-edit]");
     if (b) open(items.filter(function (p) { return p.id === b.dataset.kpEdit; })[0] || null);
   });
@@ -208,6 +213,38 @@
         $("#kp-msg").hidden = false; if (productSaved) load();
       }
     }).finally(function () { busy = false; $("#kp-save").disabled = false; });
+  });
+  var deleteTarget = null, deleting = false;
+  function openDelete(kind, item) {
+    if (!item || deleting) return;
+    deleteTarget = { kind: kind, id: item.id };
+    var blocked = kind === "category" && (item.productCount || item.activeProducts) > 0;
+    $("#kd-title").textContent = kind === "category" ? "카테고리 삭제" : "상품 삭제";
+    $("#kd-name").textContent = item.name;
+    $("#kd-description").textContent = blocked ?
+      "판매 중지 상품을 포함해 연결된 상품이 있어요. 먼저 다른 카테고리로 옮기거나 상품을 삭제해 주세요." :
+      kind === "category" ? "이 카테고리를 목록에서 삭제할까요? 기존 결제·이용권 기록은 유지됩니다." :
+      "이 상품을 판매 목록에서 삭제할까요? 신규 구매와 직접 발급에서는 제외되며, 기존 결제·이용권·환불 기록은 유지됩니다.";
+    $("#kd-msg").hidden = true;
+    $("#kd-confirm").hidden = blocked;
+    $("#kd-confirm").disabled = false;
+    A.openDrawer("#dr-kdelete");
+  }
+  $("#kd-confirm").addEventListener("click", function () {
+    if (!deleteTarget || deleting) return;
+    var target = deleteTarget;
+    deleting = true; $("#kd-confirm").disabled = true; $("#kd-msg").hidden = true;
+    api(target.kind === "category" ? "/api/admin/kiosk-categories" : "/api/admin/kiosk-products", {
+      method: "DELETE", body: { id: target.id }
+    }).then(function () {
+      A.closeDrawer($("#dr-kdelete")); deleteTarget = null;
+      // 직접 발급 화면에도 삭제 전 상품이 캐시되어 있을 수 있어 다음 진입 때 다시 읽게 합니다.
+      if (A.invalidatePassProducts) A.invalidatePassProducts();
+      toast(target.kind === "category" ? "카테고리를 삭제했습니다." : "상품을 삭제했습니다. 기존 이용권은 유지됩니다.");
+      load();
+    }).catch(function (err) {
+      if (!guard(err)) { $("#kd-msg").textContent = err.message || "삭제하지 못했습니다. 다시 시도해 주세요."; $("#kd-msg").hidden = false; }
+    }).finally(function () { deleting = false; $("#kd-confirm").disabled = false; });
   });
   A.LOAD.kprod = load;
 })();

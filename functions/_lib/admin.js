@@ -38,6 +38,7 @@ export const dayIndex = (iso) => Math.round(Date.parse(iso + "T00:00:00Z") / 864
 
 /* ---------- 표 자동 준비 ---------- */
 const SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS kiosk_catalog_deleted (kind TEXT NOT NULL, id TEXT NOT NULL, deleted_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), PRIMARY KEY(kind,id))`,
   `CREATE TABLE IF NOT EXISTS inquiries (id INTEGER PRIMARY KEY AUTOINCREMENT, receipt TEXT NOT NULL UNIQUE, submission_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), status TEXT NOT NULL DEFAULT 'new', purpose TEXT NOT NULL, space TEXT, name TEXT NOT NULL, phone TEXT NOT NULL, email TEXT, company TEXT, when_text TEXT, people TEXT, schedule TEXT, message TEXT NOT NULL, consent INTEGER NOT NULL DEFAULT 0, notice_version TEXT, page TEXT, ip_hash TEXT, notify_status TEXT, member_id INTEGER)`,
   `CREATE INDEX IF NOT EXISTS idx_inquiries_created ON inquiries (created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_inquiries_status ON inquiries (status)`,
