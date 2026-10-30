@@ -34,3 +34,18 @@ export function formatTime(ts, date) {
 export function isOutdated(data, now, receivedAt) {
   return !data || data.date !== kstDay(now) || now - receivedAt > 180000 || now - data.generated_at > 180000;
 }
+
+export function boardAvailability(data, now, receivedAt, {failed=false,loginRequired=false}={}) {
+  if(loginRequired) return 'unpaired';
+  if(!data) return failed?'error':'loading';
+  return isOutdated(data,now,receivedAt)?'error':'ready';
+}
+
+export function validBoardSnapshot(data) {
+  return !!data && data.ok===true && /^\d{4}-\d{2}-\d{2}$/.test(data.date)
+    && Number.isFinite(data.generated_at) && Array.isArray(data.reservations) && Array.isArray(data.rooms)
+    && data.rooms.length===5 && new Set(data.rooms.map(r=>r?.id)).size===5
+    && data.rooms.every(r=>ROOM_IDS.includes(r?.id)&&['ok','stale','missing'].includes(r.calendar))
+    && data.reservations.every(r=>ROOM_IDS.includes(r?.room)&&typeof r.name==='string'
+      && Number.isFinite(r.start)&&Number.isFinite(r.end)&&r.end>r.start);
+}
