@@ -47,8 +47,10 @@
       group === "friend" ? "함께 방문해 각자 결제해요" : "남은 이용 기간이 있으면 이어져요",
       selected.map(function (product) {
         var label = productLabel(product), price = won(product.price);
-        return { id: product.id, title: label, subtitle: price, gridTitle: label + " · " + price,
-          description: product.friend ? (product.listPrice > product.price ? Math.round((1 - product.price / product.listPrice) * 100) + "% 할인 · 1인 가격" : "1인 가격") : undefined,
+        var discounted = product.listPrice > product.price;
+        var rate = discounted ? Math.round((1 - product.price / product.listPrice) * 100) : 0;
+        return { id: product.id, title: label, subtitle: price + (discounted ? " · " + rate + "% 할인" : ""), gridTitle: label + " · " + price,
+          description: discounted ? "정가 " + won(product.listPrice) + (product.friend ? " · 1인 가격" : "") : product.friend ? "1인 가격" : undefined,
           iconUrl: product.imageUrl || (imageUrl && imageUrl(product.image)), onClick: function () { onSelect(product); } };
       }));
   }

@@ -93,8 +93,25 @@ test('어드민·단말기 공통 화면 모델은 그리드의 공개 필드만
   assert(grid.params.options[0].title.includes('64,350원'));
   grid.params.options[1].onClick(); assert.equal(selected.id, 'seat-3m-friend');
   const list = UI.productPage(KIOSK_PRODUCTS, 'friend', 'list', () => {});
-  assert.equal(list.params.options[0].subtitle, '64,350원');
-  assert.equal(list.params.options[0].description, '35% 할인 · 1인 가격');
+  assert.equal(list.params.options[0].subtitle, '64,350원 · 35% 할인');
+  assert.equal(list.params.options[0].description, '정가 99,000원 · 1인 가격');
+});
+
+test('일반 상품도 할인율·정가와 업로드 이미지를 목록에 표시하고 무할인 상품과 구분', () => {
+  const context = vm.createContext({}); vm.runInContext(uiCode, context);
+  const UI = context.SF_KIOSK_UI;
+  const products = [
+    { id: 'month', name: '1개월 이용권 (자유석)', category: 'regular', price: 69300, listPrice: 99000,
+      image: 'pass-1m.webp', imageUrl: 'https://example.test/product-images/month?v=2' },
+    { id: 'day', name: '1일권', category: 'regular', price: 6000, image: 'pass-1d.webp' }
+  ];
+  const list = UI.productPage(products, 'regular', 'list', () => {}, name => '/images/' + name);
+  assert.equal(list.params.options[0].subtitle, '69,300원 · 30% 할인');
+  assert.equal(list.params.options[0].description, '정가 99,000원');
+  assert.equal(list.params.options[0].iconUrl, products[0].imageUrl);
+  assert.equal(list.params.options[1].subtitle, '6,000원');
+  assert.equal(list.params.options[1].description, undefined);
+  assert.equal(list.params.options[1].iconUrl, '/images/pass-1d.webp');
 });
 
 function pluginHarness(initial, gridSupported = true) {
