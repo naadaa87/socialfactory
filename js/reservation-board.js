@@ -6,7 +6,7 @@ const pairingCode = new URLSearchParams(location.hash.slice(1)).get('pair');
 // The one-time code is never sent in a URL/query/referrer, and is removed before any request.
 if(pairingCode) history.replaceState(null,'',location.pathname+location.search);
 const capacities = { r1:36, r2:40, r3:16, r4:48, r5:30 };
-const images = { r1:'room-1-01-lecture-rear', r2:'room-2-01-lecture-angle', r3:'room-3-01-lecture', r4:'room-4-01-lecture-angle', r5:'room-5-01-theater' };
+const images = { r1:'room-1-20261030-01', r2:'room-2-20261030-01', r3:'room-3-01-lecture', r4:'room-4-20261030-01', r5:'room-5-01-theater' };
 Object.values(images).forEach(name=>{const image=new Image();image.src='/images/space/'+name+'-sm.webp';});
 let data = null, receivedAt = 0, failed = false, loginRequired = false, loading = false, selected = 'r1', page = 0, pairError = '';
 const tour=createRoomTour(Date.now());
@@ -35,6 +35,7 @@ function focusRoom(id) {
   document.querySelectorAll('[data-room]').forEach(e => { e.classList.toggle('selected',e.dataset.room === id); if(e.classList.contains('pin')) e.setAttribute('aria-pressed', String(e.dataset.room === id)); });
   document.querySelectorAll('[data-zone]').forEach(e=>e.classList.toggle('selected',e.dataset.zone===id));
   if(!$('room-image').getAttribute('src').includes(images[id])) $('room-image').src = '/images/space/' + images[id] + '-sm.webp';
+  $('room-image').style.objectPosition=['r1','r2','r4'].includes(id)?'50% 65%':'center';
   $('room-image').alt = id.slice(1) + '번룸 내부';
   $('photo-title').textContent = id.slice(1) + '번룸';
   $('photo-number').textContent = '0' + id.slice(1);
