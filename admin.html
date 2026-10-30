@@ -51,7 +51,6 @@
       <button type="button" data-view="mem">회원</button>
       <span class="nav-cap">설정</span>
       <button type="button" data-view="prod">상품</button>
-      <button type="button" data-view="kprod">토스프론트 상품</button>
       <button type="button" data-view="set">설정 상태</button>
     </nav>
     <div class="side-links" id="side-links"></div>
@@ -190,7 +189,7 @@
         <div class="acts"><button class="btn btn-primary btn-sm" type="button" id="ps-new">+ 이용권 직접 발급</button></div>
       </header>
       <div class="kpis kpis-4" id="ps-kpis"></div>
-      <div class="seg mt-s" id="ps-tabs" role="group" aria-label="보기"><button type="button" data-tab="passes" class="on">이용권</button><button type="button" data-tab="customers">고객</button><button type="button" data-tab="payments">결제</button><button type="button" data-tab="jobs">알림톡</button><button type="button" data-tab="devices">단말기</button><button type="button" data-tab="logs">단말기 오류</button><button type="button" data-tab="ui">프론트 화면</button></div>
+      <div class="seg mt-s" id="ps-tabs" role="group" aria-label="보기"><button type="button" data-tab="passes" class="on">이용권</button><button type="button" data-tab="customers">고객</button><button type="button" data-tab="payments">결제</button><button type="button" data-tab="jobs">알림톡</button><button type="button" data-tab="devices">단말기</button><button type="button" data-tab="logs">단말기 오류</button><button type="button" data-tab="ui">프론트 화면</button><button type="button" data-tab="kprod">토스프론트 상품</button></div>
 
       <div class="ps-pane" data-pane="passes">
         <div class="filters">
@@ -271,65 +270,9 @@
         <p class="tiny muted mt">이 설정을 지원하는 플러그인은 최초 한 번 새 버전으로 배포해야 해요. 이후 목록형·그리드형 변경은 어드민에서 저장하면 됩니다.</p>
       </div>
 
-      <div class="ps-pane" data-pane="devices" hidden>
-        <div class="filters"><button class="btn btn-primary btn-sm" type="button" id="pd-new">+ 단말기 연결 코드 만들기</button><button class="btn btn-light btn-sm" type="button" id="pd-reload">새로고침</button></div>
-        <div class="temp" id="pd-code" hidden></div>
-        <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>단말기</th><th>상태</th><th>시리얼</th><th>연결 · 최근 접속</th><th>관리</th></tr></thead><tbody id="pd-rows"></tbody></table></div></div>
-        <p class="tiny muted mt">토스프론트에서 플러그인을 처음 켜면 '단말기 연결' 화면이 나옵니다. 여기서 만든 8자리 코드를 30분 안에 입력하면 연결됩니다. 단말기를 바꾸거나 잃어버렸으면 '연결 해제' 후 새 코드를 만들어 주세요.</p>
-      </div>
-      <div class="ps-pane" data-pane="logs" hidden>
-        <div class="filters"><input class="input" id="pl-key" type="search" placeholder="결제 식별자로 검색" aria-label="결제 식별자로 검색"><button class="btn btn-light btn-sm" type="button" id="pl-reload">검색 · 새로고침</button></div>
-        <p class="tiny muted">최근 오류 100건 · 휴대폰 번호와 결제 응답은 수집하지 않습니다.</p>
-        <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>발생 시각</th><th>단말기</th><th>결제 식별자</th><th>오류 위치</th><th>코드 · HTTP</th></tr></thead><tbody id="pl-rows"></tbody></table></div></div>
-      </div>
-    </section>
-
-    <!-- 주문 · 결제 -->
-    <section class="view" id="view-ord" hidden>
-      <header class="vh"><div><h1>주문 · 결제</h1><p class="muted small">홈페이지 이용권 온라인 결제(KG이니시스) 내역입니다. 입실 처리는 '이용 완료', 환불은 가맹점관리자에서 취소한 뒤 '환불 완료'로 바꿔 주세요.</p></div></header>
-      <div class="filters">
-        <select class="select" id="ord-filter" aria-label="상태"><option value="">전체 상태</option><option value="paid">결제 완료</option><option value="used">이용 완료</option><option value="refund_requested">환불 요청</option><option value="refunded">환불 완료</option><option value="cancelled">취소</option><option value="failed">결제 실패</option><option value="pending">결제 대기</option></select>
-        <input class="input" id="ord-q" type="search" placeholder="주문번호 · 이름 · 전화 · 상품" aria-label="검색">
-        <label class="chk small"><input type="checkbox" id="ord-test"> 테스트 결제 포함</label>
-        <button class="btn btn-light btn-sm" type="button" id="ord-reload">검색 · 새로고침</button>
-        <button class="btn btn-light btn-sm" type="button" id="ord-csv">CSV 내려받기</button>
-      </div>
-      <p class="small muted" id="ord-count"></p>
-      <div class="card flush"><div class="tbl-wrap"><table class="tbl" id="ord-table"><thead><tr><th>주문번호 · 시각</th><th>상태</th><th>상품</th><th>금액</th><th>구매자</th><th>결제</th><th>이용 시작일 · 요청</th><th>운영 메모</th></tr></thead><tbody id="ord-rows"></tbody></table></div></div>
-      <details class="help card mt"><summary>환불은 어떻게 처리하나요?</summary>
-        <ol>
-          <li>고객이 주문번호와 함께 환불을 요청하면 상태를 <b>환불 요청</b>으로 바꿔 둡니다.</li>
-          <li>KG이니시스 <b>가맹점관리자(iniweb.inicis.com)</b> → 거래내역 조회에서 같은 주문번호(TID)를 찾아 전체 취소 또는 부분 취소합니다. 규정(7일 안 전액, 이후 90%, 정기권 일할 차감)에 맞는 금액으로 취소해 주세요.</li>
-          <li>취소가 끝나면 상태를 <b>환불 완료</b>로 바꾸고 운영 메모에 취소 금액을 적어 둡니다.</li>
-        </ol>
-      </details>
-    </section>
-
-    <!-- 회원 -->
-    <section class="view" id="view-mem" hidden>
-      <header class="vh"><div><h1>회원</h1><p class="muted small">이메일로 가입한 회원 목록입니다. 비밀번호를 잊은 회원은 본인 확인 후 임시 비밀번호를 발급해 전달해 주세요.</p></div></header>
-      <div class="filters">
-        <input class="input" id="mem-q" type="search" placeholder="이름 · 이메일 · 전화번호" aria-label="검색">
-        <label class="chk small"><input type="checkbox" id="mem-mk"> 소식 수신 동의만</label>
-        <button class="btn btn-light btn-sm" type="button" id="mem-reload">검색 · 새로고침</button>
-        <button class="btn btn-light btn-sm" type="button" id="mem-csv">CSV 내려받기</button>
-      </div>
-      <p class="small muted" id="mem-count"></p>
-      <div class="temp" id="mem-temp" hidden></div>
-      <div class="card flush"><div class="tbl-wrap"><table class="tbl" id="mem-table"><thead><tr><th>번호</th><th>가입</th><th>이름 · 연락처</th><th>소식 수신</th><th>상태</th><th>문의</th><th>최근 로그인</th><th>관리</th></tr></thead><tbody id="mem-rows"></tbody></table></div></div>
-      <p class="tiny muted mt">임시 비밀번호는 발급 직후 한 번만 보입니다. 회원은 로그인 뒤 마이페이지에서 새 비밀번호로 바꾸게 됩니다.</p>
-    </section>
-
-    <!-- 상품 -->
-    <section class="view" id="view-prod" hidden>
-      <header class="vh"><div><h1>상품</h1><p class="muted small">홈페이지에서 판매 중인 이용권과 누적 판매량입니다. (테스트 결제 제외)</p></div></header>
-      <div class="prod" id="prod"></div>
-      <div class="note mt">상품 이름 · 가격 · 설명을 바꾸려면 GitHub 저장소의 <code>functions/_lib/products.js</code> 파일을 고치고 Commit 하면 됩니다. 홈페이지 상품 페이지와 결제 금액 검증이 모두 이 파일 하나를 씁니다. 룸 대관 요금은 <code>js/site-config.js</code> 의 <code>pricing</code> 이고, 예약 등록 창의 요금표 계산도 같은 값을 씁니다.</div>
-    </section>
-
     <!-- 토스프론트 상품: 홈페이지 상품과 별도로 관리 -->
-    <section class="view" id="view-kprod" hidden>
-      <header class="vh"><div><h1>토스프론트 상품</h1><p class="muted small">현장 프론트에서 판매할 이용권입니다. 저장한 상품은 다음 상품 선택부터 적용됩니다.</p></div>
+    <div class="ps-pane" data-pane="kprod" hidden>
+      <header class="vh"><div><h2>토스프론트 상품</h2><p class="muted small">현장 프론트에서 판매할 이용권입니다. 저장한 상품은 다음 상품 선택부터 적용됩니다.</p></div>
         <div class="acts"><button class="btn btn-primary btn-sm" type="button" id="kp-new">+ 상품 등록</button></div></header>
       <div class="note">가격은 서버가 다시 검증합니다. 이미 준비된 결제와 발급된 이용권에는 구매 당시 금액·기간이 유지됩니다. 판매 중지를 하면 새 구매 화면에서만 숨겨집니다.</div>
       <div class="card mt">
@@ -403,7 +346,64 @@
       </form>
         </div>
       </div>
+    </div>
+
+      <div class="ps-pane" data-pane="devices" hidden>
+        <div class="filters"><button class="btn btn-primary btn-sm" type="button" id="pd-new">+ 단말기 연결 코드 만들기</button><button class="btn btn-light btn-sm" type="button" id="pd-reload">새로고침</button></div>
+        <div class="temp" id="pd-code" hidden></div>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>단말기</th><th>상태</th><th>시리얼</th><th>연결 · 최근 접속</th><th>관리</th></tr></thead><tbody id="pd-rows"></tbody></table></div></div>
+        <p class="tiny muted mt">토스프론트에서 플러그인을 처음 켜면 '단말기 연결' 화면이 나옵니다. 여기서 만든 8자리 코드를 30분 안에 입력하면 연결됩니다. 단말기를 바꾸거나 잃어버렸으면 '연결 해제' 후 새 코드를 만들어 주세요.</p>
+      </div>
+      <div class="ps-pane" data-pane="logs" hidden>
+        <div class="filters"><input class="input" id="pl-key" type="search" placeholder="결제 식별자로 검색" aria-label="결제 식별자로 검색"><button class="btn btn-light btn-sm" type="button" id="pl-reload">검색 · 새로고침</button></div>
+        <p class="tiny muted">최근 오류 100건 · 휴대폰 번호와 결제 응답은 수집하지 않습니다.</p>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>발생 시각</th><th>단말기</th><th>결제 식별자</th><th>오류 위치</th><th>코드 · HTTP</th></tr></thead><tbody id="pl-rows"></tbody></table></div></div>
+      </div>
     </section>
+
+    <!-- 주문 · 결제 -->
+    <section class="view" id="view-ord" hidden>
+      <header class="vh"><div><h1>주문 · 결제</h1><p class="muted small">홈페이지 이용권 온라인 결제(KG이니시스) 내역입니다. 입실 처리는 '이용 완료', 환불은 가맹점관리자에서 취소한 뒤 '환불 완료'로 바꿔 주세요.</p></div></header>
+      <div class="filters">
+        <select class="select" id="ord-filter" aria-label="상태"><option value="">전체 상태</option><option value="paid">결제 완료</option><option value="used">이용 완료</option><option value="refund_requested">환불 요청</option><option value="refunded">환불 완료</option><option value="cancelled">취소</option><option value="failed">결제 실패</option><option value="pending">결제 대기</option></select>
+        <input class="input" id="ord-q" type="search" placeholder="주문번호 · 이름 · 전화 · 상품" aria-label="검색">
+        <label class="chk small"><input type="checkbox" id="ord-test"> 테스트 결제 포함</label>
+        <button class="btn btn-light btn-sm" type="button" id="ord-reload">검색 · 새로고침</button>
+        <button class="btn btn-light btn-sm" type="button" id="ord-csv">CSV 내려받기</button>
+      </div>
+      <p class="small muted" id="ord-count"></p>
+      <div class="card flush"><div class="tbl-wrap"><table class="tbl" id="ord-table"><thead><tr><th>주문번호 · 시각</th><th>상태</th><th>상품</th><th>금액</th><th>구매자</th><th>결제</th><th>이용 시작일 · 요청</th><th>운영 메모</th></tr></thead><tbody id="ord-rows"></tbody></table></div></div>
+      <details class="help card mt"><summary>환불은 어떻게 처리하나요?</summary>
+        <ol>
+          <li>고객이 주문번호와 함께 환불을 요청하면 상태를 <b>환불 요청</b>으로 바꿔 둡니다.</li>
+          <li>KG이니시스 <b>가맹점관리자(iniweb.inicis.com)</b> → 거래내역 조회에서 같은 주문번호(TID)를 찾아 전체 취소 또는 부분 취소합니다. 규정(7일 안 전액, 이후 90%, 정기권 일할 차감)에 맞는 금액으로 취소해 주세요.</li>
+          <li>취소가 끝나면 상태를 <b>환불 완료</b>로 바꾸고 운영 메모에 취소 금액을 적어 둡니다.</li>
+        </ol>
+      </details>
+    </section>
+
+    <!-- 회원 -->
+    <section class="view" id="view-mem" hidden>
+      <header class="vh"><div><h1>회원</h1><p class="muted small">이메일로 가입한 회원 목록입니다. 비밀번호를 잊은 회원은 본인 확인 후 임시 비밀번호를 발급해 전달해 주세요.</p></div></header>
+      <div class="filters">
+        <input class="input" id="mem-q" type="search" placeholder="이름 · 이메일 · 전화번호" aria-label="검색">
+        <label class="chk small"><input type="checkbox" id="mem-mk"> 소식 수신 동의만</label>
+        <button class="btn btn-light btn-sm" type="button" id="mem-reload">검색 · 새로고침</button>
+        <button class="btn btn-light btn-sm" type="button" id="mem-csv">CSV 내려받기</button>
+      </div>
+      <p class="small muted" id="mem-count"></p>
+      <div class="temp" id="mem-temp" hidden></div>
+      <div class="card flush"><div class="tbl-wrap"><table class="tbl" id="mem-table"><thead><tr><th>번호</th><th>가입</th><th>이름 · 연락처</th><th>소식 수신</th><th>상태</th><th>문의</th><th>최근 로그인</th><th>관리</th></tr></thead><tbody id="mem-rows"></tbody></table></div></div>
+      <p class="tiny muted mt">임시 비밀번호는 발급 직후 한 번만 보입니다. 회원은 로그인 뒤 마이페이지에서 새 비밀번호로 바꾸게 됩니다.</p>
+    </section>
+
+    <!-- 상품 -->
+    <section class="view" id="view-prod" hidden>
+      <header class="vh"><div><h1>상품</h1><p class="muted small">홈페이지에서 판매 중인 이용권과 누적 판매량입니다. (테스트 결제 제외)</p></div></header>
+      <div class="prod" id="prod"></div>
+      <div class="note mt">상품 이름 · 가격 · 설명을 바꾸려면 GitHub 저장소의 <code>functions/_lib/products.js</code> 파일을 고치고 Commit 하면 됩니다. 홈페이지 상품 페이지와 결제 금액 검증이 모두 이 파일 하나를 씁니다. 룸 대관 요금은 <code>js/site-config.js</code> 의 <code>pricing</code> 이고, 예약 등록 창의 요금표 계산도 같은 값을 씁니다.</div>
+    </section>
+
 
     <!-- 설정 상태 -->
     <section class="view" id="view-set" hidden>
@@ -555,7 +555,7 @@
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
 <script src="/toss-front-plugin/ui.js?v=9aa875d6bc"></script>
 <script src="/js/admin-kiosk-ui.js?v=749a2de995"></script>
-<script src="/js/admin-passes.js?v=20261030-catalog-delete"></script>
-<script src="/js/admin-kiosk-products.js?v=20261030-catalog-delete"></script>
+<script src="/js/admin-passes.js?v=20261030-products-submenu"></script>
+<script src="/js/admin-kiosk-products.js?v=20261030-products-submenu"></script>
 </body>
 </html>
