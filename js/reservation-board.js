@@ -1,4 +1,4 @@
-import { ROOM_IDS, roomSchedule, kstDay, formatTime, isOutdated } from './reservation-board-model.mjs';
+import { ROOM_IDS, ROOM_GUIDES, createRoomTour, roomSchedule, kstDay, formatTime, isOutdated } from './reservation-board-model.mjs?v=20261030-tour';
 
 const $ = id => document.getElementById(id);
 const demo = new URLSearchParams(location.search).get('demo') === '1';
@@ -7,7 +7,10 @@ const pairingCode = new URLSearchParams(location.hash.slice(1)).get('pair');
 if(pairingCode) history.replaceState(null,'',location.pathname+location.search);
 const capacities = { r1:36, r2:40, r3:16, r4:48, r5:30 };
 const images = { r1:'room-1-01-lecture-rear', r2:'room-2-01-lecture-angle', r3:'room-3-01-lecture', r4:'room-4-01-lecture-angle', r5:'room-5-01-theater' };
+Object.values(images).forEach(name=>{const image=new Image();image.src='/images/space/'+name+'-sm.webp';});
 let data = null, receivedAt = 0, failed = false, loginRequired = false, loading = false, selected = 'r1', page = 0, pairError = '';
+const tour=createRoomTour(Date.now());
+const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 // A fixed, explicitly labelled example clock makes every visual review reproducible.
 const demoDate = kstDay(Date.now());
 const now = () => demo ? Date.parse(demoDate + 'T14:25:00+09:00') : Date.now();
@@ -27,13 +30,31 @@ function example() {
 }
 
 function focusRoom(id) {
+  const changed=selected!==id;
   selected = id;
   document.querySelectorAll('[data-room]').forEach(e => { e.classList.toggle('selected',e.dataset.room === id); if(e.classList.contains('pin')) e.setAttribute('aria-pressed', String(e.dataset.room === id)); });
-  $('room-image').src = '/images/space/' + images[id] + '-sm.webp';
+  document.querySelectorAll('[data-zone]').forEach(e=>e.classList.toggle('selected',e.dataset.zone===id));
+  if(!$('room-image').getAttribute('src').includes(images[id])) $('room-image').src = '/images/space/' + images[id] + '-sm.webp';
   $('room-image').alt = id.slice(1) + '번룸 내부';
   $('photo-title').textContent = id.slice(1) + '번룸';
   $('photo-number').textContent = '0' + id.slice(1);
   $('photo-description').textContent = (id === 'r5' ? '주출입구에서 오른쪽 · ' : '주출입구에서 왼쪽 복도 · ') + '최대 ' + capacities[id] + '명';
+  $('guide-room').textContent=id.slice(1)+'번룸';
+  $('guide-arrow').textContent=ROOM_GUIDES[id].arrow;
+  $('guide-direction').textContent=ROOM_GUIDES[id].direction;
+  $('guide-location').textContent=ROOM_GUIDES[id].location;
+  $('room-sequence').textContent=id.slice(1)+' / 5';
+  if(changed && !reducedMotion.matches) {
+    [$('room-guide'),$('room-photo')].forEach(e=>e.animate([{opacity:.45,transform:'translateY(5px)'},{opacity:1,transform:'translateY(0)'}],{duration:450,easing:'ease-out'}));
+  }
+}
+
+function selectRoom(id){tour.select(id,Date.now());tickTour();}
+function tickTour(){
+  const state=tour.sample(Date.now());
+  if(state.room!==selected)focusRoom(state.room);
+  $('tour-progress').style.transform='scaleX('+state.progress+')';
+  document.querySelector('.tour-progress').setAttribute('aria-valuenow',String(Math.round(state.progress*100)));
 }
 
 function slot(rows, next, uncertain, unavailable) {
@@ -65,9 +86,9 @@ function render() {
     label.append(elem('h3',id.slice(1)+'번룸'),elem('small','최대 '+capacities[id]+'명'));
     identity.append(elem('span',id.slice(1),'number'),label);
     row.append(identity,slot(schedule.current,false,uncertain,unavailable),slot(schedule.next?[schedule.next]:[],true,uncertain,unavailable));
-    row.addEventListener('click',()=>focusRoom(id)); rooms.append(row);
+    row.addEventListener('click',()=>selectRoom(id)); rooms.append(row);
   });
-  focusRoom(selected);
+  focusRoom(tour.sample(Date.now()).room);
   $('total').textContent = unavailable ? '확인 필요' : '오늘 '+data.reservations.length+'건';
   const warnings = [];
   if(loginRequired) warnings.push(pairError || '모니터 연결이 필요합니다. 관리자에게 연결 링크를 요청해 주세요.');
@@ -114,12 +135,18 @@ async function refresh() {
 }
 
 $('preview-bar').hidden=!demo;
-document.querySelectorAll('.pin').forEach(pin=>pin.addEventListener('click',()=>focusRoom(pin.dataset.room)));
+document.querySelectorAll('.pin').forEach(pin=>pin.addEventListener('click',()=>selectRoom(pin.dataset.room)));
+$('tour-toggle').addEventListener('click',()=>{
+  const paused=tour.sample(Date.now()).paused;
+  if(paused)tour.resume(Date.now());else tour.pause(Date.now());
+  $('tour-toggle').textContent=paused?'방 안내 잠시 멈춤':'방 안내 다시 시작';
+  $('tour-toggle').setAttribute('aria-pressed',String(!paused));tickTour();
+});
 $('previous').addEventListener('click',()=>{page--;render();});
 $('next').addEventListener('click',()=>{page++;render();});
 $('fullscreen').addEventListener('click',async()=>{try {if(document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen();} catch { $('fullscreen').title='브라우저의 전체 화면 기능을 이용해 주세요'; }});
 window.addEventListener('online',refresh);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden) refresh();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){tickTour();refresh();}});
 if(demo){data=example();receivedAt=now();}
 async function start(){
   if(pairingCode && !demo){
@@ -133,6 +160,8 @@ async function start(){
   await refresh();
 }
 render(); start();
+// This only changes visual focus; it never clicks a booking or sends a mutation.
+setInterval(()=>{if(!document.hidden)tickTour();},100);
 setInterval(render,10000);
 setInterval(refresh,60000);
 if(!matchMedia('(prefers-reduced-motion: reduce)').matches) setInterval(()=>{page++;render();},12000);

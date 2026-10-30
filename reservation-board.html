@@ -7,8 +7,8 @@
   <meta name="referrer" content="same-origin">
   <title>오늘의 예약 안내 | 소셜팩토리 건대</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/css/reservation-board.css?v=5">
-  <script type="module" src="/js/reservation-board.js?v=20261030-device"></script>
+  <link rel="stylesheet" href="/css/reservation-board.css?v=20261030-tour2">
+  <script type="module" src="/js/reservation-board.js?v=20261030-tour"></script>
 </head>
 <body>
   <div class="preview-bar" id="preview-bar" hidden><span><b>디자인 시제품</b> · 아래 이름과 일정은 예시입니다.</span><a href="/reservation-board">실제 예약 보기 ↗</a></div>
@@ -19,18 +19,27 @@
   </header>
   <main>
     <section class="wayfinding" aria-labelledby="welcome-title">
-      <div class="welcome"><div class="eyebrow">WELCOME TO SOCIAL FACTORY</div><h1 id="welcome-title">오늘의 모임,<br> 어느 방인가요?</h1><p>예약자명과 시간을 확인하고<br> 지도에서 방 번호를 찾아주세요.</p></div>
-      <div class="map-heading"><h2>4층 공간 안내</h2><span>주출입구를 기준으로 확인하세요</span></div>
+      <div class="welcome"><div class="eyebrow">4F · FIND YOUR ROOM</div><h1 id="welcome-title">내 방은 어디에 있나요?</h1><p>손대지 않아도 1번부터 5번까지 차례로 안내합니다.</p></div>
+      <div class="map-heading"><h2>지금 안내하는 공간</h2><div class="tour-controls"><span id="room-sequence">1 / 5</span><button type="button" id="tour-toggle" aria-pressed="false">방 안내 잠시 멈춤</button></div></div>
+      <div class="room-guide" id="room-guide"><strong id="guide-room">1번룸</strong><div><b><span id="guide-arrow" aria-hidden="true">←</span> 주출입구에서 <span id="guide-direction">왼쪽 복도</span></b><span id="guide-location">지도 아래쪽 가운데</span></div></div>
+      <div class="tour-progress" role="progressbar" aria-label="다음 방 안내까지 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="tour-progress"></span></div>
       <div class="floor-map">
         <img src="/images/aerial/03-overhead.webp" width="1600" height="900" alt="4층 조감도. 주출입구 오른쪽은 휴게 공간과 5번룸, 왼쪽 복도를 따라 1·2·3·4번룸이 있습니다.">
-        <button class="pin" data-room="r1" style="--x:37.9%;--y:71.5%" aria-label="1번룸 위치와 예약 보기">1</button>
-        <button class="pin" data-room="r2" style="--x:17.9%;--y:72.9%" aria-label="2번룸 위치와 예약 보기">2</button>
-        <button class="pin" data-room="r3" style="--x:16.3%;--y:53.1%" aria-label="3번룸 위치와 예약 보기">3</button>
-        <button class="pin" data-room="r4" style="--x:19.1%;--y:26.9%" aria-label="4번룸 위치와 예약 보기">4</button>
-        <button class="pin" data-room="r5" style="--x:76.2%;--y:46.7%" aria-label="5번룸 위치와 예약 보기">5</button>
-        <span class="entry" style="--x:64.2%;--y:85%">↑ 주출입구</span>
+        <svg class="map-zones" viewBox="0 0 1600 900" aria-hidden="true">
+          <rect data-zone="r1" x="475" y="532" width="286" height="232" rx="12"/>
+          <rect data-zone="r2" x="117" y="551" width="347" height="212" rx="12"/>
+          <rect data-zone="r3" x="120" y="416" width="335" height="129" rx="12"/>
+          <rect data-zone="r4" x="118" y="94" width="346" height="316" rx="12"/>
+          <rect data-zone="r5" x="1075" y="233" width="308" height="354" rx="12"/>
+        </svg>
+        <button class="pin" data-room="r1" style="--x:37.9%;--y:71.5%" aria-label="1번룸 위치와 예약 보기"><b>1</b><span>1번룸</span></button>
+        <button class="pin" data-room="r2" style="--x:17.9%;--y:72.9%" aria-label="2번룸 위치와 예약 보기"><b>2</b><span>2번룸</span></button>
+        <button class="pin" data-room="r3" style="--x:16.3%;--y:53.1%" aria-label="3번룸 위치와 예약 보기"><b>3</b><span>3번룸</span></button>
+        <button class="pin" data-room="r4" style="--x:19.1%;--y:26.9%" aria-label="4번룸 위치와 예약 보기"><b>4</b><span>4번룸</span></button>
+        <button class="pin" data-room="r5" style="--x:76.2%;--y:46.7%" aria-label="5번룸 위치와 예약 보기"><b>5</b><span>5번룸</span></button>
+        <span class="entry" style="--x:64.2%;--y:85%"><b>↑ 주출입구</b><small>이곳을 기준으로 찾으세요</small></span>
       </div>
-      <div class="map-caption"><span><i class="blue-dot"></i>방 번호를 누르면 위치와 사진을 확인할 수 있어요</span><small>홈페이지 조감도 기준 · 가구 배치는 예시</small></div>
+      <div class="map-caption"><span><i class="blue-dot"></i>파란색으로 표시된 공간이 지금 안내하는 방입니다</span><small>홈페이지 조감도 기준 · 가구 배치는 예시</small></div>
       <div class="room-photo" id="room-photo"><img id="room-image" src="/images/space/room-1-01-lecture-rear-sm.webp" alt="1번룸 내부"><div><span class="eyebrow">YOUR ROOM</span><h3 id="photo-title">1번룸</h3><p id="photo-description">주출입구에서 왼쪽 복도 · 최대 36명</p></div><span class="photo-number" id="photo-number">01</span></div>
     </section>
     <section class="reservations" aria-labelledby="schedule-title">
