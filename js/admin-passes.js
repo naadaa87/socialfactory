@@ -38,15 +38,23 @@
   var custCell = function (r) { return '<button class="linkbtn" type="button" data-cust="' + esc(r.customer_id) + '"><b>' + esc(r.phone_fmt || "") + "</b></button>" + (r.customer_name ? "<small>" + esc(r.customer_name) + "</small>" : ""); };
 
   /* ---------- 탭 ---------- */
-  var TAB = new URLSearchParams(location.search).get("front-ui") === "1" ? "ui" : "passes";
+  var tabParams = new URLSearchParams(location.search);
+  var TAB = tabParams.get("pass-tab") || (tabParams.get("front-ui") === "1" ? "ui" : "passes");
   function setTab(t) {
+    var loaders = { passes: loadPasses, customers: loadCustomers, payments: loadPayments, jobs: loadJobs, devices: loadDevices, logs: loadLogs, ui: A.loadKioskUi, kprod: A.loadKioskProducts };
+    if (!Object.prototype.hasOwnProperty.call(loaders, t) || typeof loaders[t] !== "function") t = "passes";
     TAB = t;
+    var url = new URL(location.href);
+    url.searchParams.delete("front-ui");
+    url.searchParams.set("pass-tab", t);
+    history.replaceState(null, "", url.pathname + url.search + url.hash);
     $$("#ps-tabs [data-tab]").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === t); });
     $$("#view-pass .ps-pane").forEach(function (p) { p.hidden = p.dataset.pane !== t; });
-    ({ passes: loadPasses, customers: loadCustomers, payments: loadPayments, jobs: loadJobs, devices: loadDevices, logs: loadLogs, ui: A.loadKioskUi })[t]();
+    loaders[t]();
   }
   $("#ps-tabs").addEventListener("click", function (e) { var b = e.target.closest("[data-tab]"); if (b) setTab(b.dataset.tab); });
   A.LOAD.pass = function () { setTab(TAB); };
+  A.openPassTab = function (t) { TAB = t; A.go("pass"); };
 
   function loadLogs() {
     var box = $("#pl-rows"), key = $("#pl-key").value.trim();

@@ -246,5 +246,7 @@
       if (!guard(err)) { $("#kd-msg").textContent = err.message || "삭제하지 못했습니다. 다시 시도해 주세요."; $("#kd-msg").hidden = false; }
     }).finally(function () { deleting = false; $("#kd-confirm").disabled = false; });
   });
-  A.LOAD.kprod = load;
+  A.loadKioskProducts = load;
+  // 예전 상품 관리 북마크도 고객 · 이용권의 상품 탭으로 연결합니다.
+  A.LOAD.kprod = function () { A.openPassTab("kprod"); };
 })();
