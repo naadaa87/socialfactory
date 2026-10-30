@@ -1,4 +1,5 @@
-import { ROOM_IDS, ROOM_GUIDES, createRoomTour, roomSchedule, kstDay, formatTime, isOutdated } from './reservation-board-model.mjs?v=20261030-tour';
+import { ROOM_IDS, ROOM_GUIDES, createRoomTour, roomSchedule, kstDay, formatTime, isOutdated, boardAvailability, validBoardSnapshot } from './reservation-board-model.mjs?v=20261030-status';
+import { boardRequest } from './board-request.mjs?v=20261030-status';
 
 const $ = id => document.getElementById(id);
 const demo = new URLSearchParams(location.search).get('demo') === '1';
@@ -9,6 +10,7 @@ const capacities = { r1:36, r2:40, r3:16, r4:48, r5:30 };
 const images = { r1:'room-1-20261030-01', r2:'room-2-20261030-01', r3:'room-3-01-lecture', r4:'room-4-20261030-01', r5:'room-5-01-theater' };
 Object.values(images).forEach(name=>{const image=new Image();image.src='/images/space/'+name+'-sm.webp';});
 let data = null, receivedAt = 0, failed = false, loginRequired = false, loading = false, selected = 'r1', page = 0, pairError = '';
+let requestTimedOut=false,refreshTimer=null,failures=0,initialized=false;
 const tour=createRoomTour(Date.now());
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 // A fixed, explicitly labelled example clock makes every visual review reproducible.
@@ -58,12 +60,16 @@ function tickTour(){
   document.querySelector('.tour-progress').setAttribute('aria-valuenow',String(Math.round(state.progress*100)));
 }
 
-function slot(rows, next, uncertain, unavailable) {
+function slot(rows, next, uncertain, availability) {
   const box = elem('div', null, 'slot');
-  if (unavailable) { box.append(elem('p','확인 중','empty'),elem('span','관리자에게 문의해 주세요','empty-sub')); return box; }
+  if (availability!=='ready') {
+    const title=availability==='loading'?'예약 불러오는 중':availability==='unpaired'?'모니터 연결 필요':requestTimedOut?'조회 시간 초과':'예약 조회 오류';
+    const detail=availability==='loading'?'잠시만 기다려 주세요':availability==='unpaired'?'관리자에게 연결을 요청해 주세요':'연결 상태를 확인해 주세요';
+    box.append(elem('p',title,'empty'),elem('span',detail,'empty-sub'));return box;
+  }
   if (!rows.length) {
-    box.append(elem('p',uncertain ? '일정 확인 필요' : next ? '이후 예약 없음' : '현재 예약 없음','empty'));
-    if(!next) box.append(elem('span',uncertain ? '마지막 확인 일정 기준' : '이용 가능 여부는 예약 후 확인','empty-sub'));
+    box.append(elem('p',uncertain ? '일정 확인 필요' : next ? '오늘 남은 예약 없음' : '현재 예약 없음','empty'));
+    if(uncertain || !next) box.append(elem('span',uncertain ? '최신 일정 확인이 필요합니다' : '이용 가능 여부는 예약 후 확인','empty-sub'));
     return box;
   }
   box.append(elem('span',rows.length > 1 ? '일정 겹침 · 확인 필요' : next ? '이용 예정' : '예약 시간 중', 'badge' + (rows.length>1?' warn':next?' next':'')));
@@ -74,7 +80,8 @@ function slot(rows, next, uncertain, unavailable) {
 function render() {
   const timestamp = now();
   const obsolete = !demo && isOutdated(data,timestamp,receivedAt);
-  const unavailable = !data || data.date !== kstDay(timestamp) || obsolete;
+  const availability=boardAvailability(data,timestamp,receivedAt,{failed,loginRequired});
+  const unavailable=availability!=='ready';
   $('date').textContent = new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric',weekday:'long'}).format(timestamp);
   $('clock').textContent = (demo ? '예시 ' : '') + new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(timestamp);
   const rooms = $('rooms'); rooms.replaceChildren();
@@ -86,15 +93,15 @@ function render() {
     const identity = elem('div',null,'room-identity'), label = elem('div');
     label.append(elem('h3',id.slice(1)+'번룸'),elem('small','최대 '+capacities[id]+'명'));
     identity.append(elem('span',id.slice(1),'number'),label);
-    row.append(identity,slot(schedule.current,false,uncertain,unavailable),slot(schedule.next?[schedule.next]:[],true,uncertain,unavailable));
+    row.append(identity,slot(schedule.current,false,uncertain,availability),slot(schedule.next?[schedule.next]:[],true,uncertain,availability));
     row.addEventListener('click',()=>selectRoom(id)); rooms.append(row);
   });
   focusRoom(tour.sample(Date.now()).room);
-  $('total').textContent = unavailable ? '확인 필요' : '오늘 '+data.reservations.length+'건';
+  $('total').textContent = availability==='loading'?'불러오는 중':unavailable?'조회 확인 필요':'오늘 '+data.reservations.length+'건';
   const warnings = [];
   if(loginRequired) warnings.push(pairError || '모니터 연결이 필요합니다. 관리자에게 연결 링크를 요청해 주세요.');
-  else if(obsolete && data) warnings.push('예약 정보를 갱신하지 못해 일정을 숨겼습니다. 관리자에게 문의해 주세요.');
-  else if(!data) warnings.push(failed ? '예약 정보를 불러오지 못했습니다. 연결을 확인해 주세요.' : '예약 정보를 확인하고 있습니다.');
+  else if(obsolete && data) warnings.push('예약 정보를 갱신하지 못해 일정을 숨겼습니다. 연결을 확인해 주세요. 자동으로 다시 시도합니다.');
+  else if(!data) warnings.push(failed ? (requestTimedOut?'예약 조회 시간이 초과되었습니다.':'예약 정보를 불러오지 못했습니다.')+' 연결을 확인해 주세요. 자동으로 다시 시도합니다.' : '예약 정보를 불러오고 있습니다. 잠시만 기다려 주세요.');
   else if(failed) warnings.push('연결이 불안정합니다. 마지막 확인 일정을 표시합니다.');
   if(data && !unavailable) {
     const badRooms = data.rooms.filter(r=>r.calendar!=='ok');
@@ -102,7 +109,7 @@ function render() {
     if(data.unassigned) warnings.push('방 번호가 없는 예약은 별도 확인이 필요합니다.');
   }
   $('notice').replaceChildren(document.createTextNode(warnings.join(' ')));
-  $('connection').textContent = demo?'예시 데이터':failed||unavailable?'연결 확인 필요':'1분마다 자동 갱신';
+  $('connection').textContent = demo?'예시 데이터':availability==='loading'?'예약 불러오는 중':failed||unavailable?'연결 확인 필요':'1분마다 자동 갱신';
   document.querySelector('.schedule-bottom').classList.toggle('offline', failed||unavailable);
   $('updated').textContent = demo?'시제품 · 실제 예약과 연결되지 않은 예시 화면':receivedAt?'마지막 확인 '+new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(receivedAt):'갱신 대기 중';
   const entries = unavailable?[]:data.reservations;
@@ -117,22 +124,25 @@ function render() {
     const top=elem('div',null,'day-top'); top.append(elem('b',r.room.slice(1)+'번룸'),elem('span',ended?'종료':current?'예약 시간 중':'예정'));
     item.append(top,elem('strong',r.name),elem('time',timeText(r))); dayItems.append(item);
   });
-  if(!entries.length) dayItems.append(elem('p',unavailable?'예약 정보를 확인해 주세요.':'오늘 등록된 예약이 없습니다.','day-empty'));
+  if(!entries.length) dayItems.append(elem('p',availability==='loading'?'예약을 불러오고 있습니다.':unavailable?'예약을 조회하지 못했습니다. 예약 없음으로 판단하지 마세요.':'오늘 등록된 예약이 없습니다.','day-empty'));
 }
 
 async function refresh() {
-  if(loading||demo) return;
+  if(!initialized||loading||demo) return;
+  clearTimeout(refreshTimer);
   loading=true;
-  const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),20000);
   try {
-    const response=await fetch('/api/board/schedule',{credentials:'same-origin',cache:'no-store',signal:controller.signal});
-    loginRequired=response.status===401;
-    if(!response.ok) throw new Error('request');
-    const fresh=await response.json();
-    if(!fresh.ok||!Array.isArray(fresh.reservations)||!Array.isArray(fresh.rooms)) throw new Error('format');
-    data=fresh; receivedAt=Date.now(); failed=false; loginRequired=false;
-  } catch { failed=true; if(loginRequired) data=null; }
-  finally { clearTimeout(timeout); loading=false; render(); }
+    const fresh=await boardRequest('/api/board/schedule',{credentials:'same-origin',cache:'no-store'});
+    if(!validBoardSnapshot(fresh)) throw new Error('format');
+    data=fresh; receivedAt=Date.now(); failed=false; loginRequired=false;requestTimedOut=false;failures=0;
+  } catch(error) {
+    failed=true;requestTimedOut=error.code==='timeout';loginRequired=error.status===401;
+    if(loginRequired)data=null;
+    failures++;
+  } finally {
+    loading=false;render();
+    refreshTimer=setTimeout(refresh,failed&&!loginRequired?Math.min(60000,5000*2**Math.min(failures-1,4)):60000);
+  }
 }
 
 $('preview-bar').hidden=!demo;
@@ -147,22 +157,20 @@ $('previous').addEventListener('click',()=>{page--;render();});
 $('next').addEventListener('click',()=>{page++;render();});
 $('fullscreen').addEventListener('click',async()=>{try {if(document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen();} catch { $('fullscreen').title='브라우저의 전체 화면 기능을 이용해 주세요'; }});
 window.addEventListener('online',refresh);
+window.addEventListener('pageshow',()=>{tickTour();refresh();});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){tickTour();refresh();}});
 if(demo){data=example();receivedAt=now();}
 async function start(){
   if(pairingCode && !demo){
-    const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),15000);
     try{
-      const response=await fetch('/api/board/pair',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:pairingCode}),signal:controller.signal});
-      const result=await response.json();if(!response.ok)pairError=result.message||'모니터를 연결하지 못했습니다.';
-    }catch{pairError='모니터를 연결하지 못했습니다. 관리자에서 새 연결 링크를 발급해 주세요.';}
-    finally{clearTimeout(timeout);}
+      await boardRequest('/api/board/pair',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:pairingCode})});
+    }catch(error){pairError=error.status===401?'연결 링크가 만료됐거나 이미 사용되었습니다. 관리자에서 새 링크를 발급해 주세요.':'모니터를 연결하지 못했습니다. 관리자에서 새 연결 링크를 발급해 주세요.';}
   }
+  initialized=true;
   await refresh();
 }
 render(); start();
 // This only changes visual focus; it never clicks a booking or sends a mutation.
 setInterval(()=>{if(!document.hidden)tickTour();},100);
 setInterval(render,10000);
-setInterval(refresh,60000);
 if(!matchMedia('(prefers-reduced-motion: reduce)').matches) setInterval(()=>{page++;render();},12000);
