@@ -2,14 +2,17 @@
 import { ROOM_KEYS, addDaysIso, isIsoDate } from './admin.js';
 
 export function displayName(value) {
-  const name = String(value || '').trim();
+  const name = String(value || '').normalize('NFC').trim();
   // Calendar names can already be masked (e.g. 김석*). Composite titles may contain
   // phone numbers or internal notes: use a neutral label instead of guessing a name.
-  if (/^[가-힣]{2,5}$/.test(name)) {
-    const chars = [...name];
+  // Apply one masking rule regardless of language or what the name represents.
+  // Do not expose raw calendar titles, phone-only values, URLs or internal notes.
+  if (/^[\p{L}\p{N} ]{1,40}$/u.test(name) && /\p{L}/u.test(name)) {
+    const chars = [...name.replace(/ /g, '')];
+    if(chars.length===1) return '○';
     return chars.length === 2 ? chars[0] + '○' : chars[0] + '○'.repeat(chars.length - 2) + chars.at(-1);
   }
-  if (/^[가-힣]{1,4}[*○●]{1,4}$/.test(name)) return name.replace(/[*●]/g, '○');
+  if (/^[\p{L}\p{N}]{1,4}[*○●]{1,4}$/u.test(name) && /\p{L}/u.test(name)) return name.replace(/[*●]/g, '○');
   return '예약 고객';
 }
 
