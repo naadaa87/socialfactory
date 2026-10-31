@@ -79,8 +79,11 @@ main{padding:30px 2.6vw 0;display:grid;grid-template-columns:minmax(0,43fr) minm
 
 /* Show the on-site sign beside the booking room number on every board surface. */
 .classroom-name{display:block;font-size:.7em;font-weight:600;letter-spacing:-.2px;line-height:1.3;margin-top:2px}
-.room-identity h3 .classroom-name{font-size:11px}
+.room-identity h3 .classroom-name{display:inline;font-size:11px;margin-top:0}
 .room-guide>strong .classroom-name{font-size:14px;letter-spacing:0}
 .pin .classroom-name{font-size:.8em;margin-top:1px}
 .day-top b .classroom-name{font-size:10px;color:inherit}
 @media(max-width:1150px){.room-identity h3 .classroom-name{font-size:10px}}
+/* Reserve space for the full room label and align both reservation columns. */
+.column-labels,.room-row{grid-template-columns:clamp(170px,12vw,230px) minmax(0,1fr) minmax(0,1fr);column-gap:16px}
+@media(max-width:800px){.column-labels,.room-row{grid-template-columns:136px minmax(0,1fr) minmax(0,1fr);column-gap:9px}}
