@@ -34,9 +34,9 @@ main{padding:30px 2.6vw 0;display:grid;grid-template-columns:minmax(0,43fr) minm
 .map-zones rect.selected{opacity:1}
 .floor-map .pin{z-index:2;display:grid;place-items:center;background:#fff;color:var(--blue);border:2px solid var(--blue);box-shadow:0 2px 8px #14245326;transition:transform .5s,background .5s,color .5s,box-shadow .5s}
 .pin b{font:inherit;font-weight:800}
-.pin span{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;padding:3px 7px;border-radius:5px;background:white;color:#30446d;box-shadow:0 1px 7px #18243b21;font-family:inherit;font-size:12px;font-weight:750;white-space:nowrap;letter-spacing:-.3px}
+.pin>span{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;padding:3px 7px;border-radius:5px;background:white;color:#30446d;box-shadow:0 1px 7px #18243b21;font-family:inherit;font-size:12px;font-weight:750;white-space:nowrap;letter-spacing:-.3px}
 .floor-map .pin.selected{z-index:3;transform:translate(-50%,-50%) scale(1.17);background:var(--blue);color:white;border-color:white;box-shadow:0 0 0 4px var(--blue),0 0 0 11px #2852ed27,0 4px 18px #18243b40}
-.pin.selected span{background:var(--blue);color:white;font-size:14px;padding:4px 9px;box-shadow:0 3px 12px #18243b30}
+.pin.selected>span{background:var(--blue);color:white;font-size:14px;padding:4px 9px;box-shadow:0 3px 12px #18243b30}
 .pin[data-room="r3"] span{left:calc(100% + 7px);top:50%;transform:translateY(-50%);margin-top:0}
 .entry{z-index:4;background:#172741;border:2px solid white;box-shadow:0 2px 12px #18243b33;text-align:center;font-size:14px;padding:6px 12px;line-height:1.2}
 .entry b{display:block}.entry small{display:block;font-size:9px;font-weight:500;margin-top:4px;color:#d4e0f5}
@@ -58,14 +58,14 @@ main{padding:30px 2.6vw 0;display:grid;grid-template-columns:minmax(0,43fr) minm
   .welcome h1{font-size:24px;margin:6px 0}.welcome p{font-size:10px}.map-heading{margin-top:10px}.map-heading h2{font-size:12px}
   .tour-controls{font-size:10px;gap:8px}.tour-controls button{font-size:9px;padding:3px 6px}
   .room-guide{padding:8px 12px;margin-top:8px;gap:12px}.room-guide>strong{font-size:27px;padding-right:12px}.room-guide b{font-size:15px}.room-guide>div>span{font-size:10px}#guide-arrow{font-size:18px}
-  .floor-map{max-width:410px;margin-top:6px}.floor-map .pin{width:31px;height:31px;font-size:16px}.pin span{font-size:10px;margin-top:3px;padding:2px 5px}.pin.selected span{font-size:11px;padding:3px 6px}
+  .floor-map{max-width:410px;margin-top:6px}.floor-map .pin{width:31px;height:31px;font-size:16px}.pin>span{font-size:10px;margin-top:3px;padding:2px 5px}.pin.selected>span{font-size:11px;padding:3px 6px}
   .entry{font-size:11px;padding:4px 7px}.entry small{font-size:8px;margin-top:2px}.map-caption{margin:8px 0 0;font-size:9px}
 }
 @media(max-width:800px){
   .wayfinding{order:0}.reservations{order:1}.welcome h1{font-size:25px}.welcome p{font-size:12px}
   .room-guide{padding:12px;gap:12px}.room-guide>strong{font-size:27px;padding-right:12px}.room-guide b{font-size:15px}.room-guide>div>span{font-size:11px}
   .map-heading{margin-top:16px}.map-heading h2{font-size:14px}.tour-controls{gap:8px;font-size:11px}
-  .floor-map .pin{width:30px;height:30px;font-size:16px}.pin span{font-size:10px;padding:2px 5px}.pin.selected span{font-size:11px;padding:3px 6px}
+  .floor-map .pin{width:30px;height:30px;font-size:16px}.pin>span{font-size:10px;padding:2px 5px}.pin.selected>span{font-size:11px;padding:3px 6px}
   .entry{font-size:10px;padding:4px 6px}.entry small{display:none}.map-caption{margin-top:14px;font-size:10px}
 }
 @media(prefers-reduced-motion:reduce){.map-zones rect,.floor-map .pin,.tour-progress>span{transition:none!important}}
@@ -76,3 +76,11 @@ main{padding:30px 2.6vw 0;display:grid;grid-template-columns:minmax(0,43fr) minm
   .room-row{min-height:84px;padding-top:10px;padding-bottom:10px}.slot strong{font-size:21px;line-height:1.2;margin-top:4px}.slot time{font-size:13px}.badge{font-size:10px;padding:2px 5px}.slot{font-size:13px}
   .day-schedule{padding:12px 24px}.day-items{margin-top:9px}.schedule-heading{margin-bottom:16px}footer{padding-top:10px;padding-bottom:10px}
 }
+
+/* Show the on-site sign beside the booking room number on every board surface. */
+.classroom-name{display:block;font-size:.7em;font-weight:600;letter-spacing:-.2px;line-height:1.3;margin-top:2px}
+.room-identity h3 .classroom-name{font-size:11px}
+.room-guide>strong .classroom-name{font-size:14px;letter-spacing:0}
+.pin .classroom-name{font-size:.8em;margin-top:1px}
+.day-top b .classroom-name{font-size:10px;color:inherit}
+@media(max-width:1150px){.room-identity h3 .classroom-name{font-size:10px}}
