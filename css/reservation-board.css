@@ -37,7 +37,7 @@ main{padding:30px 2.6vw 0;display:grid;grid-template-columns:minmax(0,43fr) minm
 .pin>span{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:4px;padding:3px 7px;border-radius:5px;background:white;color:#30446d;box-shadow:0 1px 7px #18243b21;font-family:inherit;font-size:12px;font-weight:750;white-space:nowrap;letter-spacing:-.3px}
 .floor-map .pin.selected{z-index:3;transform:translate(-50%,-50%) scale(1.17);background:var(--blue);color:white;border-color:white;box-shadow:0 0 0 4px var(--blue),0 0 0 11px #2852ed27,0 4px 18px #18243b40}
 .pin.selected>span{background:var(--blue);color:white;font-size:14px;padding:4px 9px;box-shadow:0 3px 12px #18243b30}
-.pin[data-room="r3"] span{left:calc(100% + 7px);top:50%;transform:translateY(-50%);margin-top:0}
+.pin[data-room="r3"]>span{left:calc(100% + 7px);top:50%;transform:translateY(-50%);margin-top:0}
 .entry{z-index:4;background:#172741;border:2px solid white;box-shadow:0 2px 12px #18243b33;text-align:center;font-size:14px;padding:6px 12px;line-height:1.2}
 .entry b{display:block}.entry small{display:block;font-size:9px;font-weight:500;margin-top:4px;color:#d4e0f5}
 .room-row.selected{background:#edf2ff;border:2px solid var(--blue);box-shadow:0 4px 15px #2852ed12}
