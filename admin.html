@@ -409,14 +409,13 @@
     <section class="view" id="view-set" hidden>
       <header class="vh"><div><h1>설정 상태</h1><p class="muted small">Cloudflare Pages 설정값과 데이터베이스 표가 준비되었는지 확인합니다. 값 자체는 보이지 않고 있는지 없는지만 봅니다.</p></div></header>
       <div class="card"><h2 class="ch"><span>예약 안내 모니터</span></h2>
-        <p class="small muted">오늘의 방별 예약만 보여주는 전용 권한입니다. 고객 연락처·결제금액·관리자 기능에는 접근할 수 없습니다. 연결은 180일 유지되며 여기서 언제든 해제할 수 있습니다. 공용 모니터에서는 관리자에 로그인하지 마세요.</p>
-        <form id="board-device-form" class="form">
-          <div class="f"><label for="board-device-name">모니터 이름</label><input class="input" id="board-device-name" maxlength="40" value="입구 모니터" required></div>
-          <div class="acts"><button class="btn btn-primary btn-sm" type="submit" id="board-device-create">모니터 연결 링크 발급</button><button class="btn btn-light btn-sm" type="button" id="board-device-reload">연결 상태 새로고침</button><a class="btn btn-light btn-sm" href="/reservation-board?demo=1" target="_blank" rel="noopener">예시 화면 보기 ↗</a></div>
-          <div class="f" id="board-device-pair" hidden><label for="board-device-link">10분간 유효한 1회용 연결 링크 · 모니터 기기에서만 열어 주세요</label><input class="input" type="text" id="board-device-link" readonly autocomplete="off" spellcheck="false"><button class="btn btn-light btn-sm" type="button" id="board-device-copy">연결 링크 복사</button></div>
-          <p class="small muted" id="board-device-status" role="status"></p>
-        </form>
-        <ul class="setlist" id="board-device-list"></ul>
+        <p class="small muted">아래 주소를 모니터 브라우저에서 열면 바로 예약 안내가 표시됩니다. 관리자 로그인이나 기기 연결 링크 발급은 필요하지 않습니다. 예약자명은 마스킹하며 연락처·결제금액·내부 메모는 표시하지 않습니다.</p>
+        <div class="form">
+          <div class="f"><label for="board-view-link">예약 안내 주소</label><input class="input" type="text" id="board-view-link" value="https://socialfactory.co.kr/reservation-board" readonly autocomplete="off" spellcheck="false"></div>
+          <div class="acts"><a class="btn btn-primary btn-sm" href="/reservation-board" target="_blank" rel="noopener">예약 안내 화면 열기 ↗</a><button class="btn btn-light btn-sm" type="button" id="board-view-copy">주소 복사</button><a class="btn btn-light btn-sm" href="/reservation-board?demo=1" target="_blank" rel="noopener">예시 화면 보기 ↗</a></div>
+          <p class="small muted">검색 제외 태그를 적용하고 사이트맵·홈페이지 메뉴에서 제외한 화면입니다. 주소를 아는 사람은 조회할 수 있습니다.</p>
+          <p class="small muted" id="board-view-status" role="status"></p>
+        </div>
       </div>
       <div class="card sc-settings"><h2 class="ch"><span>스페이스클라우드 예약 연결</span></h2>
         <p class="small muted">각 룸의 캘린더 내보내기 주소를 저장하면 예약 시간표에 자동으로 표시합니다. 비워 둔 룸은 기존 연결을 유지합니다. 캘린더에는 연락처 · 인원 · 금액이 없지만, 같은 예약번호의 결제내역이 자동 수집되면 예약 상세에 금액을 표시합니다. 매출은 결제내역에서 한 번만 합산합니다.</p>
@@ -567,6 +566,6 @@
 <script src="/js/admin-kiosk-ui.js?v=749a2de995"></script>
 <script src="/js/admin-passes.js?v=20261030-products-submenu"></script>
 <script src="/js/admin-kiosk-products.js?v=20261030-products-submenu"></script>
-<script src="/js/admin-board-devices.js?v=20261030-1"></script>
+<script src="/js/admin-board-devices.js?v=20261031-direct"></script>
 </body>
 </html>

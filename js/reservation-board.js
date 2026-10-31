@@ -1,15 +1,14 @@
-import { ROOM_IDS, ROOM_CLASSROOMS, ROOM_GUIDES, roomDisplayName, createRoomTour, roomSchedule, kstDay, formatTime, isOutdated, boardAvailability, validBoardSnapshot } from './reservation-board-model.mjs?v=20261031-classrooms';
+import { ROOM_IDS, ROOM_CLASSROOMS, ROOM_GUIDES, roomDisplayName, createRoomTour, roomSchedule, kstDay, formatTime, isOutdated, boardAvailability, validBoardSnapshot } from './reservation-board-model.mjs?v=20261031-direct';
 import { boardRequest } from './board-request.mjs?v=20261030-status';
 
 const $ = id => document.getElementById(id);
 const demo = new URLSearchParams(location.search).get('demo') === '1';
-const pairingCode = new URLSearchParams(location.hash.slice(1)).get('pair');
-// The one-time code is never sent in a URL/query/referrer, and is removed before any request.
-if(pairingCode) history.replaceState(null,'',location.pathname+location.search);
+// Previously issued enrollment links now open the same display without consuming a code.
+if(new URLSearchParams(location.hash.slice(1)).has('pair')) history.replaceState(null,'',location.pathname+location.search);
 const capacities = { r1:36, r2:40, r3:16, r4:48, r5:30 };
 const images = { r1:'room-1-20261030-01', r2:'room-2-20261030-01', r3:'room-3-01-lecture', r4:'room-4-20261030-01', r5:'room-5-01-theater' };
 Object.values(images).forEach(name=>{const image=new Image();image.src='/images/space/'+name+'-sm.webp';});
-let data = null, receivedAt = 0, failed = false, loginRequired = false, loading = false, selected = 'r1', page = 0, pairError = '';
+let data = null, receivedAt = 0, failed = false, loading = false, selected = 'r1', page = 0;
 let requestTimedOut=false,refreshTimer=null,failures=0,initialized=false;
 const tour=createRoomTour(Date.now());
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
@@ -67,8 +66,8 @@ function tickTour(){
 function slot(rows, next, uncertain, availability) {
   const box = elem('div', null, 'slot');
   if (availability!=='ready') {
-    const title=availability==='loading'?'예약 불러오는 중':availability==='unpaired'?'모니터 연결 필요':requestTimedOut?'조회 시간 초과':'예약 조회 오류';
-    const detail=availability==='loading'?'잠시만 기다려 주세요':availability==='unpaired'?'관리자에게 연결을 요청해 주세요':'연결 상태를 확인해 주세요';
+    const title=availability==='loading'?'예약 불러오는 중':requestTimedOut?'조회 시간 초과':'예약 조회 오류';
+    const detail=availability==='loading'?'잠시만 기다려 주세요':'연결 상태를 확인해 주세요';
     box.append(elem('p',title,'empty'),elem('span',detail,'empty-sub'));return box;
   }
   if (!rows.length) {
@@ -84,7 +83,7 @@ function slot(rows, next, uncertain, availability) {
 function render() {
   const timestamp = now();
   const obsolete = !demo && isOutdated(data,timestamp,receivedAt);
-  const availability=boardAvailability(data,timestamp,receivedAt,{failed,loginRequired});
+  const availability=boardAvailability(data,timestamp,receivedAt,{failed});
   const unavailable=availability!=='ready';
   $('date').textContent = new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric',weekday:'long'}).format(timestamp);
   $('clock').textContent = (demo ? '예시 ' : '') + new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(timestamp);
@@ -104,8 +103,7 @@ function render() {
   focusRoom(tour.sample(Date.now()).room);
   $('total').textContent = availability==='loading'?'불러오는 중':unavailable?'조회 확인 필요':'오늘 '+data.reservations.length+'건';
   const warnings = [];
-  if(loginRequired) warnings.push(pairError || '모니터 연결이 필요합니다. 관리자에게 연결 링크를 요청해 주세요.');
-  else if(obsolete && data) warnings.push('예약 정보를 갱신하지 못해 일정을 숨겼습니다. 연결을 확인해 주세요. 자동으로 다시 시도합니다.');
+  if(obsolete && data) warnings.push('예약 정보를 갱신하지 못해 일정을 숨겼습니다. 연결을 확인해 주세요. 자동으로 다시 시도합니다.');
   else if(!data) warnings.push(failed ? (requestTimedOut?'예약 조회 시간이 초과되었습니다.':'예약 정보를 불러오지 못했습니다.')+' 연결을 확인해 주세요. 자동으로 다시 시도합니다.' : '예약 정보를 불러오고 있습니다. 잠시만 기다려 주세요.');
   else if(failed) warnings.push('연결이 불안정합니다. 마지막 확인 일정을 표시합니다.');
   if(data && !unavailable) {
@@ -140,14 +138,13 @@ async function refresh() {
   try {
     const fresh=await boardRequest('/api/board/schedule',{credentials:'same-origin',cache:'no-store'});
     if(!validBoardSnapshot(fresh)) throw new Error('format');
-    data=fresh; receivedAt=Date.now(); failed=false; loginRequired=false;requestTimedOut=false;failures=0;
+    data=fresh; receivedAt=Date.now(); failed=false;requestTimedOut=false;failures=0;
   } catch(error) {
-    failed=true;requestTimedOut=error.code==='timeout';loginRequired=error.status===401;
-    if(loginRequired)data=null;
+    failed=true;requestTimedOut=error.code==='timeout';
     failures++;
   } finally {
     loading=false;render();
-    refreshTimer=setTimeout(refresh,failed&&!loginRequired?Math.min(60000,5000*2**Math.min(failures-1,4)):60000);
+    refreshTimer=setTimeout(refresh,failed?Math.min(60000,5000*2**Math.min(failures-1,4)):60000);
   }
 }
 
@@ -171,11 +168,6 @@ window.addEventListener('pageshow',()=>{tickTour();refresh();});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){tickTour();refresh();}});
 if(demo){data=example();receivedAt=now();}
 async function start(){
-  if(pairingCode && !demo){
-    try{
-      await boardRequest('/api/board/pair',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:pairingCode})});
-    }catch(error){pairError=error.status===401?'연결 링크가 만료됐거나 이미 사용되었습니다. 관리자에서 새 링크를 발급해 주세요.':'모니터를 연결하지 못했습니다. 관리자에서 새 연결 링크를 발급해 주세요.';}
-  }
   initialized=true;
   await refresh();
 }

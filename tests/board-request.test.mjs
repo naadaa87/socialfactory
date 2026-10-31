@@ -25,16 +25,14 @@ test('successful JSON is returned and malformed success responses fail',async()=
   assert.deepEqual(await boardRequest('/schedule',{fetcher:async()=>({ok:true,json:async()=>snapshot()})}),snapshot());
   await assert.rejects(boardRequest('/schedule',{fetcher:async()=>({ok:true,json:async()=>{throw new SyntaxError('invalid JSON');}})}),SyntaxError);
 });
-test('empty confirmed data is ready; loading, failed and unpaired states are distinct',()=>{
+test('empty confirmed data is ready while loading and failed reads remain distinct',()=>{
   assert.equal(boardAvailability(null,now,0),'loading');
   assert.equal(boardAvailability(null,now,0,{failed:true}),'error');
-  assert.equal(boardAvailability(null,now,0,{failed:true,loginRequired:true}),'unpaired');
   assert.equal(boardAvailability(snapshot(),now,now),'ready');
 });
 test('recent last-known schedules survive a transient error but expire after three minutes or midnight',()=>{
   assert.equal(boardAvailability(snapshot(),now+60000,now,{failed:true}),'ready');
   assert.equal(boardAvailability(snapshot(),now+180001,now,{failed:true}),'error');
-  assert.equal(boardAvailability(snapshot(),now,now,{loginRequired:true}),'unpaired');
   assert.equal(boardAvailability({...snapshot(),date:'2026-10-29'},now,now),'error');
 });
 test('invalid snapshots cannot reach the renderer or falsely declare no reservations',()=>{

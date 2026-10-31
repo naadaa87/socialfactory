@@ -39,8 +39,7 @@ export function isOutdated(data, now, receivedAt) {
   return !data || data.date !== kstDay(now) || now - receivedAt > 180000 || now - data.generated_at > 180000;
 }
 
-export function boardAvailability(data, now, receivedAt, {failed=false,loginRequired=false}={}) {
-  if(loginRequired) return 'unpaired';
+export function boardAvailability(data, now, receivedAt, {failed=false}={}) {
   if(!data) return failed?'error':'loading';
   return isOutdated(data,now,receivedAt)?'error':'ready';
 }
