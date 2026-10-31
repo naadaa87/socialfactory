@@ -1,4 +1,4 @@
-import { ROOM_IDS, ROOM_GUIDES, createRoomTour, roomSchedule, kstDay, formatTime, isOutdated, boardAvailability, validBoardSnapshot } from './reservation-board-model.mjs?v=20261031-speed';
+import { ROOM_IDS, ROOM_CLASSROOMS, ROOM_GUIDES, roomDisplayName, createRoomTour, roomSchedule, kstDay, formatTime, isOutdated, boardAvailability, validBoardSnapshot } from './reservation-board-model.mjs?v=20261031-classrooms';
 import { boardRequest } from './board-request.mjs?v=20261030-status';
 
 const $ = id => document.getElementById(id);
@@ -18,6 +18,10 @@ const demoDate = kstDay(Date.now());
 const now = () => demo ? Date.parse(demoDate + 'T14:25:00+09:00') : Date.now();
 const elem = (tag, text, className) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (className) e.className = className; return e; };
 const timeText = row => (row.continued ? '전일~ ' : '') + formatTime(row.start, data.date) + ' – ' + formatTime(row.end, data.date) + (row.continues ? ' ~익일' : '');
+function setRoomHeading(node,id) {
+  node.replaceChildren(document.createTextNode(id.slice(1)+'번룸'));
+  if(ROOM_CLASSROOMS[id]) node.append(elem('span',' ('+ROOM_CLASSROOMS[id]+')','classroom-name'));
+}
 
 function example() {
   const at = time => Date.parse(demoDate + 'T' + time + ':00+09:00');
@@ -38,11 +42,11 @@ function focusRoom(id) {
   document.querySelectorAll('[data-zone]').forEach(e=>e.classList.toggle('selected',e.dataset.zone===id));
   if(!$('room-image').getAttribute('src').includes(images[id])) $('room-image').src = '/images/space/' + images[id] + '-sm.webp';
   $('room-image').style.objectPosition=['r1','r2','r4'].includes(id)?'50% 65%':'center';
-  $('room-image').alt = id.slice(1) + '번룸 내부';
-  $('photo-title').textContent = id.slice(1) + '번룸';
+  $('room-image').alt = roomDisplayName(id) + ' 내부';
+  setRoomHeading($('photo-title'),id);
   $('photo-number').textContent = '0' + id.slice(1);
   $('photo-description').textContent = (id === 'r5' ? '주출입구에서 오른쪽 · ' : '주출입구에서 왼쪽 복도 · ') + '최대 ' + capacities[id] + '명';
-  $('guide-room').textContent=id.slice(1)+'번룸';
+  setRoomHeading($('guide-room'),id);
   $('guide-arrow').textContent=ROOM_GUIDES[id].arrow;
   $('guide-direction').textContent=ROOM_GUIDES[id].direction;
   $('guide-location').textContent=ROOM_GUIDES[id].location;
@@ -91,7 +95,8 @@ function render() {
     const schedule = roomSchedule(data?.reservations || [],id,timestamp);
     const row = elem('article',null,'room-row'); row.dataset.room = id;
     const identity = elem('div',null,'room-identity'), label = elem('div');
-    label.append(elem('h3',id.slice(1)+'번룸'),elem('small','최대 '+capacities[id]+'명'));
+    const heading=elem('h3');setRoomHeading(heading,id);
+    label.append(heading,elem('small','최대 '+capacities[id]+'명'));
     identity.append(elem('span',id.slice(1),'number'),label);
     row.append(identity,slot(schedule.current,false,uncertain,availability),slot(schedule.next?[schedule.next]:[],true,uncertain,availability));
     row.addEventListener('click',()=>selectRoom(id)); rooms.append(row);
@@ -105,7 +110,7 @@ function render() {
   else if(failed) warnings.push('연결이 불안정합니다. 마지막 확인 일정을 표시합니다.');
   if(data && !unavailable) {
     const badRooms = data.rooms.filter(r=>r.calendar!=='ok');
-    if(badRooms.length) warnings.push(badRooms.map(r=>r.id.slice(1)+'번룸').join('·')+' 외부 일정 연결을 확인해야 합니다.');
+    if(badRooms.length) warnings.push(badRooms.map(r=>roomDisplayName(r.id)).join('·')+' 외부 일정 연결을 확인해야 합니다.');
     if(data.unassigned) warnings.push('방 번호가 없는 예약은 별도 확인이 필요합니다.');
   }
   $('notice').replaceChildren(document.createTextNode(warnings.join(' ')));
@@ -121,7 +126,8 @@ function render() {
   entries.slice(page*5,page*5+5).forEach(r=>{
     const ended=r.end<=timestamp, current=r.start<=timestamp&&!ended;
     const item=elem('div',null,'day-item'+(ended?' ended':current?' current':''));
-    const top=elem('div',null,'day-top'); top.append(elem('b',r.room.slice(1)+'번룸'),elem('span',ended?'종료':current?'예약 시간 중':'예정'));
+    const top=elem('div',null,'day-top'), roomTitle=elem('b');setRoomHeading(roomTitle,r.room);
+    top.append(roomTitle,elem('span',ended?'종료':current?'예약 시간 중':'예정'));
     item.append(top,elem('strong',r.name),elem('time',timeText(r))); dayItems.append(item);
   });
   if(!entries.length) dayItems.append(elem('p',availability==='loading'?'예약을 불러오고 있습니다.':unavailable?'예약을 조회하지 못했습니다. 예약 없음으로 판단하지 마세요.':'오늘 등록된 예약이 없습니다.','day-empty'));
@@ -146,7 +152,11 @@ async function refresh() {
 }
 
 $('preview-bar').hidden=!demo;
-document.querySelectorAll('.pin').forEach(pin=>pin.addEventListener('click',()=>selectRoom(pin.dataset.room)));
+document.querySelectorAll('.pin').forEach(pin=>{
+  setRoomHeading(pin.querySelector('span'),pin.dataset.room);
+  pin.setAttribute('aria-label',roomDisplayName(pin.dataset.room)+' 위치와 예약 보기');
+  pin.addEventListener('click',()=>selectRoom(pin.dataset.room));
+});
 $('tour-toggle').addEventListener('click',()=>{
   const paused=tour.sample(Date.now()).paused;
   if(paused)tour.resume(Date.now());else tour.pause(Date.now());

@@ -1,5 +1,9 @@
 // Pure presentation logic, shared with time-boundary tests. All times are epoch ms.
 export const ROOM_IDS = ['r1', 'r2', 'r3', 'r4', 'r5'];
+export const ROOM_CLASSROOMS = { r1:'강의실1', r2:'강의실2', r3:'강의실3', r4:'강의실4', r5:'강의실5' };
+export function roomDisplayName(id) {
+  return id.slice(1)+'번룸'+(ROOM_CLASSROOMS[id]?' ('+ROOM_CLASSROOMS[id]+')':'');
+}
 export const ROOM_GUIDES = {
   r1: { direction:'왼쪽 복도', location:'지도 아래쪽 가운데', arrow:'←' },
   r2: { direction:'왼쪽 복도', location:'지도 왼쪽 아래', arrow:'←' },
@@ -9,7 +13,7 @@ export const ROOM_GUIDES = {
 };
 
 // Independent of reservation render/refresh and the demo's fixed clock.
-export function createRoomTour(start, duration=Math.round(8000 / 1.5)) {
+export function createRoomTour(start, duration=4000) {
   let anchor=start, offset=0, pausedAt=null;
   const sample=at=>{
     const elapsed=Math.max(0,(pausedAt ?? at)-anchor), step=Math.floor(elapsed/duration);
