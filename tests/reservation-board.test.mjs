@@ -26,7 +26,17 @@ function insert(env,changes={}) {
 test('display names never pass composite calendar titles, contact numbers or internal notes to a monitor',()=>{
   assert.equal(displayName('김민수'),'김○수');assert.equal(displayName('이준'),'이○');
   assert.equal(displayName('최정*'),'최정○');
-  for(const title of ['투자N 모임 010-1234-5678','스페이스클라우드 예약 #123456','김민수 / 비밀번호 1234','<img onerror=alert(1)>','','a@b.com']) assert.equal(displayName(title),'예약 고객');
+  for(const title of ['투자N 모임 010-1234-5678','01012345678','스페이스클라우드 예약 #123456','김민수 / 비밀번호 1234','<img onerror=alert(1)>','','a@b.com']) assert.equal(displayName(title),'예약 고객');
+});
+test('all supported names use the same masking without classifying personal or organization names',()=>{
+  for(const [name,masked] of [['투자N','투○N'],['ABC','A○C'],['이름123','이○○○3'],['John Doe','J○○○○○e'],['김','○'],['Li','L○'],['최정*','최정○'],['Kim*','Kim○']]) {
+    assert.equal(displayName(name),masked);
+    assert.notEqual(masked,name);
+  }
+  const rows=boardRows([{...base,space:'r5',customer_name:'투자N',start_min:900,end_min:1020}],date);
+  assert.equal(rows[0].name,'투○N');
+  assert.equal(roomSchedule(rows,'r5',at('14:00')).next.name,'투○N');
+  assert.equal(roomSchedule(rows,'r5',at('15:00')).current[0].name,'투○N');
 });
 test('today projection clips overnight reservations and excludes cancelled, other rooms and invalid time slots',()=>{
   const rows=boardRows([base,{...base,code:'prev',date:'2026-10-29',start_min:1380,end_min:1500},
