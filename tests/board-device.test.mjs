@@ -40,24 +40,28 @@ test('monitor credentials cannot authenticate to admin or issue new monitor cred
     const response=await handler({request:request('/api/admin/session',null,{cookie:cookie(paired.token),authorization:'Bearer '+paired.token}),env});assert.equal(response.status,401);
   }
   const denied=await manageDevices({request:request('/api/admin/board-devices',{action:'create',name:'침입'},{cookie:cookie(paired.token),origin}),env});assert.equal(denied.status,401);
-  const anonymous=await schedule({request:request('/api/board/schedule'),env});assert.equal(anonymous.status,401);
+  const anonymous=await schedule({request:request('/api/board/schedule'),env});assert.equal(anonymous.status,200);
 });
 test('schedule output exposes no contact details, payment, notes, reservation identifiers or device secrets',async()=>{
   const env=environment(),created=await createBoardDevice(env,'입구'),paired=await pairBoardDevice(env,created.code);
   const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
   env.sqlite.prepare(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,phone,memo,amount,pay_method)
     VALUES('PRIVATE-123','confirmed','r1',?,600,720,'김민수','010-1234-5678','내부 메모',99000,'bank_blank')`).run(today);
-  const response=await schedule({request:request('/api/board/schedule',null,{cookie:cookie(paired.token)}),env});assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
+  // A fresh monitor needs neither an administrator session nor a device cookie.
+  const response=await schedule({request:request('/api/board/schedule'),env});assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
+  assert.match(response.headers.get('x-robots-tag'),/noindex/);
   const data=await response.json();assert.equal(data.reservations[0].name,'김○수');assert.equal(data.reservations.length,1);
-  const raw=JSON.stringify(data);for(const secret of ['010-1234','내부 메모','PRIVATE-123','김민수','"amount":','token_hash',paired.token,created.code])assert(!raw.includes(secret));
+  const raw=JSON.stringify(data);for(const secret of ['010-1234','내부 메모','PRIVATE-123','김민수','"amount":','"monitor":','token_hash',paired.token,created.code])assert(!raw.includes(secret));
 });
-test('revocation, credential expiry and admin key rotation invalidate only monitor access',async()=>{
+test('legacy credentials can be revoked but no longer gate the public display or grant administrator access',async()=>{
   const env=environment(),created=await createBoardDevice(env,'입구'),paired=await pairBoardDevice(env,created.code);
   const req=request('/api/board/schedule',null,{cookie:cookie(paired.token)});
   assert.equal(await readBoardDevice(req,env,paired.until),null);
   env.ADMIN_KEY='rotated';assert.equal(await readBoardDevice(req,env),null);env.ADMIN_KEY='board-auth-test-only';
   const revoked=await manageDevices({request:request('/api/admin/board-devices',{action:'revoke',id:created.id},adminHeaders),env});assert.equal(revoked.status,200);
-  assert.equal((await schedule({request:req,env})).status,401);
+  assert.equal(await readBoardDevice(req,env),null);
+  assert.equal((await schedule({request:req,env})).status,200);
+  assert.equal((await adminSession({request:request('/api/admin/session'),env})).status,401);
   assert.equal((await adminSession({request:request('/api/admin/session',null,adminHeaders),env})).status,200);
 });
 test('pairing and management reject cross-origin requests and device listings never return hashes or codes',async()=>{
