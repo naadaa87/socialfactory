@@ -1,4 +1,4 @@
-import { ROOM_IDS, ROOM_GUIDES, createRoomTour, roomSchedule, kstDay, formatTime, isOutdated, boardAvailability, validBoardSnapshot } from './reservation-board-model.mjs?v=20261030-status';
+import { ROOM_IDS, ROOM_GUIDES, createRoomTour, roomSchedule, kstDay, formatTime, isOutdated, boardAvailability, validBoardSnapshot } from './reservation-board-model.mjs?v=20261031-speed';
 import { boardRequest } from './board-request.mjs?v=20261030-status';
 
 const $ = id => document.getElementById(id);
