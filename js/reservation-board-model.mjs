@@ -9,7 +9,7 @@ export const ROOM_GUIDES = {
 };
 
 // Independent of reservation render/refresh and the demo's fixed clock.
-export function createRoomTour(start, duration=8000) {
+export function createRoomTour(start, duration=Math.round(8000 / 1.5)) {
   let anchor=start, offset=0, pausedAt=null;
   const sample=at=>{
     const elapsed=Math.max(0,(pausedAt ?? at)-anchor), step=Math.floor(elapsed/duration);
