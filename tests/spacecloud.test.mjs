@@ -197,6 +197,59 @@ test('date-bounded history preserves a past paid booking only in its month', asy
   e.sqlite.close();
 });
 
+test('host-added bookings without a payment ID survive expiry individually with stable codes and no revenue', async () => {
+  const e=env(), before=Date.parse('2026-10-31T00:00:00Z'), after=Date.parse('2026-11-01T00:00:00Z');
+  const manual=(uid,start,end)=>event(uid,start,end).replace(/URL:[^\r]+\r\n/,'');
+  let body=calendar(manual('host-added-one','20261031T150000','20261031T170000'),
+    manual('host-added-two','20261031T180000','20261031T200000'));
+  const fetcher=async()=>response(body);
+  const live=await loadSpacecloud(e,{fetcher,force:true,now:before});
+  assert.equal(live.results.length,2);
+  body=calendar();
+  const past=await loadSpacecloud(e,{fetcher,force:true,now:after,from:'2026-10-01',to:'2026-10-31'});
+  assert.deepEqual(past.results.map(r=>r.code).sort(),live.results.map(r=>r.code).sort());
+  assert(past.results.every(r=>r.historical&&r.amount===null&&r.pay_status==='unknown'&&r.source_url===''));
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM reservations').get().n,0);
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sales').get().n,0);
+  assert.equal((await loadSpacecloud(e,{fetcher,now:after+1000,from:'2026-11-01',to:'2026-11-30'})).results.length,0);
+  // A returning feed must not double either anonymous booking or collapse both into one.
+  body=calendar(manual('host-added-one','20261031T150000','20261031T170000'));
+  const returned=await loadSpacecloud(e,{fetcher,force:true,now:after+2000});
+  assert.equal(returned.results.length,2);
+  assert.equal(new Set(returned.results.map(r=>r.code)).size,2);
+  e.sqlite.close();
+});
+
+test('host-added future cancellation, rescheduling and changed feed links do not resurrect old slots', async () => {
+  const e=env(), now=Date.parse('2026-10-30T00:00:00Z');
+  let body=calendar(event('host-added','20261031T150000','20261031T170000').replace(/URL:[^\r]+\r\n/,''));
+  const fetcher=async()=>response(body);
+  await loadSpacecloud(e,{fetcher,force:true,now});
+  body=calendar(event('host-added','20261101T150000','20261101T170000').replace(/URL:[^\r]+\r\n/,''));
+  await loadSpacecloud(e,{fetcher,force:true,now:now+1000});
+  body=calendar();
+  assert.equal((await loadSpacecloud(e,{fetcher,force:true,now:now+2000})).results.length,0);
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_calendar_history').get().n,0);
+  body=calendar(event('host-added','20261031T150000','20261031T170000').replace(/URL:[^\r]+\r\n/,''));
+  await loadSpacecloud(e,{fetcher,force:true,now:now+3000});
+  e.SPACECLOUD_ICAL_FEEDS=JSON.stringify({r1:url(99)});body=calendar();
+  assert.equal((await loadSpacecloud(e,{fetcher,force:true,now:Date.parse('2026-11-02T00:00:00Z')})).results.length,0);
+  e.sqlite.close();
+});
+
+test('upgrade salvages host-added events from the last good cache before its first replacement', async () => {
+  const e=env(), before=Date.parse('2026-10-31T00:00:00Z'), after=Date.parse('2026-11-01T00:00:00Z');
+  let body=calendar(event('old-cache-only','20261031T150000','20261031T170000').replace(/URL:[^\r]+\r\n/,''));
+  const fetcher=async()=>response(body);
+  const live=await loadSpacecloud(e,{fetcher,force:true,now:before});
+  // Simulate the old implementation, which never archived manual calendar entries.
+  e.sqlite.exec('DELETE FROM spacecloud_calendar_history');body=calendar();
+  const past=await loadSpacecloud(e,{fetcher,force:true,now:after});
+  assert.equal(past.results.length,1);
+  assert.equal(past.results[0].code,live.results[0].code);
+  e.sqlite.close();
+});
+
 test('uses the Workers-supported manual redirect policy and refuses redirected feeds', async()=>{
  const e=env();let calls=0;
  const fetcher=async(u,init)=>{calls++;assert.equal(init.redirect,'manual');return new Response('',{status:302,headers:{location:'https://untrusted.invalid/private'}});};
@@ -204,7 +257,8 @@ test('uses the Workers-supported manual redirect policy and refuses redirected f
  assert.equal(calls,1);assert.equal(data.results.length,0);assert(data.info.rooms[0].error.includes('HTTP 302'));
 });
 
-test('SpaceCloud actual revenue is idempotent and included in totals, channel shares and dashboard', async()=>{
+test('SpaceCloud actual revenue is idempotent and included in totals, channel shares and dashboard', async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-25T03:00:00Z')});
  const e=env(); const original=globalThis.fetch;
  globalThis.fetch=async()=>response(calendar(event('revenue','20261024T100000','20261024T120000')));
  try {
@@ -235,7 +289,8 @@ test('multi-day calendar slots cannot accidentally book the full payment on ever
  finally{globalThis.fetch=original;e.sqlite.close();}
 });
 
-test('settlement import previews without writes, rejects ambiguity, and totals gross less refund once', async()=>{
+test('settlement import previews without writes, rejects ambiguity, and totals gross less refund once', async t=>{
+  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-25T03:00:00Z')});
   const {onRequestPost:importSales}=await import('../functions/api/admin/spacecloud-import.js');
   const {onRequestGet:sales}=await import('../functions/api/admin/sales.js');
   const e=env(null);const call=async(action,rows)=>importSales({env:e,request:new Request('https://example.test/api/admin/spacecloud-import',{method:'POST',headers,body:JSON.stringify({action,rows})})});
@@ -268,7 +323,8 @@ test('settlement linked to a calendar-backed manual sale does not count twice',a
   }finally{globalThis.fetch=originalFetch;}
 });
 
-test('pre-settlement payment and later settlement share one ID; future use is counted by paid month',async()=>{
+test('pre-settlement payment and later settlement share one ID; future use is counted by paid month',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-25T03:00:00Z')});
  const {onRequestPost:importSales}=await import('../functions/api/admin/spacecloud-import.js');
  const {onRequestGet:sales}=await import('../functions/api/admin/sales.js');
  const e=env(null);const row={reservation_id:'999',venue:'소셜팩토리 건대 (초특가)',use_date:'2026-11-06',end_date:'2026-11-06',paid_at:'2026-10-24',amount:45000,refund_amount:0};

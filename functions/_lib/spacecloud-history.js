@@ -1,5 +1,5 @@
 import { calendarRows } from './spacecloud.js';
-import { calendarReservationId, ensureSpacecloudSales } from './spacecloud-sales.js';
+import { calendarReservationId } from './spacecloud-sales.js';
 
 const TABLE = `CREATE TABLE IF NOT EXISTS spacecloud_calendar_history (
   space TEXT NOT NULL, uid TEXT NOT NULL, reservation_id TEXT NOT NULL,
@@ -22,8 +22,9 @@ export async function rememberFeedEvents(env, space, configHash, events, now) {
     `DELETE FROM spacecloud_calendar_history WHERE space=?1 AND uid=?2 AND config_hash=?3 AND source='feed'`
   ).bind(space, e.uid, configHash));
   const writes = events.map(e => {
-    const reservationId = calendarReservationId(e.source_url);
-    if (!reservationId) return null;
+    // Host-added bookings have a calendar UID but no payment reservation ID.
+    // Occupancy must be retained independently from the financial ledger.
+    const reservationId = calendarReservationId(e.source_url) || '';
     return env.DB.prepare(`INSERT INTO spacecloud_calendar_history
       (space,uid,reservation_id,config_hash,start_ms,end_ms,title,source,recorded_at)
       VALUES (?1,?2,?3,?4,?5,?6,?7,'feed',?8)
@@ -32,7 +33,7 @@ export async function rememberFeedEvents(env, space, configHash, events, now) {
       title=excluded.title,recorded_at=excluded.recorded_at
       WHERE source='feed'`)
       .bind(space, e.uid, reservationId, configHash, e.start, e.end, e.title, now);
-  }).filter(Boolean);
+  });
   const statements = deletes.concat(writes);
   for (let i = 0; i < statements.length; i += 100) await env.DB.batch(statements.slice(i, i + 100));
 }
@@ -40,24 +41,33 @@ export async function rememberFeedEvents(env, space, configHash, events, now) {
 export async function historicalCalendarRows(env, feeds, current, now, { from, to } = {}) {
   await ensureCalendarHistory(env);
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_spacecloud_history_end ON spacecloud_calendar_history(end_ms)').run();
-  await ensureSpacecloudSales(env);
   const hashes = new Map(feeds.map(f => [f.space, f.hash]));
   const where = ['h.end_ms<=?1'];
   const args = [now];
   if (from) { args.push(Date.parse(from + 'T00:00:00Z') - KST); where.push(`h.end_ms>?${args.length}`); }
   if (to) { args.push(Date.parse(to + 'T00:00:00Z') + 86400000 - KST); where.push(`h.start_ms<?${args.length}`); }
   const records = (await env.DB.prepare(`SELECT h.* FROM spacecloud_calendar_history h
-    INNER JOIN spacecloud_sales s ON s.reservation_id=h.reservation_id
     WHERE ${where.join(' AND ')} ORDER BY h.start_ms DESC LIMIT 6000`).bind(...args).all()).results || [];
-  const active = new Set(current.map(r => `${calendarReservationId(r.source_url)}|${r.space}|${r.date}`));
+  const active = new Set(current.map(r => r.code));
+  // Reservation IDs also deduplicate one-time verified backfills with live feeds.
+  // Never group host-added entries by their absent payment ID.
+  const paymentKey = r => {
+    const id = calendarReservationId(r.source_url);
+    return id ? `${id}|${r.space}|${r.date}` : null;
+  };
+  const linked = new Set(current.map(paymentKey).filter(Boolean));
   const output = [];
   for (const h of records) {
     if (h.source === 'feed' && hashes.get(h.space) !== h.config_hash) continue;
     const rows = await calendarRows([{ uid:h.uid, start:h.start_ms, end:h.end_ms,
-      title:h.title, source_url:`https://partner.spacecloud.kr/reservation/${h.reservation_id}` }], h.space, h.recorded_at, { from, to });
+      title:h.title, source_url:h.reservation_id ? `https://partner.spacecloud.kr/reservation/${h.reservation_id}` : '' }], h.space, h.recorded_at, { from, to });
     for (const row of rows) {
-      const key = `${h.reservation_id}|${row.space}|${row.date}`;
-      if (!active.has(key)) { output.push({ ...row, historical: true, history_source:h.source }); active.add(key); }
+      const key = paymentKey(row);
+      if (!active.has(row.code) && (!key || !linked.has(key))) {
+        output.push({ ...row, historical: true, history_source:h.source });
+        active.add(row.code);
+        if (key) linked.add(key);
+      }
     }
   }
   return output;
