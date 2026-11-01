@@ -177,6 +177,9 @@ async function refreshRoom(env, feed, force, fetcher, now) {
       let snapshot;
       const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 10000);
       try {
+        // On upgrade, the previous cache may be the only remaining copy of a
+        // host-added booking. Archive it before the upstream feed rolls forward.
+        if (cached.updated_at) await rememberFeedEvents(env, feed.space, hash, JSON.parse(cached.events_json), cached.updated_at);
         const response = await fetcher(feed.url, { redirect: 'manual', signal: controller.signal, headers: { Accept: 'text/calendar, text/plain', 'User-Agent': 'SocialFactory-calendar-check' } });
         const events = parseCalendar(await readBody(response));
         // Validate segmentation and size before replacing a previously good snapshot.
