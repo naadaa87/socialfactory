@@ -467,6 +467,12 @@ test('verified host-added amounts can be registered and edited beside unrelated 
   const {onRequestGet:sales}=await import('../functions/api/admin/sales.js');
   const total=await(await sales({env:e,request:new Request('https://test.invalid/api/admin/sales?year=2026',{headers})})).json();
   assert.equal(total.total,85000);assert.equal(total.n,2);
+  // Even an unlinked imported payment for this exact booking remains protected.
+  globalThis.fetch=async()=>response(raw.replace('END:VEVENT','URL:https://partner.spacecloud.kr/reservation/888\r\nEND:VEVENT'));
+  await loadSpacecloud(e,{force:true});
+  const ownImport=await updateReservation({env:e,request:new Request('https://test.invalid/api/admin/reservations',{method:'PATCH',headers,body:JSON.stringify({...saved,action:'update',amount:36000})})});
+  assert.equal(ownImport.status,400);
+  globalThis.fetch=async()=>response(raw);await loadSpacecloud(e,{force:true});
   // A copied slot under a legacy code is recognized rather than charged again.
   e.sqlite.prepare("UPDATE reservations SET code='SC3-0000000000000000'").run();
   assert.equal((await(await post(body)).json()).already,true);

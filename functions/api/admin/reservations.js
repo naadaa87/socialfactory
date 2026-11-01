@@ -175,6 +175,14 @@ export async function onRequestPatch({ request, env }) {
     if (importedLink) return bad('amount', '이 예약의 매출은 정산 엑셀 기록으로 관리됩니다. 원본 결제/취소 내역을 먼저 확인해 주세요.');
     const sameCalendarSlot = isCalendarLinked(prev) && v.space === prev.space && v.date === prev.date
       && v.start_min === prev.start_min && v.end_min === prev.end_min;
+    if (v.channel === 'spacecloud' && sameCalendarSlot) {
+      const external = await loadSpacecloud(env);
+      const match = external.results.find(e => e.space === prev.space && e.date === prev.date
+        && e.start_min === prev.start_min && e.end_min === prev.end_min && e.customer_name === prev.customer_name);
+      const importedId = match && calendarReservationId(match.source_url);
+      if (importedId && await env.DB.prepare('SELECT reservation_id FROM spacecloud_sales WHERE reservation_id=?1').bind(importedId).first())
+        return bad('amount', '이 일정은 자동 수집된 결제내역이 있습니다. 수집 기록에서 확인해 주세요.');
+    }
     if (v.channel === 'spacecloud' && !sameCalendarSlot) {
       const imported = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE use_date <= ?1 AND end_date >= ?1 LIMIT 1").bind(v.date).first();
       if (imported) return bad('amount', '해당 이용일에 엑셀 매출이 있어 중복 여부 확인이 필요합니다.');
