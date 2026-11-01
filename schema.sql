@@ -291,6 +291,13 @@ CREATE TABLE IF NOT EXISTS spacecloud_calendar_history (
 CREATE INDEX IF NOT EXISTS idx_spacecloud_history_reservation ON spacecloud_calendar_history (reservation_id, space);
 CREATE INDEX IF NOT EXISTS idx_spacecloud_history_end ON spacecloud_calendar_history (end_ms);
 
+-- Source cancellation affects occupancy; existing payment/refund records remain separate.
+CREATE TABLE IF NOT EXISTS spacecloud_calendar_link_state (
+  code TEXT PRIMARY KEY,
+  state TEXT NOT NULL,
+  checked_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS spacecloud_sync_device (
  id INTEGER PRIMARY KEY CHECK(id=1),code_hash TEXT,code_until INTEGER,token_hash TEXT,token_until INTEGER,
  enabled INTEGER NOT NULL DEFAULT 0,last_attempt INTEGER,last_success INTEGER,status TEXT,message TEXT,counts TEXT

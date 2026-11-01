@@ -59,7 +59,7 @@ async function conflicts(env, v, exceptCode) {
   ).bind(v.space, addDaysIso(v.date, -1), addDaysIso(v.date, 1), exceptCode || "").all();
   const base = dayIndex(v.date) * 1440, s = base + v.start_min, e = base + v.end_min;
   const external = await loadSpacecloud(env);
-  return (results || []).concat(external.results).filter((r) => r.code !== exceptCode && r.space === v.space).filter((r) => { const b0 = dayIndex(r.date) * 1440; return b0 + r.start_min < e && s < b0 + r.end_min; })
+  return mergeCalendarRows(results || [], external.results, { info: external.info }).filter((r) => r.code !== exceptCode && r.space === v.space).filter((r) => { const b0 = dayIndex(r.date) * 1440; return b0 + r.start_min < e && s < b0 + r.end_min; })
     .map((r) => ({ code: r.code, date: r.date, time: hm(r.start_min) + "–" + hm(r.end_min), name: r.customer_name, people: r.people }));
 }
 
@@ -84,7 +84,8 @@ export async function onRequestGet({ request, env }) {
   try {
     const { results } = await env.DB.prepare(sql).bind(...args).all();
     const external = code ? null : await loadSpacecloud(env, { from: isIsoDate(from) ? from : undefined, to: isIsoDate(to) ? to : undefined });
-    const rows = mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : []);
+    const rows = mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : [],
+      { info: external?.info, sourceRows: external?.results || [] });
     return json({ ok: true, today: kstToday(), results: await attachCalendarPayments(env, rows), spacecloud: external && external.info });
   } catch (e) { console.error("res-get", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
 }
