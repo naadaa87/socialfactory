@@ -4,6 +4,8 @@
  */
 import { sha256Hex } from './auth.js';
 import { historicalCalendarRows, rememberFeedEvents } from './spacecloud-history.js';
+import { calendarEventIdentity } from './spacecloud-identity.js';
+import { isCalendarLinked, reconcileCalendarLinks } from './spacecloud-links.js';
 
 const TTL = 5 * 60 * 1000;
 const DAY = 86400000, KST = 9 * 3600000;
@@ -96,7 +98,7 @@ function safeEventUrl(value) {
 }
 
 /** Fail the whole snapshot on malformed/unsupported events, retaining the previous good data. */
-export function parseCalendar(text) {
+export function parseCalendar(text, { includeCancelled = false } = {}) {
   if (typeof text !== 'string' || text.length > MAX_BYTES) throw new Error('invalid-calendar');
   const lines = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n[ \t]/g, '').trim().split('\n');
   if (lines[0] !== 'BEGIN:VCALENDAR' || lines[lines.length - 1] !== 'END:VCALENDAR') throw new Error('invalid-calendar');
@@ -126,7 +128,7 @@ export function parseCalendar(text) {
     props[name] = { value: line.slice(colon + 1), params };
   }
   if (props) throw new Error('invalid-calendar');
-  return [...events.values()].filter(e => !e.cancelled);
+  return [...events.values()].filter(e => includeCancelled || !e.cancelled);
 }
 
 export async function calendarRows(events, space, updatedAt, { from, to } = {}) {
@@ -139,7 +141,7 @@ export async function calendarRows(events, space, updatedAt, { from, to } = {}) 
     for (let day = first; day < last; day++) {
       if (rows.length >= 6000) throw new Error('too-many-events');
       const date = new Date(day * DAY).toISOString().slice(0, 10);
-      rows.push({ code: 'SC' + space.slice(1) + '-' + (await sha256Hex(event.uid + '|' + date)).slice(0, 16), external: true,
+      rows.push({ code: 'SC' + space.slice(1) + '-' + (await sha256Hex(calendarEventIdentity(event) + '|' + date)).slice(0, 16), external: true,
         status: 'confirmed', space, date, start_min: Math.max(0, (event.start + KST - day * DAY) / 60000),
         end_min: Math.min(1440, (event.end + KST - day * DAY) / 60000), customer_name: event.title,
         phone: '', people: null, purpose: '', channel: 'spacecloud', amount: null, pay_method: 'spacecloud', pay_status: 'unknown',
@@ -181,10 +183,11 @@ async function refreshRoom(env, feed, force, fetcher, now) {
         // host-added booking. Archive it before the upstream feed rolls forward.
         if (cached.updated_at) await rememberFeedEvents(env, feed.space, hash, JSON.parse(cached.events_json), cached.updated_at);
         const response = await fetcher(feed.url, { redirect: 'manual', signal: controller.signal, headers: { Accept: 'text/calendar, text/plain', 'User-Agent': 'SocialFactory-calendar-check' } });
-        const events = parseCalendar(await readBody(response));
+        const parsed = parseCalendar(await readBody(response), { includeCancelled: true });
+        const events = parsed.filter(e => !e.cancelled);
         // Validate segmentation and size before replacing a previously good snapshot.
         await calendarRows(events, feed.space, now);
-        await rememberFeedEvents(env, feed.space, hash, events, now);
+        await rememberFeedEvents(env, feed.space, hash, parsed, now);
         snapshot = { events_json: JSON.stringify(events), checked_at: now, updated_at: now, error: null };
       } catch (error) {
         // Avoid logging the URL: it contains a bearer-like private feed token.
@@ -217,14 +220,16 @@ export async function loadSpacecloud(env, { force = false, fetcher = fetch, now 
     const snapshots = await Promise.all(feeds.map(async feed => {
       const cached = await refreshRoom(env, feed, force, fetcher, now);
       const events = JSON.parse(cached.events_json);
-      return { rows: await calendarRows(events, feed.space, cached.updated_at, { from, to }), room: {
+      return { events, rows: await calendarRows(events, feed.space, cached.updated_at, { from, to }), room: {
         space: feed.space, count: events.length, checked_at: cached.checked_at, updated_at: cached.updated_at,
         error: cached.error || null, stale: !!cached.error || !cached.updated_at || now - cached.updated_at >= TTL * 2 } };
     }));
-    const current = snapshots.flatMap(x => x.rows);
+    const current = [...new Map(snapshots.flatMap(x => x.rows).map(row => [row.code, row])).values()];
     const history = await historicalCalendarRows(env,
       await Promise.all(feeds.map(async f => ({ space:f.space, hash:await sha256Hex(f.url) }))), current, now, { from, to });
-    return { results: current.concat(history), info: { configured: true, rooms: snapshots.map(x => x.room), refresh_minutes: TTL / 60000 } };
+    const removed = await reconcileCalendarLinks(env, snapshots, now);
+    return { results: current.concat(history), info: { configured: true, rooms: snapshots.map(x => x.room),
+      removed_linked_codes: removed, refresh_minutes: TTL / 60000 } };
   } catch { return { results: [], info: { configured: true, error: '외부 일정을 읽지 못했습니다. 다시 불러와 주세요.', rooms: [] } }; }
 }
 
@@ -238,11 +243,26 @@ export function filterExternal(rows, params) {
 }
 
 /** A manually recorded SpaceCloud booking already covering the slot is shown once. */
-export function mergeCalendarRows(manual, external) {
-  const recorded = manual.filter(r => r.status === 'confirmed' && r.channel === 'spacecloud');
+export function mergeCalendarRows(manual, external, { info, sourceRows = external, now = Date.now() } = {}) {
+  // A payment entered from an external calendar remains a financial record.
+  // Stop displaying its future occupancy when a successful room feed no longer
+  // contains it. Failed/missing feeds and ordinary staff bookings remain intact.
+  const removed = new Set(info?.removed_linked_codes || []);
+  const visible = manual.filter(r => {
+    if (!isCalendarLinked(r) || r.status !== 'confirmed') return true;
+    if (removed.has(r.code)) return false;
+    const end = Date.parse(r.date + 'T00:00:00+09:00') + r.end_min * 60000;
+    if (end <= now) return true;
+    const room = info?.rooms?.find(x => x.space === r.space);
+    if (!info?.configured || info.error || !room?.updated_at || room.error || room.stale) return true;
+    return sourceRows.some(e => e.space === r.space && e.date === r.date
+      && e.start_min === r.start_min && e.end_min === r.end_min
+      && e.customer_name.normalize('NFC').trim() === r.customer_name.normalize('NFC').trim());
+  });
+  const recorded = visible.filter(r => r.status === 'confirmed' && r.channel === 'spacecloud');
   const absolute = r => ({ start: Date.parse(r.date + 'T00:00:00Z') + r.start_min * 60000,
     end: Date.parse(r.date + 'T00:00:00Z') + r.end_min * 60000 });
-  return manual.concat(external.filter(e => {
+  return visible.concat(external.filter(e => {
     const x = absolute(e);
     return !recorded.some(r => { const y = absolute(r); return r.space === e.space && y.start <= x.start && y.end >= x.end; });
   })).sort((a, b) => a.date.localeCompare(b.date) || a.start_min - b.start_min || a.code.localeCompare(b.code));

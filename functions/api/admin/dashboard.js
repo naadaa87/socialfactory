@@ -21,7 +21,7 @@ export async function onRequestGet({ request, env }) {
 
   // 전날 밤에 시작해 오늘 새벽까지 이어지는 예약도 '오늘'에 함께 보여 줍니다.
   const external = await loadSpacecloud(env);
-  const near = await attachCalendarPayments(env, mergeCalendarRows(await all(`SELECT ${RES} FROM reservations WHERE status = 'confirmed' AND date BETWEEN ?1 AND ?2 ORDER BY date, start_min`, addDaysIso(today, -1), in7), filterExternal(external.results, new URLSearchParams({ from: addDaysIso(today, -1), to: in7 }))));
+  const near = await attachCalendarPayments(env, mergeCalendarRows(await all(`SELECT ${RES} FROM reservations WHERE status = 'confirmed' AND date BETWEEN ?1 AND ?2 ORDER BY date, start_min`, addDaysIso(today, -1), in7), filterExternal(external.results, new URLSearchParams({ from: addDaysIso(today, -1), to: in7 })), { info: external.info, sourceRows: external.results }));
   const todayList = near.filter((r) => r.date === today || (r.date === addDaysIso(today, -1) && r.end_min > 1440));
   const tomorrowList = near.filter((r) => r.date === tomorrow);
   const upcoming = near.filter((r) => r.date > tomorrow);

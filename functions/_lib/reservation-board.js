@@ -41,7 +41,7 @@ export async function readBoard(env, { today, now = Date.now(), loadExternal, me
     ORDER BY date,start_min,id LIMIT 1001`).bind(addDaysIso(today, -1), today).all()).results || [];
   if (manual.length > 1000) throw new Error('board-limit');
   const external = await loadExternal(env, { from: today, to: today, now });
-  const rows = mergeRows(manual, external.results || []);
+  const rows = mergeRows(manual, external.results || [], { info: external.info, now });
   return { ok: true, date: today, generated_at: now, refresh_seconds: 60,
     reservations: boardRows(rows, today),
     rooms: ROOM_KEYS.map(id => {

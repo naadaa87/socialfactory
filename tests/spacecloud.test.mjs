@@ -250,6 +250,88 @@ test('upgrade salvages host-added events from the last good cache before its fir
   e.sqlite.close();
 });
 
+test('rotating upstream UIDs keep booking codes stable and do not multiply current or historical manual events', async()=>{
+ const e=env(),before=Date.parse('2026-10-30T00:00:00Z'),after=Date.parse('2026-11-01T00:00:00Z');
+ let sequence=0,empty=false;
+ const fetcher=async()=>response(empty?calendar():calendar(
+   event('random-paid-'+(++sequence),'20261031T100000','20261031T120000'),
+   event('random-manual-'+sequence,'20261031T150000','20261031T170000').replace(/URL:[^\r]+\r\n/,'')
+ ));
+ const first=await loadSpacecloud(e,{fetcher,force:true,now:before});
+ for(let n=1;n<=3;n++){
+  const again=await loadSpacecloud(e,{fetcher,force:true,now:before+n*600000});
+  assert.deepEqual(again.results.map(r=>r.code),first.results.map(r=>r.code));
+ }
+ assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_calendar_history').get().n,2);
+ // Previously deployed versions persisted every random UID. Read those legacy
+ // records by the same logical identity too, without deleting historical data.
+ e.sqlite.exec("INSERT INTO spacecloud_calendar_history SELECT space,'legacy-random-copy',reservation_id,config_hash,start_ms,end_ms,title,source,recorded_at FROM spacecloud_calendar_history WHERE reservation_id='' LIMIT 1");
+ empty=true;
+ const past=await loadSpacecloud(e,{fetcher,force:true,now:after});
+ assert.equal(past.results.length,2);
+ assert.deepEqual(past.results.map(r=>r.code).sort(),first.results.map(r=>r.code).sort());
+ e.sqlite.close();
+});
+
+test('explicit past cancellations and host-verified removals suppress archived copies',async()=>{
+ const e=env(),before=Date.parse('2026-10-30T00:00:00Z'),after=Date.parse('2026-11-01T00:00:00Z');
+ let body=calendar(event('live','20261031T100000','20261031T120000'));
+ const fetcher=async()=>response(body);
+ await loadSpacecloud(e,{fetcher,force:true,now:before});
+ e.sqlite.exec("INSERT INTO spacecloud_calendar_history SELECT space,'legacy-copy',reservation_id,config_hash,start_ms,end_ms,title,source,recorded_at FROM spacecloud_calendar_history LIMIT 1");
+ body=calendar(event('new-random-cancel','20261031T100000','20261031T120000','STATUS:CANCELLED\r\n'));
+ assert.equal((await loadSpacecloud(e,{fetcher,force:true,now:after})).results.length,0);
+ body=calendar(event('restored','20261031T100000','20261031T120000'));
+ assert.equal((await loadSpacecloud(e,{fetcher,force:true,now:after+1000})).results.length,1);
+ e.sqlite.exec("INSERT OR IGNORE INTO spacecloud_calendar_history SELECT space,'legacy-copy',reservation_id,config_hash,start_ms,end_ms,title,source,recorded_at FROM spacecloud_calendar_history WHERE source='feed' LIMIT 1");
+ e.sqlite.exec("UPDATE spacecloud_calendar_history SET source='host_cancelled' WHERE uid='legacy-copy'");
+ body=calendar();
+ assert.equal((await loadSpacecloud(e,{fetcher,force:true,now:after+2000})).results.length,0);
+ e.sqlite.close();
+});
+
+test('removed future calendar-backed payments disappear from schedules while their financial records remain',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-01T08:00:00Z')});
+ const e=env(),original=globalThis.fetch;
+ const code='SC1-0123456789abcdef';
+ e.sqlite.exec(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status,paid_at,memo)
+ VALUES('${code}','confirmed','r1','2026-11-08',600,840,'예약 일정','spacecloud',40000,'spacecloud','paid','2026-11-01','외부 일정 연결: ${code}')`);
+ const req=new Request('https://test.invalid/api/admin/reservations?from=2026-11-01&to=2026-11-30',{headers});
+ try{
+  globalThis.fetch=async()=>response(calendar(event('volatile','20261108T100000','20261108T140000').replace(/URL:[^\r]+\r\n/,'')));
+  assert.equal((await(await getReservations({env:e,request:req})).json()).results.length,1);
+  globalThis.fetch=async()=>response(calendar());await loadSpacecloud(e,{force:true});
+  assert.equal((await(await getReservations({env:e,request:req})).json()).results.length,0);
+  assert.equal(e.sqlite.prepare('SELECT amount FROM reservations').get().amount,40000);
+  const {onRequestGet:sales}=await import('../functions/api/admin/sales.js');
+  const total=await(await sales({env:e,request:new Request('https://test.invalid/api/admin/sales?year=2026',{headers})})).json();
+  assert.equal(total.total,40000);
+  globalThis.fetch=async()=>response(calendar(event('new-id','20261108T100000','20261108T140000').replace(/URL:[^\r]+\r\n/,'')));
+  await loadSpacecloud(e,{force:true,from:'2026-10-01',to:'2026-10-31'});
+  assert.equal((await(await getReservations({env:e,request:req})).json()).results.length,1);
+  globalThis.fetch=async()=>{throw Error('offline')};await loadSpacecloud(e,{force:true});
+  assert.equal((await(await getReservations({env:e,request:req})).json()).results.length,1);
+  globalThis.fetch=async()=>response(calendar());await loadSpacecloud(e,{force:true});
+  globalThis.fetch=async()=>{throw Error('offline')};await loadSpacecloud(e,{force:true});
+  assert.equal((await(await getReservations({env:e,request:req})).json()).results.length,0);
+  t.mock.timers.tick(8*86400000);
+  // Crossing the original end time must not resurrect a cancelled paid slot.
+  assert.equal((await(await getReservations({env:e,request:req})).json()).results.length,0);
+ }finally{globalThis.fetch=original;e.sqlite.close();}
+});
+
+test('reconciliation keeps local/past bookings, requires a healthy room feed, and uses unfiltered source rows',()=>{
+ const now=Date.parse('2026-11-01T08:00:00Z');
+ const linked={code:'SC1-0123456789abcdef',space:'r1',date:'2026-11-08',start_min:600,end_min:840,customer_name:'예약 일정',channel:'spacecloud',status:'confirmed'};
+ const info={configured:true,rooms:[{space:'r1',updated_at:now,error:null,stale:false}]};
+ const same={...linked,external:true,code:'SC1-fedcba9876543210'};
+ assert.equal(mergeCalendarRows([linked],[],{info,now}).length,0);
+ assert.equal(mergeCalendarRows([linked],[],{info,now,sourceRows:[same]}).length,1);
+ for(const changed of [{code:'R1'},{channel:'phone'},{date:'2026-10-31'}]) assert.equal(mergeCalendarRows([{...linked,...changed}],[],{info,now}).length,1);
+ for(const changed of [{configured:false},{error:'offline'},{rooms:[]},{rooms:[{space:'r1',updated_at:now,error:'offline'}]},{rooms:[{space:'r1',updated_at:now,stale:true}]}])assert.equal(mergeCalendarRows([linked],[],{info:{...info,...changed},now}).length,1);
+ assert.equal(mergeCalendarRows([linked],[],{now}).length,1);
+});
+
 test('uses the Workers-supported manual redirect policy and refuses redirected feeds', async()=>{
  const e=env();let calls=0;
  const fetcher=async(u,init)=>{calls++;assert.equal(init.redirect,'manual');return new Response('',{status:302,headers:{location:'https://untrusted.invalid/private'}});};
