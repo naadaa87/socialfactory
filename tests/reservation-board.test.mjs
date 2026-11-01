@@ -29,7 +29,10 @@ test('display names never pass composite calendar titles, contact numbers or int
   for(const title of ['투자N 모임 010-1234-5678','01012345678','스페이스클라우드 예약 #123456','김민수 / 비밀번호 1234','<img onerror=alert(1)>','','a@b.com']) assert.equal(displayName(title),'예약 고객');
 });
 test('all supported names use the same masking without classifying personal or organization names',()=>{
-  for(const [name,masked] of [['투자N','투○N'],['ABC','A○C'],['이름123','이○○○3'],['John Doe','J○○○○○e'],['김','○'],['Li','L○'],['최정*','최정○'],['Kim*','Kim○']]) {
+  for(const [name,masked] of [['투자N','투○N'],['ABC','A○C'],['이름123','이○○○3'],['John Doe','J○○○○○e'],
+    ['ABCDEFG','A○○○○○G'],['ABCDEFGH','ABC○○○GH'],['기반기술Seminar','기반기○○○ar'],
+    ['기반기술 Seminar','기반기○○○ar'],['가'.repeat(40),'가가가○○○가가'],
+    ['김','○'],['Li','L○'],['최정*','최정○'],['Kim*','Kim○']]) {
     assert.equal(displayName(name),masked);
     assert.notEqual(masked,name);
   }
@@ -37,6 +40,10 @@ test('all supported names use the same masking without classifying personal or o
   assert.equal(rows[0].name,'투○N');
   assert.equal(roomSchedule(rows,'r5',at('14:00')).next.name,'투○N');
   assert.equal(roomSchedule(rows,'r5',at('15:00')).current[0].name,'투○N');
+  const longRows=boardRows([{...base,space:'r5',customer_name:'기반기술Seminar',start_min:900,end_min:1020}],date);
+  assert.equal(roomSchedule(longRows,'r5',at('14:00')).next.name,'기반기○○○ar');
+  assert.equal(roomSchedule(longRows,'r5',at('15:00')).current[0].name,'기반기○○○ar');
+  assert(!JSON.stringify(longRows).includes('기반기술Seminar'));
 });
 test('today projection clips overnight reservations and excludes cancelled, other rooms and invalid time slots',()=>{
   const rows=boardRows([base,{...base,code:'prev',date:'2026-10-29',start_min:1380,end_min:1500},
