@@ -10,6 +10,7 @@ export function displayName(value) {
   if (/^[\p{L}\p{N} ]{1,40}$/u.test(name) && /\p{L}/u.test(name)) {
     const chars = [...name.replace(/ /g, '')];
     if(chars.length===1) return '○';
+    if(chars.length>=8) return chars.slice(0,3).join('')+'○○○'+chars.slice(-2).join('');
     return chars.length === 2 ? chars[0] + '○' : chars[0] + '○'.repeat(chars.length - 2) + chars.at(-1);
   }
   if (/^[\p{L}\p{N}]{1,4}[*○●]{1,4}$/u.test(name) && /\p{L}/u.test(name)) return name.replace(/[*●]/g, '○');
