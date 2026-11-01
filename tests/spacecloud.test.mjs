@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { parseCalendar, calendarRows, validateFeedConfig, loadSpacecloud, readFeedConfig, saveFeedConfig,
   mergeCalendarRows, filterExternal } from '../functions/_lib/spacecloud.js';
-import { onRequestGet as getReservations, onRequestPost as createReservation } from '../functions/api/admin/reservations.js';
+import { onRequestGet as getReservations, onRequestPost as createReservation, onRequestPatch as updateReservation } from '../functions/api/admin/reservations.js';
 import { onRequestGet as getDashboard } from '../functions/api/admin/dashboard.js';
 import { onRequestGet as getSettings, onRequestPost as configure } from '../functions/api/admin/spacecloud.js';
 import { calendarReservationId, attachCalendarPayments } from '../functions/_lib/spacecloud-sales.js';
@@ -418,4 +418,60 @@ test('pre-settlement payment and later settlement share one ID; future use is co
  const d=await(await getDashboard({env:e,request:new Request('https://example.test/',{headers})})).json();assert.equal(d.month.total,45000);
  assert.equal((await call([{...row,refund_amount:45000}],'host-draft')).status,409);
  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sales').get().n,1);
+});
+
+test('an explicitly relinked replacement payment counts once and preserves original payment and refund evidence', async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-01T08:00:00Z')});
+ const e=env(null);
+ const {onRequestGet:getSales}=await import('../functions/api/admin/sales.js');
+ const query=async()=>(await(await getSales({env:e,request:new Request('https://test.invalid/api/admin/sales?year=2026',{headers})})).json());
+ e.sqlite.exec(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status,paid_at)
+ VALUES('OLD1','confirmed','r1','2026-11-08',600,840,'예약 일정','spacecloud',40000,'spacecloud','paid','2026-11-01'),
+ ('NEW2','confirmed','r2','2026-11-08',600,780,'예약 일정','spacecloud',55000,'spacecloud','paid','2026-11-01')`);
+ assert.equal((await query()).total,95000);
+ const link=()=>e.sqlite.exec("INSERT INTO reservation_payment_relinks(original_code,replacement_code,note) VALUES('OLD1','NEW2','관리자 확인: 같은 예약의 대체 결제 기록') ON CONFLICT(original_code) DO NOTHING");
+ link();link();
+ const result=await query();assert.equal(result.total,55000);assert.equal(result.n,1);
+ assert.equal(result.bySpace.r1.amount,0);assert.equal(result.bySpace.r2.amount,55000);
+ assert.equal(result.byChannel.spacecloud.amount,55000);assert.equal(result.thisMonth.total,55000);
+ const dash=await(await getDashboard({env:e,request:new Request('https://test.invalid/api/admin/dashboard',{headers})})).json();
+ assert.equal(dash.month.total,55000);assert.equal(dash.month.reservationsN,1);
+ assert.deepEqual({...e.sqlite.prepare("SELECT amount,refund_amount,paid_at FROM reservations WHERE code='OLD1'").get()},
+  {amount:40000,refund_amount:0,paid_at:'2026-11-01'});
+ assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM reservations').get().n,2);
+ // A later settlement link to the original must not reintroduce its amount.
+ e.sqlite.exec("INSERT INTO spacecloud_sales(reservation_id,use_date,end_date,paid_at,amount,refund_amount,space,linked_code) VALUES('999','2026-11-08','2026-11-08','2026-11-01',40000,0,'r1','OLD1')");
+ assert.equal((await query()).total,55000);
+ e.sqlite.exec("UPDATE reservations SET refund_amount=10000,pay_status='refunded' WHERE code='NEW2'");
+ const refunded=await query();assert.equal(refunded.total,45000);assert.equal(refunded.refunds,10000);
+ e.sqlite.close();
+});
+
+test('verified host-added amounts can be registered and edited beside unrelated same-day imports, without duplicates',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-01T08:00:00Z')});
+ const e=env({r3:url(3)}),original=globalThis.fetch;
+ const raw=calendar(event('changing-uid','20261030T220000','20261031T000000').replace(/URL:[^\r]+\r\n/,''));
+ globalThis.fetch=async()=>response(raw);
+ try{
+  e.sqlite.exec("INSERT INTO spacecloud_sales(reservation_id,use_date,end_date,paid_at,amount,refund_amount,space) VALUES('888','2026-10-30','2026-10-30','2026-10-25',50000,0,'r3')");
+  const source=(await loadSpacecloud(e)).results[0];
+  const post=body=>createReservation({env:e,request:new Request('https://test.invalid/api/admin/reservations',{method:'POST',headers,body:JSON.stringify(body)})});
+  const body={sourceCode:source.code,amount:30000,paid_at:'2026-10-30'};
+  const created=await post(body);assert.equal(created.status,200);
+  assert.equal((await(await post(body)).json()).already,true);
+  const saved=(await created.json()).item;
+  const updated=await updateReservation({env:e,request:new Request('https://test.invalid/api/admin/reservations',{method:'PATCH',headers,body:JSON.stringify({...saved,action:'update',amount:35000})})});
+  assert.equal(updated.status,200);assert.equal((await updated.json()).item.amount,35000);
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM reservations').get().n,1);
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sales').get().n,1);
+  const {onRequestGet:sales}=await import('../functions/api/admin/sales.js');
+  const total=await(await sales({env:e,request:new Request('https://test.invalid/api/admin/sales?year=2026',{headers})})).json();
+  assert.equal(total.total,85000);assert.equal(total.n,2);
+  // A copied slot under a legacy code is recognized rather than charged again.
+  e.sqlite.prepare("UPDATE reservations SET code='SC3-0000000000000000'").run();
+  assert.equal((await(await post(body)).json()).already,true);
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM reservations').get().n,1);
+  // Ordinary unverified entries keep the existing same-day ambiguity check.
+  assert.equal((await post({space:'r3',date:'2026-10-30',start_min:600,end_min:720,customer_name:'다른 예약',channel:'spacecloud',amount:10000,pay_method:'spacecloud',paid_at:'2026-10-30'})).status,400);
+ }finally{globalThis.fetch=original;e.sqlite.close();}
 });

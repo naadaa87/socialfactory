@@ -274,6 +274,16 @@ CREATE TABLE IF NOT EXISTS spacecloud_sales (
   imported_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
 );
 
+-- Keep original payments for audit when an administrator explicitly links a
+-- replacement payment for the same booking. Count the replacement only.
+CREATE TABLE IF NOT EXISTS reservation_payment_relinks (
+  original_code TEXT PRIMARY KEY,
+  replacement_code TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours')),
+  CHECK (original_code <> replacement_code)
+);
+
 -- Historical occupancy from SpaceCloud iCal or verified HOST completed bookings.
 -- Financial amounts stay exclusively in spacecloud_sales.
 CREATE TABLE IF NOT EXISTS spacecloud_calendar_history (
