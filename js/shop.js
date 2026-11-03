@@ -25,7 +25,7 @@
     "network": "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     "default": "주문을 만들지 못했습니다. 잠시 후 다시 시도해 주세요."
   };
-  var FIELD = { required: "필수 항목입니다.", phone: "연락 가능한 휴대폰 번호를 적어 주세요.", email: "이메일 주소를 확인해 주세요.", past: "오늘 이후 날짜로 골라 주세요.", far: "오늘부터 30일 안에서 골라 주세요." };
+  var FIELD = { datetime: "이용 시작 날짜와 시간을 정확히 선택해 주세요.", pastTime: "현재 이후의 시작 시각을 선택해 주세요.", farTime: "현재부터 90일 안의 시작 시각을 선택해 주세요.", required: "필수 항목입니다.", phone: "연락 가능한 휴대폰 번호를 적어 주세요.", email: "이메일 주소를 확인해 주세요.", past: "오늘 이후 날짜로 골라 주세요.", far: "오늘부터 30일 안에서 골라 주세요." };
 
   // 결제 준비 상태 → 안내 문구 표시 (상품 · 목록 · 주문서 공통)
   var payState = api("GET", "/api/shop/products").then(function (res) {
@@ -73,7 +73,7 @@
       t("[data-od-cat]", product.category); t("[data-od-name]", product.name); t("[data-od-short]", product.short);
       t("[data-od-price]", won(product.price)); t("[data-od-unit]", product.unit); t("[data-od-validity]", product.validity);
       t("[data-od-sum-name]", product.name); t("[data-od-sum-each]", won(product.price));
-      var total = function (q) { t("[data-od-sum-qty]", q); t("[data-od-total]", won(product.price * q)); t("[data-od-total-btn]", won(product.price * q)); };
+      var total = function (q) { if (product.start === "datetime") updateSchedule(q); t("[data-od-sum-qty]", q); t("[data-od-total]", won(product.price * q)); t("[data-od-total-btn]", won(product.price * q)); };
       var st = stepper($("[data-stepper]", form), total);
       form.elements.qty.value = qty; total(qty);
       document.title = product.name + " 주문서 | 소셜팩토리 건대";
@@ -88,6 +88,28 @@
         form.elements.startDate.min = kst(today);
         form.elements.startDate.max = kst(new Date(today.getTime() + 30 * 86400000));
         form.elements.startDate.value = kst(today);
+      }
+
+      if (product.start === "datetime") {
+        $("[data-od-start-at]").hidden = false;
+        elStart().required = true;
+        $("[data-od-schedule]").hidden = false;
+        updateStartBounds();
+        elStart().addEventListener("input", function () { updateSchedule(st.get()); });
+        elStart().addEventListener("focus", updateStartBounds);
+        updateSchedule(st.get());
+      }
+      function elStart() { return form.elements.startAt; }
+      function localKst(ms) { return new Date(ms + 9 * 3600e3).toISOString().slice(0, 16); }
+      function updateStartBounds() { elStart().min = localKst(Math.ceil((Date.now()+60000)/60000)*60000); elStart().max = localKst(Date.now()+90*864e5); }
+      function updateSchedule(q) {
+        var value = elStart().value, stamp = Date.parse(value+":00+09:00");
+        var period = $("[data-od-period]"), note = $("[data-od-schedule-note]");
+        note.textContent = "선택한 시각에 자동 시작합니다. 늦게 입실해도 종료 시각은 바뀌지 않습니다.";
+        if (!value || !isFinite(stamp)) { period.textContent = "시작 날짜·시간을 선택해 주세요."; return; }
+        var end = product.id === "cowork-day" ? Date.parse(value.slice(0,10)+"T00:00:00+09:00")+q*864e5 : stamp+q*2*3600e3;
+        period.textContent = value.replace("T", " ") + " ~ " + localKst(end).replace("T", " ") + " (한국 시간)";
+        if(q>1)note.textContent += " 수량 " + q + "매는 한 분의 연속 이용 기간으로 적용됩니다.";
       }
 
       // 로그인한 회원이면 이름 · 연락처를 채운다
@@ -115,7 +137,7 @@
         var input = form.elements[key]; if (input && input.setAttribute) { if (msg) input.setAttribute("aria-invalid", "true"); else input.removeAttribute("aria-invalid"); }
       };
       var clearErrs = function () { $$("[data-err]", form).forEach(function (e) { e.hidden = true; e.textContent = ""; }); $$("[aria-invalid]", form).forEach(function (i) { i.removeAttribute("aria-invalid"); }); };
-      ["name", "phone", "email", "startDate"].forEach(function (k) { var i = form.elements[k]; if (i) i.addEventListener("input", function () { showErr(k, ""); }); });
+      ["name", "phone", "email", "startDate", "startAt"].forEach(function (k) { var i = form.elements[k]; if (i) i.addEventListener("input", function () { showErr(k, ""); }); });
       reqs.forEach(function (c) { c.addEventListener("change", function () { if (reqs.every(function (x) { return x.checked; })) showErr("agree", ""); }); });
       var msgBox = $("[data-od-msg]");
       var notice = function (m) { msgBox.textContent = m || ""; msgBox.hidden = !m; };
@@ -140,12 +162,17 @@
         if (digits.length < 9 || digits.length > 15) { showErr("phone", FIELD.phone); ok = false; }
         if (el.email.value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(el.email.value.trim())) { showErr("email", FIELD.email); ok = false; }
         if (product.start === "date" && !el.startDate.value) { showErr("startDate", FIELD.required); ok = false; }
+        if (product.start === "datetime") {
+          var chosen=el.startAt.value, when=Date.parse(chosen+":00+09:00");
+          var problem=!chosen || !isFinite(when) || localKst(when)!==chosen ? FIELD.datetime : when<=Date.now() ? FIELD.pastTime : when>Date.now()+90*864e5 ? FIELD.farTime : "";
+          if(problem){showErr("startAt",problem);ok=false;}
+        }
         if (!reqs.every(function (c) { return c.checked; })) { showErr("agree", "필수 항목에 모두 동의해 주세요."); ok = false; }
         if (!ok) { var first = $("[aria-invalid], [data-err]:not([hidden])", form); if (first) first.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
         busy(true);
         var payload = {
           productId: product.id, qty: st.get(), name: el.name.value.trim(), phone: el.phone.value.trim(), email: el.email.value.trim(),
-          startDate: product.start === "date" ? el.startDate.value : "", memo: el.memo.value.trim(), payMethod: el.payMethod.value,
+          startDate: product.start === "date" ? el.startDate.value : "", startAt: product.start === "datetime" ? el.startAt.value : "", memo: el.memo.value.trim(), payMethod: el.payMethod.value,
           device: isMobile ? "mobile" : "pc", agreeTerms: el.agreeTerms.checked, agreePrivacy: el.agreePrivacy.checked, agreeRefund: el.agreeRefund.checked, website: el.website.value
         };
         if (paymentProvider === "payapp") {
@@ -245,6 +272,7 @@
           show("[data-oc-done]"); set("[data-oc-oid]", o.oid); set("[data-oc-title]", "결제가 완료되었습니다"); set("[data-oc-lead]", o.productName + " 주문이 접수되었습니다. 주문번호를 꼭 보관해 주세요.");
           if (o.test) show("[data-oc-test]");
           var linked=o.passes||[];
+          if(o.scheduledStart)set("[data-oc-lead]",o.productName+" 구매가 완료되었습니다. 선택한 시작 시각부터 자동으로 적용됩니다. 아래 이용 시간을 확인해 주세요.");
           if(linked.some(function(p){return p.status==="ready";}))set("[data-oc-lead]",o.productName+" 구매가 완료되어 입실 대기로 등록되었습니다. 실제 입실 시 이용을 시작합니다. 주문번호를 보관해 주세요.");
         } else if (o.status === "pending" && o.provider === "payapp") {
           pending(o); if(attempts<15) timer=setTimeout(checkOrder,2000);
@@ -257,7 +285,8 @@
         show("[data-oc-detail]");
         set("[data-oc-d-oid]", o.oid); set("[data-oc-d-product]", o.productName); set("[data-oc-d-amount]", won(o.amount)); set("[data-oc-d-pay]", o.payMethod + (o.cardName ? " · " + o.cardName : ""));
         if (o.startDate) { show("[data-oc-d-start-row]"); set("[data-oc-d-start-label]", o.startLabel || "이용 시작일"); set("[data-oc-d-start]", o.startDate); }
-        set("[data-oc-d-validity]", o.validity || "—"); set("[data-oc-d-buyer]", o.buyerName + " · " + o.buyerPhone + (o.buyerEmail ? " · " + o.buyerEmail : ""));
+        var activeLinked=(o.passes||[]).filter(function(p){return p.status==="active";});
+        set("[data-oc-d-validity]", o.scheduledStart && activeLinked.length ? activeLinked[0].starts_at.slice(0,16)+" ~ "+activeLinked[activeLinked.length-1].ends_at.slice(0,16)+" (한국 시간)" : o.validity || "—"); set("[data-oc-d-buyer]", o.buyerName + " · " + o.buyerPhone + (o.buyerEmail ? " · " + o.buyerEmail : ""));
         if(o.refundedAmount) {show("[data-oc-refund-row]");set("[data-oc-refund]",won(o.refundedAmount)+"원");}
         set("[data-oc-d-paid]", o.paidAt || "—");
         var stEl = $("[data-oc-d-status]"); stEl.textContent = o.statusLabel; stEl.className = "mi-st " + (STATUS_CLASS[o.status] || "");

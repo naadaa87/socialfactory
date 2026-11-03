@@ -10,6 +10,7 @@
  * 템플릿 코드: ALIMTALK_TPL_PURCHASE · EXPIRE · RENEWAL · REFUND.
  */
 import { kstNow } from "./admin.js";
+import { expiryEndpoints } from "./kiosk.js";
 import { sendAligo } from "./aligo.js";
 
 export const TEMPLATES = {
@@ -162,10 +163,10 @@ async function currentJob(env, job, vars, now) {
   if (job.kind === "refund") return p.status === "cancelled" && p.payment_status === "refunded" && p.refund_amount > 0;
   if (p.status !== "active" || p.payment_status !== "paid") return false;
   if (job.kind !== "expire_soon") return true;
-  if (p.ends_at <= now || (vars.__endsAt && vars.__endsAt !== p.ends_at)) return false;
-  const last = await env.DB.prepare("SELECT id FROM passes WHERE customer_id = ?1 AND pass_group = ?2 AND status = 'active' AND ends_at > ?3 ORDER BY ends_at DESC, id DESC LIMIT 1").bind(job.customer_id, p.pass_group, now).first();
+  if (p.starts_at > now || p.ends_at <= now || (vars.__endsAt && vars.__endsAt !== p.ends_at)) return false;
+  const {results:periods} = await env.DB.prepare("SELECT * FROM passes WHERE customer_id = ?1 AND pass_group = ?2 AND status = 'active' AND ends_at > ?3 ORDER BY starts_at,id").bind(job.customer_id, p.pass_group, now).all();
   const displayEnd = (+p.ends_at.slice(5, 7)) + "월 " + (+p.ends_at.slice(8, 10)) + "일 " + p.ends_at.slice(11, 16);
-  return last?.id === p.id && vars.만료 === displayEnd;
+  return expiryEndpoints(periods).some(last=>last.id===p.id) && vars.만료 === displayEnd;
 }
 
 /**

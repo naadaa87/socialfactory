@@ -58,7 +58,7 @@ export async function onRequestGet({ request, env }) {
     const state = u.searchParams.get("state") || "active";
     const where = [], args = [now];
     const W = {
-      active: "((p.status = 'active' AND p.starts_at <= ?1) OR p.status = 'ready') AND p.ends_at > ?1",
+      active: "p.status IN ('active','ready') AND p.ends_at > ?1",
       ready: "p.status = 'ready' AND p.ends_at > ?1",
       upcoming: "p.status = 'active' AND p.starts_at > ?1",
       expiring: "p.status = 'active' AND p.ends_at > ?1 AND p.ends_at <= ?2",

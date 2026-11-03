@@ -12,7 +12,7 @@ import {onRequestGet as stats} from '../functions/api/admin/stats.js';
 import {payConfig,sha256,orderToken} from '../functions/_lib/shop.js';
 import {ensurePayapp,kstStamp,payappUrl,requestPayment} from '../functions/_lib/payapp.js';
 const origin='https://socialfactory.test';
-const buyer={productId:'cowork-2h',qty:2,name:'모의 구매자',phone:'01012345678',email:'test@example.test',payMethod:'card',agreeTerms:true,agreePrivacy:true,agreeRefund:true};
+const buyer={startAt:new Date(Date.now()+864e5+9*36e5).toISOString().slice(0,16),productId:'cowork-2h',qty:2,name:'모의 구매자',phone:'01012345678',email:'test@example.test',payMethod:'card',agreeTerms:true,agreePrivacy:true,agreeRefund:true};
 function fixture(t){
  const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));t.after(()=>db.close());
  const DB={prepare(sql){let a=[];const q={bind(...args){a=args;return q},async first(){return db.prepare(sql).get(...a)||null},async all(){return {results:db.prepare(sql).all(...a)}},async run(){return {meta:{changes:Number(db.prepare(sql).run(...a).changes)}}}};return q},async batch(qs){db.exec('BEGIN');try{const result=[];for(const q of qs) result.push(await q.run());db.exec('COMMIT');return result}catch(e){db.exec('ROLLBACK');throw e}}};
@@ -118,4 +118,20 @@ test('부분 취소가 승인 통보보다 먼저 도착해도 남은 승인 금
 });
 test('환불 요청만 한 상태는 실제 환불 통보 전까지 매출 유지',async t=>{
  const f=fixture(t),o=await f.seed();await f.send(o);await patchOrder({env:f.env,request:f.req('/api/admin/orders','PATCH',{id:o.id,status:'refund_requested'},{authorization:'Bearer test-admin'})});const r=await adminOrders({env:f.env,request:f.req('/api/admin/orders','GET',undefined,{authorization:'Bearer test-admin'})});assert.equal((await r.json()).sales,8000);
+});
+
+test('예약 시작은 실제 한국 날짜·미래 90일 이내만 허용하고 잘못된 요청은 결제를 만들지 않음',async t=>{
+ const f=fixture(t);t.mock.method(Date,'now',()=>Date.parse('2026-11-03T09:00:00Z'));let calls=0;fakePay(t,()=>calls++);
+ for(const [startAt,error] of [[undefined,'datetime'],['2026-11-03T18:00','pastTime'],['2026-11-02T19:00','pastTime'],['2026-11-31T19:00','datetime'],['2027-02-03T18:00','farTime'],['2026-11-04T19:00+09:00','datetime'],['2026-11-04T24:00','datetime']]){
+  const r=await create({env:f.env,request:f.req('/api/orders','POST',{...buyer,startAt,requestId:crypto.randomUUID()})});assert.equal(r.status,400);assert.equal((await r.json()).fields.startAt,error);
+ }
+ assert.equal(calls,0);assert.equal(f.db.prepare('SELECT COUNT(*) n FROM orders').get().n,0);
+ const j=await(await create({env:f.env,request:f.req('/api/orders','POST',{...buyer,startAt:'2026-11-04T14:30',requestId:crypto.randomUUID()})})).json();assert.equal(j.ok,true);assert.equal(f.order().start_date,'2026-11-04 14:30:00');
+ const terms=JSON.parse(f.db.prepare('SELECT terms FROM website_order_terms WHERE oid=?').get(j.oid).terms);assert.equal(terms.activation,'scheduled');assert.equal(terms.startAt,'2026-11-04 14:30:00');
+ await f.send(f.order());const result=(await(await f.getStatus(f.order())).json()).order;assert.equal(result.scheduledStart,true);assert.equal(result.passes[0].starts_at,'2026-11-04 14:30:00');assert.equal(result.passes[1].ends_at,'2026-11-04 18:30:00');
+});
+test('처음 요청한 시작 시각이 지나도 동일 결제 요청 재시도는 기존 청구를 복구',async t=>{
+ const f=fixture(t);let now=Date.parse('2026-11-03T09:00:00Z');t.mock.method(Date,'now',()=>now);let calls=0;fakePay(t,()=>calls++);
+ const body={...buyer,startAt:'2026-11-03T18:10',requestId:crypto.randomUUID()};let r=await create({env:f.env,request:f.req('/api/orders','POST',body)});const first=await r.json();assert.equal(r.status,200);
+ now+=3600e3;r=await create({env:f.env,request:f.req('/api/orders','POST',body)});assert.equal(r.status,200);assert.equal((await r.json()).oid,first.oid);assert.equal(calls,1);assert.equal(f.db.prepare('SELECT COUNT(*) n FROM orders').get().n,1);
 });
