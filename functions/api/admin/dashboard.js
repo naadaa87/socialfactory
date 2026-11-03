@@ -47,7 +47,7 @@ export async function onRequestGet({ request, env }) {
   byChannel.web.amount += Number(ord.s) || 0; byChannel.web.n += Number(ord.n) || 0;
   // 토스프론트 이용권 매출은 '토스프론트' 채널로 따로 보여 줍니다 (kio 는 아래에서 계산)
   const resMonth = await one("SELECT COUNT(*) AS n, COALESCE(SUM(end_min - start_min), 0) AS mins FROM reservations WHERE status = 'confirmed' AND substr(date, 1, 7) = ?1", ym);
-  const kio = await one("SELECT COUNT(*) AS n, COALESCE(SUM(MAX(amount - refund_amount, 0)), 0) AS s FROM pass_payments WHERE status IN ('paid', 'refunded') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1", ym);
+  const kio = await one("SELECT COUNT(*) AS n, COALESCE(SUM(MAX(amount - refund_amount, 0)), 0) AS s FROM pass_payments WHERE channel <> 'website' AND status IN ('paid', 'refunded') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1", ym);
   if (Number(kio.n)) byChannel.kiosk = { amount: Number(kio.s) || 0, n: Number(kio.n) || 0 };
   // 토스프론트 이용권: 지금 이용 중 · 오늘 만료 · 알림 발송 실패 (표가 아직 없으면 0)
   const nowTs = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 19).replace("T", " ");

@@ -244,6 +244,8 @@
         if (paid) {
           show("[data-oc-done]"); set("[data-oc-oid]", o.oid); set("[data-oc-title]", "결제가 완료되었습니다"); set("[data-oc-lead]", o.productName + " 주문이 접수되었습니다. 주문번호를 꼭 보관해 주세요.");
           if (o.test) show("[data-oc-test]");
+          var linked=o.passes||[];
+          if(linked.some(function(p){return p.status==="ready";}))set("[data-oc-lead]",o.productName+" 구매가 완료되어 입실 대기로 등록되었습니다. 실제 입실 시 이용을 시작합니다. 주문번호를 보관해 주세요.");
         } else if (o.status === "pending" && o.provider === "payapp") {
           pending(o); if(attempts<15) timer=setTimeout(checkOrder,2000);
         } else {

@@ -1,3 +1,4 @@
+import {checkInWebsitePass} from "../../_lib/website-passes.js";
 /**
  * /api/admin/passes — 토스프론트 이용권 관리 (관리자 로그인)
  * GET   ?view=passes&state=active|upcoming|expiring|expired|cancelled|all&q=  : 이용권 목록 (최근 500장)
@@ -57,10 +58,11 @@ export async function onRequestGet({ request, env }) {
     const state = u.searchParams.get("state") || "active";
     const where = [], args = [now];
     const W = {
-      active: "p.status = 'active' AND p.starts_at <= ?1 AND p.ends_at > ?1",
+      active: "((p.status = 'active' AND p.starts_at <= ?1) OR p.status = 'ready') AND p.ends_at > ?1",
+      ready: "p.status = 'ready' AND p.ends_at > ?1",
       upcoming: "p.status = 'active' AND p.starts_at > ?1",
       expiring: "p.status = 'active' AND p.ends_at > ?1 AND p.ends_at <= ?2",
-      expired: "p.status = 'active' AND p.ends_at <= ?1",
+      expired: "p.status IN ('active','ready') AND p.ends_at <= ?1",
       cancelled: "p.status = 'cancelled' AND ?1 = ?1"
     };
     if (state === "expiring") args.push(in3);
@@ -133,6 +135,14 @@ export async function onRequestPatch({ request, env }) {
     const p = id ? await env.DB.prepare("SELECT * FROM passes WHERE id = ?1").bind(id).first() : null;
     if (!p) return json({ ok: false, error: "not-found" }, 404);
     const memo = b.memo !== undefined ? clean(b.memo, 300) : null;
+    const pay=await env.DB.prepare("SELECT channel FROM pass_payments WHERE id=?").bind(p.payment_id).first();
+    if(pay?.channel==='website' && ['cancel','refund-notify'].includes(action))return json({ok:false,error:'pg-refund',message:'홈페이지 결제 취소는 페이앱 판매자센터에서 처리하세요. 취소 통보가 오면 이용권과 환불 금액이 자동 반영됩니다.'},409);
+    if(action==='check-in'){
+      const result=await checkInWebsitePass(env,id);
+      if(result.error)return json({ok:false,error:result.error,message:result.error==='expired'?'사용 기한이 지난 이용권입니다.':'시작할 수 없는 이용권입니다. 사용 중인 이용권이나 취소 상태를 확인해 주세요.'},409);
+      return json({ok:true,item:result.pass,duplicate:result.duplicate});
+    }
+
     const customer = async (cid) => env.DB.prepare("SELECT * FROM customers WHERE id = ?1").bind(cid).first();
     const renotice = async (cid) => { const c = await customer(cid); if (c) await env.DB.batch(await expiryNoticeStmts(env, c, p.pass_group)); };
 

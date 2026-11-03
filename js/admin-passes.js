@@ -7,8 +7,8 @@
   var onErr = function (e) { if (!guard(e)) toast(e.message); };
 
   /* ---------- 표시 ---------- */
-  var PAYM = { CARD: "카드", CASH: "현금", BARCODE: "간편결제", card_offline: "카드(POS · 현장)", bank_other: "계좌이체", cash: "현금", free: "무료 · 보상" };
-  var CHAN = { toss_front: "토스프론트", admin: "관리자 등록" };
+  var PAYM = { "payapp:1":"페이앱 · 카드", "payapp:6":"페이앱 · 계좌이체", "payapp:15":"카카오페이", "payapp:16":"네이버페이", "payapp:23":"애플페이", "payapp:25":"토스페이", CARD: "카드", CASH: "현금", BARCODE: "간편결제", card_offline: "카드(POS · 현장)", bank_other: "계좌이체", cash: "현금", free: "무료 · 보상" };
+  var CHAN = { website: "홈페이지 · 페이앱", toss_front: "토스프론트", admin: "관리자 등록" };
   var PPST = { pending: ["결제 대기", ""], paid: ["결제 완료", "ok"], canceled: ["고객 취소", "gray"], timeout: ["시간 초과", "gray"], failed: ["실패", "bad"], refunded: ["환불", "warn"] };
   var JST = { queued: ["보낼 예정", "blue"], sending: ["보내는 중", "blue"], sent: ["발송 접수", "ok"], logged: ["기록만", "gray"], failed: ["실패", "bad"], cancelled: ["취소", "gray"] };
   var JKIND = { purchase: "구매 완료", expire_soon: "만료 예정", renewal: "연장 완료", refund: "취소·환불 완료" };
@@ -24,15 +24,28 @@
   function passState(p) {
     if (p.status === "cancelled") return '<span class="st gray">취소</span>';
     var now = Date.now(), s = toMs(p.starts_at), e = toMs(p.ends_at);
+    if (p.status === "ready") return e<=now ? '<span class="st gray">사용 기한 만료</span>' : '<span class="st blue">입실 대기</span>';
     if (e <= now) return '<span class="st gray">만료</span>';
     if (s > now) return '<span class="st">시작 전</span>';
     return '<span class="st ' + (e - now < 3 * 864e5 ? "warn" : "ok") + '">이용 중</span>';
   }
   function bar(p) {
     var s = toMs(p.starts_at), e = toMs(p.ends_at), n = Date.now();
-    if (p.status === "cancelled" || n >= e || n < s) return "";
+    if (p.status !== "active" || n >= e || n < s) return "";
     var pct = Math.max(2, Math.min(100, (e - n) / (e - s) * 100));
     return '<span class="left-bar' + (e - n < 3 * 864e5 ? " soon" : "") + '"><i style="width:' + pct.toFixed(1) + '%"></i></span>';
+  }
+  function passPeriod(p) {
+    return p.status === "ready" ? "사용 기한 " + esc(short(p.ends_at)) + " · 입실 시 시간 시작" : esc(short(p.starts_at)) + " ~ <b>" + esc(short(p.ends_at)) + "</b>";
+  }
+  function passActions(p,attr) {
+    var s="";
+    if(p.status==="ready" && toMs(p.ends_at)>Date.now()) s+='<button class="btn btn-primary btn-xs" type="button" '+attr+'="check-in" data-id="'+p.id+'">입실 시작</button>';
+    if(p.status==="ready") s+='<button class="btn btn-light btn-xs" type="button" '+attr+'="move" data-id="'+p.id+'">번호 옮기기</button>';
+    if(p.status==="active") s+='<button class="btn btn-light btn-xs" type="button" '+attr+'="adjust" data-id="'+p.id+'">만료 변경</button><button class="btn btn-light btn-xs" type="button" '+attr+'="move" data-id="'+p.id+'">번호 옮기기</button>';
+    if(p.channel==="website") s+='<a class="btn btn-light btn-xs" href="https://seller.payapp.kr/p/using_list" target="_blank" rel="noopener">페이앱에서 취소</a>';
+    else if(p.status==="active") s+='<button class="btn btn-danger btn-xs" type="button" '+attr+'="cancel" data-id="'+p.id+'">취소</button>';
+    return s;
   }
   var tel = function (c) { var t = String(c || "").replace(/[^0-9]/g, ""); return t ? '<a href="tel:' + esc(t) + '">' + esc(c) + "</a>" : ""; };
   var custCell = function (r) { return '<button class="linkbtn" type="button" data-cust="' + esc(r.customer_id) + '"><b>' + esc(r.phone_fmt || "") + "</b></button>" + (r.customer_name ? "<small>" + esc(r.customer_name) + "</small>" : ""); };
@@ -53,7 +66,7 @@
     loaders[t]();
   }
   $("#ps-tabs").addEventListener("click", function (e) { var b = e.target.closest("[data-tab]"); if (b) setTab(b.dataset.tab); });
-  A.LOAD.pass = function () { setTab(TAB); };
+  A.LOAD.pass = function () { api("/api/admin/website-passes",{method:"POST",body:{}}).then(function(){setTab(TAB);}).catch(onErr); };
   A.openPassTab = function (t) { TAB = t; A.go("pass"); };
 
   function loadLogs() {
@@ -74,7 +87,7 @@
   A.invalidatePassProducts = function () { PS.products = []; };
   function loadPasses() {
     var box = $("#ps-rows");
-    api("/api/admin/passes?state=" + encodeURIComponent($("#ps-state").value) + "&q=" + encodeURIComponent($("#ps-q").value.trim())).then(function (j) {
+    api("/api/admin/website-passes",{method:"POST",body:{}}).then(function(){return api("/api/admin/passes?state=" + encodeURIComponent($("#ps-state").value) + "&q=" + encodeURIComponent($("#ps-q").value.trim()));}).then(function (j) {
       PS.items = j.results || []; PS.products = j.products || []; PS.payMethods = j.payMethods || {};
       var s = j.summary || {};
       $("#ps-kpis").innerHTML =
@@ -85,9 +98,9 @@
       box.innerHTML = PS.items.length ? PS.items.map(function (p) {
         return "<tr><td><b>" + esc(p.product_name) + '</b><small class="mono">' + esc(p.code) + "</small>" + (p.test_mode ? '<span class="st test">테스트</span>' : "") + (p.memo ? "<small>" + esc(p.memo) + "</small>" : "") + "</td>"
           + "<td>" + custCell(p) + "</td>"
-          + '<td class="nw">' + passState(p) + " <small>" + esc(short(p.starts_at)) + " ~ <b>" + esc(short(p.ends_at)) + "</b></small>" + (p.status === "active" && toMs(p.ends_at) > Date.now() ? "<small>" + esc(leftText(p.ends_at)) + "</small>" : "") + bar(p) + "</td>"
+          + '<td class="nw">' + passState(p) + " <small>" + passPeriod(p) + "</small>" + (p.status === "active" && toMs(p.ends_at) > Date.now() ? "<small>" + esc(leftText(p.ends_at)) + "</small>" : "") + bar(p) + "</td>"
           + '<td class="nw"><b>' + won(p.amount) + "</b><small>" + esc(CHAN[p.channel] || p.channel || "") + " · " + esc(PAYM[p.pay_method] || p.pay_method || "") + "</small>" + (p.refund_amount ? '<small class="bad">환불 ' + won(p.refund_amount) + "</small>" : "") + "</td>"
-          + '<td><div class="row-actions">' + (p.status === "active" ? '<button class="btn btn-light btn-xs" type="button" data-pa="adjust" data-id="' + p.id + '">만료 변경</button><button class="btn btn-light btn-xs" type="button" data-pa="move" data-id="' + p.id + '">번호 옮기기</button><button class="btn btn-danger btn-xs" type="button" data-pa="cancel" data-id="' + p.id + '">취소</button>' : "") + (p.status === "cancelled" && p.refund_amount > 0 ? '<button class="btn btn-light btn-xs" type="button" data-pa="refund-notify" data-id="' + p.id + '">환불 완료 알림</button>' : "") + '<button class="btn btn-light btn-xs" type="button" data-pa="memo" data-id="' + p.id + '">메모</button></div></td></tr>';
+          + '<td><div class="row-actions">' + passActions(p,"data-pa") + '<button class="btn btn-light btn-xs" type="button" data-pa="memo" data-id="' + p.id + '">메모</button></div></td></tr>';
       }).join("") : '<tr><td colspan="5">' + emptyMsg("해당하는 이용권이 없습니다.") + "</td></tr>";
     }).catch(function (e) { if (!guard(e)) box.innerHTML = '<tr><td colspan="5">' + emptyMsg(e.message) + "</td></tr>"; });
   }
@@ -110,13 +123,16 @@
     var p = PS.items.filter(function (x) { return x.id === id; })[0] || (CUST && (CUST.passes || []).filter(function (x) { return x.id === id; })[0]);
     if (!p) return;
     var body = { id: id, action: act };
-    if (act === "adjust") {
+    if (act === "check-in") {
+      if(!confirm(p.product_name+" 이용을 지금 시작할까요? 실제 입실을 확인한 뒤 눌러 주세요. 시작 후 이용 시간이 차감됩니다."))return;
+    } else if (act === "adjust") {
       var v = prompt(p.product_name + " · " + p.phone_fmt + "\n새 만료 시각을 'YYYY-MM-DD HH:MM' 형식으로 적어 주세요.\n(연장 · 단축 모두 가능, 뒤에 이어 붙은 이용권은 그대로입니다)", String(p.ends_at).slice(0, 16));
       if (!v) return; body.endsAt = v.trim();
     } else if (act === "move") {
       var ph = prompt(p.product_name + " 이용권을 옮길 휴대폰 번호를 적어 주세요.\n(고객이 번호를 잘못 누른 경우)", "");
       if (!ph) return; body.phone = ph.trim();
     } else if (act === "cancel") {
+      if(p.channel==="website"){toast("홈페이지 결제는 페이앱 판매자센터에서 취소해 주세요. 결과는 자동 반영됩니다.");return;}
       var started = toMs(p.starts_at) <= Date.now();
       var rf = prompt(p.product_name + " · " + p.phone_fmt + " 이용권을 취소합니다.\n\n환불한 금액(원)을 적어 주세요. 환불하지 않았으면 0.\n※ 카드 환불은 토스 단말기에서 먼저 취소해야 합니다. 여기는 기록만 합니다." + (started ? "\n※ 이미 이용을 시작한 이용권입니다. 규정에 맞게 차감해 주세요." : ""), started ? "0" : String(p.amount || 0));
       if (rf === null) return;
@@ -193,8 +209,8 @@
       $("#pc-title").textContent = c.phone_fmt + (c.name ? " · " + c.name : "");
       var line = function (l, r) { return '<div class="pc-line"><div>' + l + "</div><div class=\"r\">" + r + "</div></div>"; };
       var passes = (d.passes || []).map(function (p) {
-        return line("<b>" + esc(p.product_name) + "</b> " + passState(p) + "<small>" + esc(short(p.starts_at)) + " ~ " + esc(short(p.ends_at)) + " · " + esc(p.code) + "</small>" + bar(p),
-          won(p.amount) + "<small>" + esc(CHAN[p.channel] || "") + "</small>" + (p.status === "active" ? '<div class="row-actions"><button class="btn btn-light btn-xs" type="button" data-pca="adjust" data-id="' + p.id + '">만료 변경</button><button class="btn btn-danger btn-xs" type="button" data-pca="cancel" data-id="' + p.id + '">취소</button></div>' : ""));
+        return line("<b>" + esc(p.product_name) + "</b> " + passState(p) + "<small>" + passPeriod(p) + " · " + esc(p.code) + "</small>" + bar(p),
+          won(p.amount) + "<small>" + esc(CHAN[p.channel] || "") + "</small>" + '<div class="row-actions">' + passActions(p,"data-pca") + '</div>');
       }).join("") || emptyMsg("이용권이 없습니다.");
       var pays = (d.payments || []).map(function (p) { var s = PPST[p.status] || [p.status, ""]; return line(esc(p.product_name) + ' <span class="st ' + s[1] + '">' + esc(s[0]) + "</span><small>" + esc(p.paid_at || p.created_at) + (p.approval_number ? " · 승인 " + esc(p.approval_number) : "") + (p.card_issuer ? " · " + esc(p.card_issuer) : "") + "</small>", won(p.amount) + (p.refund_amount ? '<small class="bad">환불 ' + won(p.refund_amount) + "</small>" : "")); }).join("") || emptyMsg("결제가 없습니다.");
       var jobs = (d.jobs || []).map(function (j) { var s = JST[j.status] || [j.status, ""]; return line(esc(JKIND[j.kind] || j.kind) + ' <span class="st ' + s[1] + '">' + esc(s[0]) + "</span><small>" + esc(short(j.sent_at || j.send_after)) + (j.last_error ? " · " + esc(j.last_error) : "") + "</small>", ""); }).join("") || emptyMsg("알림이 없습니다.");

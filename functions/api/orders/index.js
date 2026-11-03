@@ -6,6 +6,7 @@ import { PRODUCT_MAP } from "../../_lib/products.js";
 import { payConfig, makeOid, orderToken, pcPayFields, mobilePayFields, pcJsUrl, sha256 } from "../../_lib/shop.js";
 import { json, clean, normEmail, validEmail, phoneDigits, formatPhone, sameOrigin, getMember, ipHashOf } from "../../_lib/auth.js";
 
+import { ensureWebsitePasses, websiteTerms } from "../../_lib/website-passes.js";
 import { ensurePayapp, requestPayment } from "../../_lib/payapp.js";
 
 export async function onRequestPost({ request, env }) {
@@ -85,6 +86,7 @@ async function preparePayapp(request, env, cfg, order, ipHash, requestId) {
   };
   try {
     await ensurePayapp(env);
+    await ensureWebsitePasses(env);
     const existing = await env.DB.prepare("SELECT p.*, o.status, o.amount FROM payapp_payments p JOIN orders o ON o.oid=p.oid WHERE request_id=?").bind(requestId).first();
     if (existing) return reply(existing);
     const recent = ipHash && await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE ip_hash=? AND created_at > datetime('now','+9 hours','-10 minutes')").bind(ipHash).first();
@@ -94,7 +96,8 @@ async function preparePayapp(request, env, cfg, order, ipHash, requestId) {
       await env.DB.batch([
         env.DB.prepare(`INSERT INTO orders (oid,status,product_id,product_name,qty,amount,buyer_name,buyer_phone,buyer_email,start_date,memo,pay_method,device,member_id,ip_hash,test_mode,pg_method)
           VALUES (?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,0,'payapp:pending')`).bind(order.oid,order.product_id,order.product_name,order.qty,order.amount,order.buyer_name,order.buyer_phone,order.buyer_email,order.start_date,order.memo,order.pay_method,order.device,order.member_id,ipHash),
-        env.DB.prepare("INSERT INTO payapp_payments (oid,nonce,request_id,request_hash) VALUES (?,?,?,?)").bind(order.oid,nonce,requestId,hash)
+        env.DB.prepare("INSERT INTO payapp_payments (oid,nonce,request_id,request_hash) VALUES (?,?,?,?)").bind(order.oid,nonce,requestId,hash),
+        env.DB.prepare("INSERT INTO website_order_terms (oid,terms) VALUES (?,?)").bind(order.oid,JSON.stringify(websiteTerms(PRODUCT_MAP[order.product_id])))
       ]);
     } catch (e) {
       const concurrent = await env.DB.prepare("SELECT p.*, o.status, o.amount FROM payapp_payments p JOIN orders o ON o.oid=p.oid WHERE request_id=?").bind(requestId).first();

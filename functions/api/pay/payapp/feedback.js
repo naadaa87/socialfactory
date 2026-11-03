@@ -1,3 +1,4 @@
+import {syncWebsiteOrder} from "../../../_lib/website-passes.js";
 import { payappConfig, validFeedback, equalSecret, ensurePayapp } from "../../../_lib/payapp.js";
 const response=(text,status=200)=>new Response(text,{status,headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-store"}});
 export async function onRequestPost({request,env}) {
@@ -47,6 +48,7 @@ export async function onRequestPost({request,env}) {
     } else if (["8","16","31","32"].includes(state)) {
       await sql("UPDATE orders SET status='cancelled',fail_msg='페이앱 결제 요청 취소' WHERE oid=? AND status='pending'",oid).run();
     }
+    await syncWebsiteOrder(env,oid);
     return response("SUCCESS");
   } catch { return response("FAIL",500); }
 }

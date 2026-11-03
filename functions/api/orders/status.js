@@ -15,9 +15,10 @@ export async function onRequestGet({ request, env }) {
   if (!allowed) return json({ ok: false, error: "forbidden" }, 403);
   await ensurePayapp(env);
   const payment=await env.DB.prepare("SELECT refunded_amount,payurl FROM payapp_payments WHERE oid=?").bind(oid).first();
+  const linked=await env.DB.prepare("SELECT p.code,p.status,p.starts_at,p.ends_at FROM website_order_passes w JOIN pass_payments pp ON pp.payment_key=w.payment_key JOIN passes p ON p.payment_id=pp.id WHERE w.oid=? ORDER BY w.unit").bind(oid).all().catch(()=>({results:[]}));
   const p = PRODUCT_MAP[o.product_id] || {};
   return json({ ok: true, order: {
-    oid: o.oid, provider:payment ? "payapp" : "inicis", refundedAmount:payment ? payment.refunded_amount : 0, payurl:payment && o.status === "pending" ? payment.payurl : null, status: o.status, statusLabel: ORDER_STATUS[o.status] || o.status, productId: o.product_id, productName: o.product_name, qty: o.qty, amount: o.amount,
+    passes:linked.results, oid: o.oid, provider:payment ? "payapp" : "inicis", refundedAmount:payment ? payment.refunded_amount : 0, payurl:payment && o.status === "pending" ? payment.payurl : null, status: o.status, statusLabel: ORDER_STATUS[o.status] || o.status, productId: o.product_id, productName: o.product_name, qty: o.qty, amount: o.amount,
     buyerName: o.buyer_name, buyerPhone: o.buyer_phone, buyerEmail: o.buyer_email || "", startDate: o.start_date || "", startLabel: p.startLabel || "",
     payMethod: PAY_METHOD[o.pg_method] || (payment ? "페이앱" : o.pg_method) || (o.pay_method === "bank" ? "실시간 계좌이체" : "신용 · 체크카드"), paidAt: o.paid_at || "", tid: o.tid || "",
     cardName: o.card_name || "", failMsg: o.fail_msg || "", createdAt: o.created_at, test: !!o.test_mode, validity: p.validity || ""
