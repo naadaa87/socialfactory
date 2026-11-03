@@ -152,7 +152,7 @@
         <div class="card"><h2 class="ch"><span>공간별</span></h2><div id="sl-spaces" class="bars"></div></div>
         <div class="card"><h2 class="ch"><span>채널별 매출 · 비중</span></h2><div id="sl-channels" class="bars"></div><details class="mt-s"><summary>채널별 상세보기</summary><div class="tbl-wrap" id="sl-channel-details"></div></details><p class="tiny muted mt" id="sl-channel-note"></p></div>
       </div>
-      <p class="tiny muted mt">매출 = 결제 완료 · 환불 예약의 (결제 금액 − 환불 금액). 취소했어도 환불하지 않은 금액은 매출로 남습니다. 결제일 기준은 결제일을 적지 않은 예약을 이용일로 셉니다. 홈페이지 이용권은 KG이니시스 결제일 기준이며 테스트 결제와 환불 · 취소 주문은 빠집니다.</p>
+      <p class="tiny muted mt">매출 = 결제 완료 · 환불 예약의 (결제 금액 − 환불 금액). 취소했어도 환불하지 않은 금액은 매출로 남습니다. 결제일 기준은 결제일을 적지 않은 예약을 이용일로 셉니다. 홈페이지 이용권은 결제일 기준이며 부분 환불액을 차감하고 테스트 결제와 환불 · 취소 주문은 빠집니다.</p>
       <div class="card mt"><h2>스페이스클라우드 자동 매출 동기화</h2>
         <p class="small muted">연결된 PC의 크롬에서 15분마다 수집합니다. 매출은 로그인한 모든 관리자에게 동일하게 표시됩니다. PC 절전·크롬 종료·호스트센터 로그인 만료 시 수집이 멈춥니다.</p>
         <p id="sc-auto-status" role="status">연결 상태 확인 중…</p><p id="sc-auto-times" class="small muted"></p><p id="sc-auto-counts" class="small"></p>
@@ -363,7 +363,7 @@
 
     <!-- 주문 · 결제 -->
     <section class="view" id="view-ord" hidden>
-      <header class="vh"><div><h1>주문 · 결제</h1><p class="muted small">홈페이지 이용권 온라인 결제(KG이니시스) 내역입니다. 입실 처리는 '이용 완료', 환불은 가맹점관리자에서 취소한 뒤 '환불 완료'로 바꿔 주세요.</p></div></header>
+      <header class="vh"><div><h1>주문 · 결제</h1><p class="muted small">홈페이지 이용권 온라인 결제 내역입니다. 페이앱 승인·환불 결과는 자동 반영됩니다. 입실 후에는 이용 완료로 변경해 주세요.</p></div></header>
       <div class="filters">
         <select class="select" id="ord-filter" aria-label="상태"><option value="">전체 상태</option><option value="paid">결제 완료</option><option value="used">이용 완료</option><option value="refund_requested">환불 요청</option><option value="refunded">환불 완료</option><option value="cancelled">취소</option><option value="failed">결제 실패</option><option value="pending">결제 대기</option></select>
         <input class="input" id="ord-q" type="search" placeholder="주문번호 · 이름 · 전화 · 상품" aria-label="검색">
@@ -376,8 +376,8 @@
       <details class="help card mt"><summary>환불은 어떻게 처리하나요?</summary>
         <ol>
           <li>고객이 주문번호와 함께 환불을 요청하면 상태를 <b>환불 요청</b>으로 바꿔 둡니다.</li>
-          <li>KG이니시스 <b>가맹점관리자(iniweb.inicis.com)</b> → 거래내역 조회에서 같은 주문번호(TID)를 찾아 전체 취소 또는 부분 취소합니다. 규정(7일 안 전액, 이후 90%, 정기권 일할 차감)에 맞는 금액으로 취소해 주세요.</li>
-          <li>취소가 끝나면 상태를 <b>환불 완료</b>로 바꾸고 운영 메모에 취소 금액을 적어 둡니다.</li>
+          <li>주문에 표시된 결제사의 <b>판매자센터(페이앱) 또는 가맹점관리자(이니시스)</b> → 거래내역 조회에서 같은 주문번호(TID)를 찾아 전체 취소 또는 부분 취소합니다. 규정(7일 안 전액, 이후 90%, 정기권 일할 차감)에 맞는 금액으로 취소해 주세요.</li>
+          <li>페이앱은 취소 통보를 받으면 전체·부분 환불 금액을 자동 반영합니다. 기존 이니시스 주문은 상태를 환불 완료로 바꾸고 운영 메모에 취소 금액을 적어 주세요.</li>
         </ol>
       </details>
     </section>
@@ -431,7 +431,7 @@
         </form>
       </div>
       <div class="card"><h2 class="ch"><span>필수</span></h2><ul class="setlist" id="set-req"></ul></div>
-      <div class="card mt"><h2 class="ch"><span>결제 (KG이니시스)</span></h2><ul class="setlist" id="set-pay"></ul></div>
+      <div class="card mt"><h2 class="ch"><span>온라인 결제</span></h2><ul class="setlist" id="set-pay"></ul></div>
       <div class="card mt"><h2 class="ch"><span>선택</span></h2><ul class="setlist" id="set-opt"></ul></div>
       <p class="tiny muted mt">자세한 설정 방법은 저장소의 README.md 에 있습니다. 관리자 비밀번호(ADMIN_KEY)를 바꾸면 로그인해 둔 모든 기기에서 자동으로 로그아웃됩니다.</p>
     </section>
@@ -558,7 +558,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </div>
 <script src="/js/site-config.js?v=3361ee9a-room3-16"></script>
-<script src="/js/admin.js?v=20261027-month-speed"></script>
+<script src="/js/admin.js?v=20261103-payapp"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>

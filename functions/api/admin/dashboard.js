@@ -1,3 +1,4 @@
+import { ensurePayapp, netOrderAmount } from "../../_lib/payapp.js";
 import { ensureSpacecloudSales, SALES_SOURCE, attachCalendarPayments } from "../../_lib/spacecloud-sales.js";
 /**
  * GET /api/admin/dashboard — 관리자 첫 화면 '오늘 확인할 것'
@@ -13,6 +14,7 @@ const RES = "code, status, space, space_note, date, start_min, end_min, customer
 
 export async function onRequestGet({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
+  await ensurePayapp(env);
   await ensureSpacecloudSales(env);
   const today = kstToday(), tomorrow = addDaysIso(today, 1), in7 = addDaysIso(today, 7), ym = today.slice(0, 7);
   const all = async (sql, ...a) => { try { return (await env.DB.prepare(sql).bind(...a).all()).results || []; } catch (e) { console.error("dash", e && e.message); return []; } };
@@ -36,7 +38,7 @@ export async function onRequestGet({ request, env }) {
   for (const r of await all(`SELECT pay_method AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM ${SALES_SOURCE} WHERE pay_status IN ('paid', 'refunded') AND substr(COALESCE(paid_at,date), 1, 7) = ?1 GROUP BY pay_method`, ym)) {
     if (r.k in byMethod) { byMethod[r.k] = Number(r.s) || 0; resTotal += byMethod[r.k]; resN += Number(r.n) || 0; }
   }
-  const ord = await one("SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM orders WHERE status IN ('paid', 'used') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1", ym);
+  const ord = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${netOrderAmount}), 0) AS s FROM orders WHERE status IN ('paid', 'used', 'refund_requested') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1`, ym);
   const byChannel = {};
   for (const r of await all(`SELECT COALESCE(NULLIF(channel,''),'none') AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM ${SALES_SOURCE} WHERE pay_status IN ('paid','refunded') AND substr(COALESCE(paid_at,date),1,7) = ?1 GROUP BY k`, ym)) {
     byChannel[r.k] = { amount: Number(r.s) || 0, n: Number(r.n) || 0 };
