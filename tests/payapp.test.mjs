@@ -95,7 +95,7 @@ test('수동 상태 변경은 PG 승인/취소를 가장하지 못하고 메모/
  assert.equal((await patch({status:'paid'})).status,409);await f.send(o);assert.equal((await patch({status:'refunded'})).status,409);assert.equal((await patch({status:'used',memo:'입실 확인'})).status,200);assert.equal(f.order().status,'used');assert.equal(f.order().admin_memo,'입실 확인');
 });
 test('복귀 URL은 올바른 조회 토큰만 허용하고 승인 처리하지 않음',async t=>{
- const f=fixture(t),o=await f.seed();for(const path of ['/api/pay/payapp/return?oid='+o.oid,'/api/pay/payapp/return?oid='+o.oid+'&t=forged'])assert.equal((await returnPage({env:f.env,request:f.req(path)})).status,403);
+ const f=fixture(t),o=await f.seed();assert.equal((await(await f.getStatus(o)).json()).order.payMethod,'결제 대기');for(const path of ['/api/pay/payapp/return?oid='+o.oid,'/api/pay/payapp/return?oid='+o.oid+'&t=forged'])assert.equal((await returnPage({env:f.env,request:f.req(path)})).status,403);
  const r=await returnPage({env:f.env,request:f.req('/api/pay/payapp/return?oid='+o.oid+'&t='+await orderToken(f.env,o.oid))});assert.equal(r.status,303);assert.equal(f.order().status,'pending');
  assert.equal((await status({env:f.env,request:f.req('/api/orders/status?oid='+o.oid)})).status,403);
 });

@@ -109,7 +109,7 @@ export async function postForm(url, fields, env) {
 }
 export const parseNvp = (s) => Object.fromEntries(new URLSearchParams(s));
 
-export const PAY_METHOD = { "payapp:1": "카드", "payapp:2": "휴대폰", "payapp:4": "대면결제", "payapp:6": "계좌이체", "payapp:7": "가상계좌", "payapp:15": "카카오페이", "payapp:16": "네이버페이", "payapp:17": "등록결제", "payapp:21": "스마일페이", "payapp:22": "위챗페이", "payapp:23": "애플페이", "payapp:24": "내통장결제", "payapp:25": "토스페이", "payapp:26": "나나결제", Card: "신용 · 체크카드", DirectBank: "실시간 계좌이체", VBank: "가상계좌", HPP: "휴대폰", Kakaopay: "카카오페이", NaverPay: "네이버페이", Samsungpay: "삼성페이", Payco: "페이코", "0": "신용 · 체크카드", "1": "계좌이체", "2": "가상계좌", "3": "휴대폰" };
+export const PAY_METHOD = { "payapp:pending": "결제 대기", "payapp:unknown": "페이앱", "payapp:1": "카드", "payapp:2": "휴대폰", "payapp:4": "대면결제", "payapp:6": "계좌이체", "payapp:7": "가상계좌", "payapp:15": "카카오페이", "payapp:16": "네이버페이", "payapp:17": "등록결제", "payapp:21": "스마일페이", "payapp:22": "위챗페이", "payapp:23": "애플페이", "payapp:24": "내통장결제", "payapp:25": "토스페이", "payapp:26": "나나결제", Card: "신용 · 체크카드", DirectBank: "실시간 계좌이체", VBank: "가상계좌", HPP: "휴대폰", Kakaopay: "카카오페이", NaverPay: "네이버페이", Samsungpay: "삼성페이", Payco: "페이코", "0": "신용 · 체크카드", "1": "계좌이체", "2": "가상계좌", "3": "휴대폰" };
 
 /* 간단한 HTML 응답 (결제창 안에서 열리므로 맨 위 창을 이동시킨다) */
 export function htmlRedirect(to, note) {
