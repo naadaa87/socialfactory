@@ -29,7 +29,7 @@ export async function onRequestGet({ request, env }) {
   const one = async (sql, ...a) => { try { return (await env.DB.prepare(sql).bind(...a).first()) || {}; } catch (e) { console.error("sales", e && e.message); return {}; } };
 
   const methods = Object.keys(PAY_METHODS).concat(withOrders ? ["orders", "kiosk"] : []);
-  const KIOSK = "FROM pass_payments WHERE status IN ('paid', 'refunded') AND test_mode = 0 AND paid_at IS NOT NULL";
+  const KIOSK = "FROM pass_payments WHERE channel <> 'website' AND status IN ('paid', 'refunded') AND test_mode = 0 AND paid_at IS NOT NULL";
   const KNET = "MAX(amount - refund_amount, 0)";
   const blank = () => { const o = {}; methods.forEach((k) => { o[k] = 0; }); return o; };
   const months = [];
