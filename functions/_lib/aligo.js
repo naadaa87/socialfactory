@@ -42,7 +42,7 @@ export async function sendAligo(env, job, message, template) {
   const form = new URLSearchParams({
     apikey: env.ALIGO_API_KEY, userid: env.ALIGO_USER_ID, senderkey: env.ALIGO_SENDER_KEY,
     tpl_code: env[template.env] || template.code, sender, receiver_1: receiver,
-    subject_1: message.title, message_1: message.text, failover: "N", testMode
+    subject_1: message.title, message_1: message.text, failover: "Y", fsubject_1: message.title, fmessage_1: message.fallbackText || message.text, testMode
   });
   if (message.buttons) form.set("button_1", JSON.stringify(message.buttons));
   if (message.emtitle) form.set("emtitle_1", message.emtitle);
@@ -85,4 +85,21 @@ export async function sendAligo(env, job, message, template) {
     }
     return { messageId: String(data.info.mid) };
   } finally { clearTimeout(timer); }
+}
+
+// 새 홈페이지 템플릿은 업체가 승인한 본문·버튼과 일치할 때만 사용합니다.
+const approvalCache=new Map();
+export async function approvedWebsiteTemplate(env,template){
+ const code=env[template.env]||template.code,key=String(env.ALIGO_SENDER_KEY||'')+'|'+code,now=Date.now(),cached=approvalCache.get(key);
+ if(cached && cached.until>now)return cached.ok;
+ let ok=false;
+ try{
+  const target=deliveryTarget(env),url=target.url===RELAY_ENDPOINT?'https://relay.naranhistory.com/socialfactory/aligo/templates':'https://kakaoapi.aligo.in/akv10/template/list/';
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),5000);
+  let r,data;try{r=await fetch(url,{method:'POST',redirect:'manual',headers:target.headers,body:new URLSearchParams({apikey:env.ALIGO_API_KEY||'',userid:env.ALIGO_USER_ID||'',senderkey:env.ALIGO_SENDER_KEY||'',tpl_code:code}),signal:ctrl.signal});data=await r.json()}finally{clearTimeout(timer)}
+  const row=r.ok && Number(data.code)===0 && Array.isArray(data.list)?data.list.find(t=>t.templtCode===code):null;
+  const normalize=v=>String(v||'').replace(/\r\n/g,'\n').trim();
+  ok=!!(row && row.inspStatus==='APR' && row.status!=='S' && normalize(row.templtContent)===normalize(template.text) && Array.isArray(row.buttons) && row.buttons.length===template.buttons.button.length && row.buttons.every((b,i)=>['name','linkType','linkMo','linkPc'].every(k=>String(b[k]||'')===String(template.buttons.button[i][k]||''))));
+ }catch{}
+ if(approvalCache.size>32)approvalCache.clear();approvalCache.set(key,{ok,until:now+300000});return ok;
 }

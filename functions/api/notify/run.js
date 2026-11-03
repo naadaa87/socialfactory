@@ -5,6 +5,7 @@
  */
 import { json, safeEqual } from "../../_lib/auth.js";
 import { adminOk, ensureSchema } from "../../_lib/admin.js";
+import {cleanupGuest} from "../../_lib/guest-orders.js";
 import { runQueue } from "../../_lib/notify.js";
 
 export async function onRequestPost({ request, env }) {
@@ -13,5 +14,6 @@ export async function onRequestPost({ request, env }) {
   if (!byCron && !(await adminOk(request, env))) return json({ ok: false, error: "unauthorized" }, 401);
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   await ensureSchema(env);
+  await cleanupGuest(env).catch(()=>{});
   return json(await runQueue(env, { limit: 50 }));
 }

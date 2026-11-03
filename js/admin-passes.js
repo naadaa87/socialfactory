@@ -306,6 +306,10 @@
       });
     }).catch(function () { status.textContent = "연결 시험 실패: 서버에 연결하지 못했습니다."; }).then(function () { b.disabled = false; });
   });
+  $("#pj-sms-test").addEventListener("click",function(){
+    var b=this,status=$("#pj-test-status");b.disabled=true;status.textContent="인증 문자 API 테스트 중 (실제 발송 없음)…";
+    api("/api/admin/guest-sms-test",{method:"POST",body:{}}).then(function(r){status.textContent=r.message;}).catch(function(e){if(!guard(e))status.textContent=e.message;}).then(function(){b.disabled=false;});
+  });
   $("#pj-rows").addEventListener("click", function (e) {
     var b = e.target.closest("[data-job]"); if (!b) return;
     api("/api/admin/passes", { method: "PATCH", body: { jobId: +b.dataset.id, action: b.dataset.job } }).then(function () { toast(b.dataset.job === "job-retry" ? "다시 보낼 목록에 넣었습니다." : "보내지 않기로 했습니다."); loadJobs(); }).catch(onErr);

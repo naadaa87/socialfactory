@@ -52,3 +52,8 @@ Caddy와 네이버 중계의 PID가 유지됐고, 비인증 기존 BizM 403·com
 
 알리고 IP 등록은 **30개 한도**로 거절됐습니다. 대표자가 사용하지 않는 기존 IP를 확인한 후 서버 IP 한 개로 교체해야 합니다.
 기존 IP 목록은 변경하지 않았습니다. 운영 Pages 중계 변수 연결·main 병합과 테스트 모드 최종 성공은 아직 별도 단계입니다.
+
+## 비회원 인증·템플릿 승인 조회 추가 (2026-11-03)
+
+`extend_guest.py`는 기존 `socialfactory-aligo.caddy`와 전용 키를 재사용하여 `/socialfactory/aligo/sms` → `apis.aligo.in/send/`, `/socialfactory/aligo/templates` → `kakaoapi.aligo.in/akv10/template/list/` 두 경로만 추가합니다. 두 경로 모두 인증된 폼 POST만 허용하며 임의 목적지·인증 없는 요청은 차단합니다.
+디스크/실행 설정 일치와 새 경로를 뺀 전체 기존 설정 동일성을 검사하고 후보 파일을 caddy 사용자로 검증한 뒤 reload합니다. 실패 시 백업을 복구하며 Caddy/커머스 서비스 PID가 그대로인지 확인합니다. 실제 API 키·수신자 없이 각 upstream JSON 오류 응답과 비인증 403을 확인했습니다.

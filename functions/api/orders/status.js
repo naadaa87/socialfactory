@@ -2,6 +2,7 @@
 import { orderToken, ORDER_STATUS, PAY_METHOD } from "../../_lib/shop.js";
 import { PRODUCT_MAP } from "../../_lib/products.js";
 import { json, clean, safeEqual, getMember } from "../../_lib/auth.js";
+import {getGuest,ownsGuestOrder} from "../../_lib/guest-orders.js";
 import {websiteSchedule,publicSchedule} from "../../_lib/website-reschedule.js";
 import { ensurePayapp } from "../../_lib/payapp.js";
 export async function onRequestGet({ request, env }) {
@@ -12,7 +13,7 @@ export async function onRequestGet({ request, env }) {
   const o = await env.DB.prepare("SELECT * FROM orders WHERE oid = ?1").bind(oid).first().catch(() => null);
   if (!o) return json({ ok: false, error: "not-found" }, 404);
   const member = await getMember(request, env);
-  const allowed = safeEqual(t, await orderToken(env, oid)) || (member && o.member_id === member.id);
+  const allowed = safeEqual(t, await orderToken(env, oid)) || (member && o.member_id === member.id) || ownsGuestOrder(await getGuest(request,env),o);
   if (!allowed) return json({ ok: false, error: "forbidden" }, 403);
   await ensurePayapp(env);
   const payment=await env.DB.prepare("SELECT refunded_amount,payurl FROM payapp_payments WHERE oid=?").bind(oid).first();

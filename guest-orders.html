@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>document.documentElement.className=document.documentElement.className.replace("no-js","js");</script>
+  <title>비회원 주문 조회 | 소셜팩토리 건대</title>
+  <meta name="description" content="휴대폰 인증으로 비회원 주문과 이용 시간을 확인합니다.">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#2855E8">
+  
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="소셜팩토리">
+  <meta property="og:title" content="비회원 주문 조회 | 소셜팩토리 건대">
+  <meta property="og:description" content="휴대폰 인증으로 비회원 주문과 이용 시간을 확인합니다.">
+  <meta property="og:url" content="https://socialfactory.co.kr/guest-orders">
+  <meta property="og:image" content="https://socialfactory.co.kr/images/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="소셜팩토리 건대 — 모이면 만들어진다">
+  <meta property="og:locale" content="ko_KR">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="비회원 주문 조회 | 소셜팩토리 건대">
+  <meta name="twitter:description" content="휴대폰 인증으로 비회원 주문과 이용 시간을 확인합니다.">
+  <meta name="twitter:image" content="https://socialfactory.co.kr/images/og-image.jpg">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="css/style.css?v=nav20261024">
+  </head>
+<body>
+<a class="skip-link" href="#main">본문으로 바로가기</a>
+<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="/" aria-label="소셜팩토리 홈">
+      <img class="mark" src="images/logo-mark.svg" alt="" width="36" height="36">
+      <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
+    </a>
+    <nav class="nav-links" id="nav-links" aria-label="주요 메뉴">
+      <a href="/space#rooms">공간 대관</a><a href="/space#coworking">코워킹</a><a href="/space#office">독립사무실</a><a href="/pricing">이용 요금</a><a href="/shop">이용권 구매</a><a href="/guide">이용 안내</a><a href="/parking">주차 안내</a><a href="/about">소개</a>
+      <a class="nav-member" href="/login" data-member-link hidden>로그인</a>
+      <span class="nav-cta"><a class="btn btn-outline btn-sm" href="/contact">대관 문의</a><a class="btn btn-sm nav-kk btn-kakao" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg>카카오톡 문의</a></span>
+    </nav>
+    <a class="nav-kakao" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener" aria-label="카카오톡으로 문의하기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span class="nk-l">카톡 문의</span><span class="nk-s">문의</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="메뉴 열기"><span></span></button>
+  </div>
+</header>
+<main id="main"><section class="page-hero"><div class="container"><div class="crumbs"><a href="/">Home</a> / Guest orders</div><span class="eyebrow">My orders</span><h1 class="mt-16">비회원 주문 조회</h1><p class="lead">구매할 때 입력한 휴대폰 번호로 인증하면 최근 90일의 비회원 주문을 다시 확인할 수 있습니다. 2시간권·데이패스는 이용 시작 전에 시간을 변경할 수 있습니다.</p></div></section>
+<section class="section tight"><div class="container"><div class="oc-wrap" data-guest-orders>
+<p class="my-loading" data-guest-loading>조회 화면을 준비하고 있습니다…</p>
+<div class="my-card" data-guest-auth hidden><h2>구매한 휴대폰 번호 인증</h2><form data-guest-phone-form class="mt-24" novalidate><label class="af-field"><span>휴대폰 번호 <em>*</em></span><input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000" maxlength="20" required></label><p class="note mt-16">주문 조회를 위해 이 번호로 인증 문자를 보냅니다. 인증번호는 5분 동안 유효합니다. <a href="/privacy">개인정보 처리방침</a></p><button type="submit" class="btn btn-primary mt-16" data-guest-send>인증번호 받기</button></form>
+<div data-guest-code-box hidden class="mt-24"><form data-guest-code-form novalidate><label class="af-field"><span>인증번호 6자리 <em>*</em></span><input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></label><button type="submit" class="btn btn-primary mt-16" data-guest-check>인증하고 주문 조회</button></form></div></div>
+<div class="my-card" data-guest-list hidden><div class="mc-head"><h2>내 비회원 주문</h2><button type="button" class="btn btn-outline btn-sm" data-guest-logout>인증 종료</button></div><p class="note mt-16"><b data-guest-phone></b> 번호로 구매한 최근 주문입니다. 인증은 30분 동안 유지됩니다.</p><ul class="my-inq mt-24" data-guest-rows></ul><p class="note mt-24" data-guest-empty hidden>최근 90일 동안 이 번호로 확인되는 비회원 주문이 없습니다. 로그인하고 구매한 주문은 마이페이지에서 확인해 주세요.</p><button type="button" class="btn btn-outline mt-16" data-guest-refresh>주문 새로고침</button></div>
+<p class="auth-notice mt-16" role="status" data-guest-message hidden></p><div class="actions mt-24"><a class="btn btn-outline" href="/mypage">회원 주문은 마이페이지</a><a class="btn btn-kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener">카카오톡 문의</a></div></div></div></section></main>
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="/" aria-label="소셜팩토리 홈">
+          <img class="mark" src="images/logo-mark.svg" alt="" width="40" height="40">
+          <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
+        </a>
+        <p class="tagline">모이면 만들어진다. 2015년 홍대에서 시작한 모임공간 소셜팩토리의 건대 공간입니다. 룸 5개, 코워킹, 독립사무실을 안내합니다.</p>
+      </div>
+      <div>
+        <h4>Menu</h4>
+        <ul>
+          <li><a href="/space#rooms">공간 대관 (룸 1~5)</a></li>
+          <li><a href="/space#coworking">코워킹</a></li>
+          <li><a href="/space#office">독립사무실</a></li>
+          <li><a href="/pricing">이용 요금</a></li>
+          <li><a href="/pricing#estimate">예상 금액 계산</a></li>
+          <li><a href="/shop">이용권 구매</a></li>
+          <li><a href="/guide">이용 안내 · FAQ</a></li>
+          <li><a href="/tour">3D로 공간 살펴보기</a></li>
+          <li><a href="/about">소셜팩토리 소개</a></li>
+          <li><a href="/program">프로그램 · 호스트 모집</a></li>
+          <li><a href="/history">지난 기록 2015–2021</a></li>
+          <li><a href="/family">패밀리 브랜드</a></li>
+          <li><a href="/contact">대관과 이용 문의</a></li>
+          <li><a href="/login" data-member-link hidden>로그인 · 회원가입</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Space</h4>
+        <ul>
+          <li><strong>소셜팩토리 건대</strong></li>
+          <li data-sf="address">서울 광진구 화양동 10-1 한아름건물 4층</li>
+          <li>룸 5개 · 코워킹 · 독립사무실 4실</li>
+          <li>룸 <span data-sf="hours.rooms">24시간 · 예약제</span></li>
+          <li>코워킹 <span data-sf="hours.coworking">24시간</span></li>
+          <li>룸 시간당 <span data-sf="pricing.from">10,000</span>원부터 · 부가세 포함</li>
+          <li>4층 전체 약 250평 · 코워킹 50석</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contact</h4>
+        <a class="btn btn-sm foot-kk btn-kakao" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg>카카오톡 문의</a>
+        <p class="foot-kk-note" data-if-kakao>대관 · 이용 문의는 카카오톡 문의채널에서 가장 빠르게 답해 드립니다.</p>
+        <ul>
+          <li><a data-channel="naver" hidden>네이버 예약</a></li>
+          <li><a data-channel="spacecloud" hidden>스페이스클라우드</a></li>
+          <li><a data-channel="instagram" hidden>인스타그램</a></li>
+          <li><a data-channel="phone" hidden><span data-channel-value>전화</span></a></li>
+          <li><a data-channel="email" href="mailto:spaceblank0100@gmail.com"><span data-channel-value>spaceblank0100@gmail.com</span></a></li>
+          <li class="channels-empty" hidden>상담 채널을 준비하고 있습니다. 그 전까지는 <a href="/contact">문의 폼</a>으로 남겨 주세요.</li>
+        </ul>
+      </div>
+    </div>
+    <nav class="footer-family" aria-label="패밀리 사이트">
+      <div class="ff-head"><h4>Family Sites</h4><a href="/family">패밀리 브랜드 한눈에 보기 →</a></div>
+      <ul class="ff-list"><li data-family="megaspot"><a data-family-link="megaspot" href="https://megaspot.kr" target="_blank" rel="noopener"><b data-ff="name">메가스팟</b><span data-ff="tag">대형 행사장 대관</span></a></li><li data-family="mingle"><a data-family-link="mingle" href="https://hellomingle.kr" target="_blank" rel="noopener"><b data-ff="name">밍글</b><span data-ff="tag">24시간 무인디저트카페 · 동네 커뮤니티</span></a></li><li data-family="ssople"><a data-family-link="ssople" href="https://ssople.com" target="_blank" rel="noopener"><b data-ff="name">쏘플파티룸</b><span data-ff="tag">무인 프라이빗 파티룸</span></a></li><li data-family="playtion"><a data-family-link="playtion" href="https://playtion.kr" target="_blank" rel="noopener"><b data-ff="name">플레이션</b><span data-ff="tag">게임파티룸 · 가챠샵</span></a></li><li data-family="gongbaek"><a data-family-link="gongbaek" href="https://vacancy.co.kr" target="_blank" rel="noopener"><b data-ff="name">공백 공간백서</b><span data-ff="tag">공실개발 솔루션</span></a></li><li data-family="coremood"><a data-family-link="coremood" href="https://coremood.kr" target="_blank" rel="noopener"><b data-ff="name">코어무드</b><span data-ff="tag">공간 브랜딩 · 인테리어 스튜디오</span></a></li><li data-family="orbis"><a data-family-link="orbis" href="https://orbis-estate.com" target="_blank" rel="noopener"><b data-ff="name">오르비스 부동산 중개법인</b><span data-ff="tag">빌딩 매매 · 상가 임대 · 상권분석</span></a></li><li data-family="choisijun"><a data-family-link="choisijun" href="https://choisijun.com" target="_blank" rel="noopener"><b data-ff="name">최시준</b><span data-ff="tag">소셜팩토리 대표 · 공실개발 전문가</span></a></li><li data-family="yeodeol"><a data-family-link="yeodeol" href="https://yeodeol.kr" target="_blank" rel="noopener"><b data-ff="name">여덟글자</b><span data-ff="tag">사주로 읽는 하루 기록</span></a></li></ul>
+    </nav>
+    <div class="footer-biz" aria-label="사업자 정보">
+      <span><b>상호</b> <span data-sf="company.name">주식회사 블랭크</span></span>
+      <span><b>대표자</b> <span data-sf="company.ceo">최시준</span></span>
+      <span><b>사업자등록번호</b> <span data-sf="company.regNo">161-86-03494</span></span>
+      <span data-hide-if-empty hidden><b>통신판매업 신고번호</b> <span data-sf="company.mailOrderNo">—</span></span>
+      <span><b>주소</b> <span data-sf="company.address">서울특별시 강남구 영동대로 602, 6층 제트71 (삼성동, 삼성동 미켈란 107)</span></span>
+      <span><b>연락처</b> <a data-tel-link href="tel:01023849580"><span data-sf="company.phone">010-2384-9580</span></a> · <a data-channel="email" href="mailto:spaceblank0100@gmail.com"><span data-channel-value>spaceblank0100@gmail.com</span></a></span>
+      <span><b>개인정보 보호책임자</b> <span data-sf="company.privacyOfficer">최시준</span></span>
+    </div>
+    <div class="footer-bottom">
+      <span>© <span data-year>2026</span> SOCIAL FACTORY. All rights reserved.</span>
+      <span class="legal-links"><a href="/terms">이용약관</a><a href="/privacy"><strong>개인정보 처리방침</strong></a><a href="/shop#policy">이용권 환불 규정</a><a href="/guest-orders">비회원 주문 조회</a></span>
+      <span class="en">EST. 2015 · TALK. PLAY. BOOK. STUDY.</span>
+    </div>
+  </div>
+</footer>
+<a class="kakao-fab" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener" aria-label="카카오톡으로 문의하기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span class="kf-t">카카오톡 문의</span></a>
+<script src="js/site-config.js?v=3361ee9a-room3-16"></script>
+<script src="js/main.js?v=980aaa85"></script>
+<script src="js/guest-orders.js?v=guest20261103"></script>
+</body>
+</html>

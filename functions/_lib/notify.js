@@ -11,9 +11,16 @@
  */
 import { kstNow } from "./admin.js";
 import { expiryEndpoints } from "./kiosk.js";
-import { sendAligo } from "./aligo.js";
+import {orderToken} from "./shop.js";
+import {phoneDigits} from "./auth.js";
+import { sendAligo,approvedWebsiteTemplate } from "./aligo.js";
 
 export const TEMPLATES = {
+  website_purchase: {
+    title:"구매 완료",env:"ALIMTALK_TPL_WEBSITE_PURCHASE",code:"UN_2929",
+    text:"[소셜팩토리 건대] 이용권 구매 완료\n\n이용권이 정상적으로 등록되었습니다.\n\n■ 주문번호: #{주문번호}\n■ 구매 상품: #{이용권}\n■ 결제 금액: #{금액}원\n■ 이용 시작: #{시작일시}\n■ 이용 종료: #{종료일시}\n\n아래 버튼에서 주문을 확인하고 이용 시작 전에 시간을 변경할 수 있습니다.\n공간 이용 방법은 이용 안내 버튼에서 확인해 주세요.",
+    buttons:{button:[{name:"내 주문 확인·시간 변경",linkType:"WL",linkMo:"https://socialfactory.co.kr/order-complete?oid=#{주문번호}&t=#{주문토큰}",linkPc:"https://socialfactory.co.kr/order-complete?oid=#{주문번호}&t=#{주문토큰}"},{name:"이용 안내",linkType:"WL",linkMo:"https://socialfactory.co.kr/guide",linkPc:"https://socialfactory.co.kr/guide"}]}
+  },
   purchase: {
     title: "구매 완료", env: "ALIMTALK_TPL_PURCHASE", code: "UM_9903",
     text: "[소셜팩토리 건대] 이용권 구매 완료\n\n이용권이 정상적으로 등록되었습니다.\n\n■ 구매 상품: #{이용권}\n■ 결제 금액: #{금액}원\n■ 이용 시작: #{시작일시}\n■ 이용 종료: #{종료일시}\n\n공간 이용 방법과 시설 안내는 아래 이용 안내를 통해 확인 부탁드립니다.",
@@ -74,12 +81,15 @@ export function buildMessage(kind, vars, env = {}) {
       throw Object.assign(new Error(e.retryable === false ? e.message : "알림톡 버튼 JSON 형식 오류"), { retryable: false });
     }
   }
+  const links=(message.buttons?.button||[]).filter(b=>b.linkType==='WL').map(b=>b.name+": "+(b.linkMo||b.linkPc||""));
+  if(vars.__orderLink && !links.some(v=>v.includes(vars.__orderLink)))links.unshift("내 주문 확인·시간 변경: "+vars.__orderLink);
+  message.fallbackText=message.text+(links.length?"\n\n"+links.join("\n"):"");
   return message;
 }
 export const deliveryEnabled = env => String(env.ALIMTALK_ENABLED || "") === "1" && !!String(env.ALIMTALK_PROVIDER || "").trim();
 
 const PROVIDERS = {
-  aligo: (env, job, text, vars, message) => sendAligo(env, job, message, TEMPLATES[job.kind]),
+  aligo: (env, job, text, vars, message) => sendAligo(env, job, message, message.template || TEMPLATES[job.kind]),
   async webhook(env, job, text, vars, message) {
     if (!env.ALIMTALK_WEBHOOK_URL) throw new Error("ALIMTALK_WEBHOOK_URL 없음");
     const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 10000);
@@ -126,7 +136,16 @@ export async function runQueue(env, { limit = 30 } = {}) {
         await env.DB.prepare("UPDATE notification_jobs SET status = 'cancelled', updated_at = datetime('now', '+9 hours') WHERE id = ?1").bind(job.id).run();
         out.cancelled++; continue;
       }
-      const message = buildMessage(job.kind, vars, env);
+      let kind=job.kind;
+      if(kind==='purchase'){
+        const order=await env.DB.prepare("SELECT o.oid,o.buyer_phone FROM website_order_passes w JOIN pass_payments pp ON pp.payment_key=w.payment_key JOIN passes p ON p.payment_id=pp.id JOIN orders o ON o.oid=w.oid WHERE p.id=? AND pp.channel='website'").bind(job.pass_id).first().catch(()=>null);
+        if(order && phoneDigits(order.buyer_phone)===phoneDigits(job.phone)){
+          vars.주문번호=order.oid;vars.주문토큰=await orderToken(env,order.oid);vars.__orderLink="https://socialfactory.co.kr/order-complete?oid="+encodeURIComponent(order.oid)+"&t="+vars.주문토큰;
+          if(provider==='aligo' && await approvedWebsiteTemplate(env,TEMPLATES.website_purchase))kind='website_purchase';
+        }
+      }
+      const message = buildMessage(kind, vars, env);
+      if(kind==='website_purchase')message.template=TEMPLATES.website_purchase;
       text = message.text;
       if (!provider) {
         await env.DB.prepare("UPDATE notification_jobs SET status = 'logged', rendered = ?1, provider = 'log', updated_at = datetime('now', '+9 hours') WHERE id = ?2").bind(text, job.id).run();
