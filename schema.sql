@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS auth_events (
 );
 CREATE INDEX IF NOT EXISTS idx_auth_events ON auth_events (kind, created_at);
 
--- 주문 · 결제 (이용권 온라인 판매, KG이니시스) ------------------------------------
+-- 주문 · 결제 (이용권 온라인 판매, 페이앱) ------------------------------------
 CREATE TABLE IF NOT EXISTS orders (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   oid           TEXT    NOT NULL UNIQUE,                             -- 주문번호 (결제사에도 같은 값 전달)

@@ -185,7 +185,7 @@ button.kpi:hover { border-color: var(--blue); }
 .ch-link.kakao .ch-mark { background: #FEE500; color: #191919; }
 .ch-link.spacecloud .ch-mark { background: #7B5BE0; }
 .ch-link.gmail .ch-mark { background: #EA4335; }
-.ch-link.inicis .ch-mark { background: #E5322D; }
+.ch-link.payapp .ch-mark { background: #3454E8; }
 .ch-link.cloudflare .ch-mark { background: #F38020; }
 .ch-link b { display: block; font-size: 14px; }
 .ch-link small { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
