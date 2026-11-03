@@ -63,7 +63,7 @@
     <div class="oc-wrap">
       <div class="oc-card form-done" data-oc-done hidden>
         <h3>결제가 완료되었습니다</h3>
-        <p>아래 주문번호를 캡처하거나 적어 두세요. 적어 주신 휴대폰 번호로 1영업일 안에 입실 안내(출입 방법 · 유효기간)를 보내 드립니다.</p>
+        <p>아래 주문번호와 이 페이지 주소를 저장해 두세요. 비회원도 이 페이지에서 주문을 확인하고 이용 시작 전 시간을 변경할 수 있습니다. 적어 주신 휴대폰 번호로 1영업일 안에 입실 안내(출입 방법 · 유효기간)를 보내 드립니다.</p>
         <p class="receipt mt-16" data-oc-oid>—</p>
         <p class="oc-test" data-oc-test hidden>테스트 결제로 처리된 주문입니다. 실제로 돈이 빠져나가지 않았습니다.</p>
       </div>
@@ -101,7 +101,7 @@
         <h3 class="h4 mt-32">다음 안내</h3>
         <ul class="checks mt-16">
           <li>이용 당일 현장에서 이름 또는 주문번호를 말씀하시거나, 문자로 안내받은 출입 방법으로 들어오시면 됩니다.</li>
-          <li>이용 시작일을 바꾸거나 환불을 원하시면 주문번호와 함께 카카오톡 문의채널 · 이메일 · 문의 폼으로 알려 주세요. 규정은 <a href="/shop#policy">발급 · 교환 · 환불 안내</a>에 있습니다.</li>
+          <li>2시간권·데이패스는 이용 시작 전에 아래에서 시간을 변경할 수 있습니다. 다른 상품의 일정 변경이나 환불은 주문번호와 함께 카카오톡 문의채널 · 이메일 · 문의 폼으로 알려 주세요. 규정은 <a href="/shop#policy">발급 · 교환 · 환불 안내</a>에 있습니다.</li>
           <li>카드 영수증(매출전표)은 결제창에서 받은 이메일 또는 카드사 앱에서 확인할 수 있습니다.</li>
         </ul>
         <div class="actions">
@@ -111,6 +111,17 @@
         </div>
         </div>
       </div>
+      <section class="my-card mt-24" data-oc-change hidden aria-labelledby="change-title">
+        <h2 id="change-title">이용 시간 변경</h2>
+        <p class="note mt-16">2시간권·데이패스는 이용 시작 전까지 변경할 수 있습니다. 새 일정도 원래 구매일로부터 90일 안에서 선택해 주세요. 늦게 입실해도 종료 시각은 바뀌지 않습니다.</p>
+        <p class="auth-notice" data-oc-change-unavailable hidden></p>
+        <form data-oc-change-form novalidate class="mt-16">
+          <label class="af-field"><span>새 이용 시작 날짜·시간 <em>*</em> <small>한국 시간 기준</small></span><input name="startAt" type="datetime-local" step="60" required></label>
+          <div class="od-schedule" aria-live="polite"><b>변경 후 이용 시간</b><p data-oc-change-period>새 시작 시각을 선택해 주세요.</p></div>
+          <button type="submit" class="btn btn-primary" data-oc-change-save>이용 시간 변경 저장</button>
+        </form>
+        <p class="auth-notice mt-16" role="status" data-oc-change-message hidden></p>
+      </section>
       <p class="my-loading" data-oc-loading>주문 결과를 확인하고 있습니다…</p>
     </div>
   </div>
@@ -194,6 +205,6 @@
 <a class="kakao-fab" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener" aria-label="카카오톡으로 문의하기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span class="kf-t">카카오톡 문의</span></a>
 <script src="js/site-config.js?v=3361ee9a-room3-16"></script>
 <script src="js/main.js?v=980aaa85"></script>
-<script src="js/shop.js?v=20261103-scheduled-start"></script>
+<script src="js/shop.js?v=20261103-reschedule"></script>
 </body>
 </html>

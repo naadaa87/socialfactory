@@ -113,10 +113,12 @@ export async function runQueue(env, { limit = 30 } = {}) {
   const { results } = await env.DB.prepare("SELECT * FROM notification_jobs WHERE status = 'queued' AND send_after <= ?1 ORDER BY send_after LIMIT ?2").bind(now, limit).all();
   const provider = deliveryEnabled(env) ? String(env.ALIMTALK_PROVIDER).trim() : "";
   const out = { ok: true, picked: results.length, sent: 0, logged: 0, failed: 0, retry: 0, cancelled: 0, provider: provider || "log" };
-  for (const job of results) {
+  for (const candidate of results) {
     // 먼저 '보내는 중'으로 잡아 둔 것만 보냅니다 (동시에 돈 다른 발송기와 겹치지 않게)
-    const claim = await env.DB.prepare("UPDATE notification_jobs SET status = 'sending', provider = ?1, attempts = attempts + 1, updated_at = datetime('now', '+9 hours') WHERE id = ?2 AND status = 'queued'").bind(provider || "log", job.id).run();
+    const claim = await env.DB.prepare("UPDATE notification_jobs SET status = 'sending', provider = ?1, attempts = attempts + 1, updated_at = datetime('now', '+9 hours') WHERE id = ?2 AND status = 'queued'").bind(provider || "log", candidate.id).run();
     if (!claim.meta || !claim.meta.changes) continue;
+    const job = await env.DB.prepare("SELECT * FROM notification_jobs WHERE id=?1").bind(candidate.id).first();
+    if(!job)continue;
     let text = "", accepted = false;
     try {
       const vars = JSON.parse(job.vars || "{}");
@@ -142,7 +144,7 @@ export async function runQueue(env, { limit = 30 } = {}) {
         .bind(text, provider, (r && r.messageId) || null, job.id).run();
       out.sent++;
     } catch (e) {
-      const tries = (job.attempts || 0) + 1, wait = e.retryable === false || (provider === "aligo" && accepted) ? null : RETRY_MIN[tries - 1];
+      const tries = job.attempts || 1, wait = e.retryable === false || (provider === "aligo" && accepted) ? null : RETRY_MIN[tries - 1];
       const msg = provider === "aligo" && accepted ? "알리고 접수 후 기록 실패 — 전송내역 확인 후 수동 재시도" : String((e && e.message) || e).slice(0, 300);
       if (wait) {
         await env.DB.prepare("UPDATE notification_jobs SET status = 'queued', send_after = datetime('now', '+9 hours', ?1), last_error = ?2, rendered = ?3, updated_at = datetime('now', '+9 hours') WHERE id = ?4").bind(`+${wait} minutes`, msg, text, job.id).run();

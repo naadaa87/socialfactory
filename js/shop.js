@@ -249,6 +249,52 @@
     };
     var refresh=$("[data-oc-refresh]");
     if(refresh) refresh.addEventListener("click",function(){clearTimeout(timer);attempts=0;checkOrder();});
+    var changeForm=$("[data-oc-change-form]"), changeAttempt;
+    var changeMessage=function(text,bad){var box=$("[data-oc-change-message]");if(!box)return;box.textContent=text||"";box.hidden=!text;box.className="auth-notice mt-16"+(bad?" err":"");};
+    var changeKst=function(ms){return new Date(ms+9*3600e3).toISOString().slice(0,16);};
+    function changePeriod(){
+      if(!changeForm || !lastOrder)return;
+      var value=changeForm.elements.startAt.value,ms=Date.parse(value+":00+09:00");
+      if(!value || !isFinite(ms)){set("[data-oc-change-period]","새 시작 시각을 선택해 주세요.");return;}
+      var end=lastOrder.productId==="cowork-day" ? Date.parse(value.slice(0,10)+"T00:00:00+09:00")+lastOrder.qty*864e5 : ms+lastOrder.qty*2*3600e3;
+      set("[data-oc-change-period]",value.replace("T"," ")+" ~ "+changeKst(end).replace("T"," ")+" (한국 시간)");
+    }
+    function renderChange(o){
+      var schedule=o.schedule;
+      if(!changeForm || !schedule || !schedule.supported || o.status==="pending"){hide("[data-oc-change]");return;}
+      show("[data-oc-change]");changeForm.hidden=!schedule.allowed;
+      set("[data-oc-change-unavailable]",schedule.message||"");
+      $("[data-oc-change-unavailable]").hidden=!!schedule.allowed;
+      if(schedule.allowed){
+        changeForm.elements.startAt.min=changeKst(Date.now()+60000);
+        changeForm.elements.startAt.max=schedule.maxStart.slice(0,16).replace(" ","T");
+        changeForm.elements.startAt.value=o.startDate.slice(0,16).replace(" ","T");changePeriod();
+      }
+    }
+    if(changeForm){
+      changeForm.elements.startAt.addEventListener("input",changePeriod);
+      changeForm.addEventListener("submit",function(e){
+        e.preventDefault();changeMessage("");
+        if(!lastOrder || !lastOrder.schedule || !lastOrder.schedule.allowed)return;
+        var value=changeForm.elements.startAt.value,ms=Date.parse(value+":00+09:00"),problem;
+        if(!value || !isFinite(ms) || changeKst(ms)!==value)problem=FIELD.datetime;
+        else if(ms<=Date.now())problem=FIELD.pastTime;
+        else if(value.replace("T"," ")+":00">lastOrder.schedule.maxStart)problem="원래 구매일로부터 90일 안의 시각을 선택해 주세요.";
+        if(problem){changeMessage(problem,true);return;}
+        var body={oid:oid,token:tok,startAt:value,expectedStart:lastOrder.startDate};
+        var fingerprint=JSON.stringify(body);
+        if(!changeAttempt || changeAttempt.fingerprint!==fingerprint)changeAttempt={fingerprint:fingerprint,id:crypto.randomUUID()};
+        body.requestId=changeAttempt.id;
+        var save=$("[data-oc-change-save]");save.disabled=true;save.textContent="변경 저장 중…";
+        api("POST","/api/orders/reschedule",body).then(function(res){
+          save.disabled=false;save.textContent="이용 시간 변경 저장";
+          if(res.j.ok){changeAttempt=null;changeMessage("이용 시간이 변경되었습니다. 종료 시각과 아직 발송하지 않은 알림 예약도 함께 갱신했습니다.");clearTimeout(timer);checkOrder();return;}
+          var fields={originalLimit:"원래 구매일로부터 90일 안의 시각을 선택해 주세요.",datetime:FIELD.datetime,pastTime:FIELD.pastTime,farTime:FIELD.farTime};
+          changeMessage(fields[res.j.field] || res.j.message || (res.status===403 ? "주문을 변경할 권한이 없습니다. 구매한 계정으로 로그인하거나 주문 완료 페이지 주소를 확인해 주세요." : "저장 결과를 확인하지 못했습니다. 새로 결제하지 말고 같은 내용으로 다시 시도해 주세요."),true);
+          if(res.status===409)checkOrder();
+        });
+      });
+    }
     var STATUS_CLASS = { paid: "done", used: "done", pending: "ing", refund_requested: "ing", refunded: "", cancelled: "", failed: "" };
     if (!oid) {
       finish(); show("[data-oc-notfound]"); set("[data-oc-title]", "주문을 찾을 수 없습니다"); set("[data-oc-lead]", "주문번호가 없는 주소입니다.");
@@ -265,7 +311,7 @@
           if(attempts<15) timer=setTimeout(checkOrder,2000); return;
         }
         if (!o) { hide("[data-oc-pending]"); show("[data-oc-notfound]"); set("[data-oc-title]", "주문을 찾을 수 없습니다"); set("[data-oc-lead]", "주소를 다시 확인해 주세요."); return; }
-        lastOrder=o; hide("[data-oc-pending]"); hide("[data-oc-notfound]"); hide("[data-oc-fail]"); hide("[data-oc-done]");
+        lastOrder=o; renderChange(o); hide("[data-oc-pending]"); hide("[data-oc-notfound]"); hide("[data-oc-fail]"); hide("[data-oc-done]");
         var paid = o.status === "paid" || o.status === "used";
         if (paid) show("[data-oc-use-guide]"); else hide("[data-oc-use-guide]");
         if (paid) {
