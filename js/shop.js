@@ -1,5 +1,5 @@
 /* 소셜팩토리 — 이용권 구매 (상품 · 주문서 · 주문 완료)
-   결제는 KG이니시스 표준결제(PC 결제창 · 모바일 결제)를 쓰고, 금액 계산과 승인은 모두 서버(functions/api/orders, functions/api/pay)에서 합니다. */
+   결제는 설정된 결제사(페이앱 · KG이니시스)를 쓰고, 금액 계산과 승인은 모두 서버(functions/api/orders, functions/api/pay)에서 합니다. */
 (function () {
   "use strict";
   var $ = function (s, r) { return (r || document).querySelector(s); };
@@ -15,6 +15,9 @@
       .catch(function () { return { status: 0, j: { error: "network" } }; });
   };
   var MSG = {
+    "pay-rejected": "결제창을 준비하지 못했습니다. 잠시 후 다시 시도하거나 카카오톡으로 문의해 주세요.",
+    "rate-limit": "결제 요청이 많습니다. 잠시 후 다시 시도해 주세요.",
+    "request-conflict": "주문 내용이 바뀌었습니다. 페이지를 새로 고친 뒤 다시 시도해 주세요.",
     "pay-off": "온라인 결제를 준비하고 있습니다. 카카오톡 문의채널이나 문의 폼으로 신청해 주세요.",
     "no-db": "온라인 결제를 준비하고 있습니다. 카카오톡 문의채널이나 문의 폼으로 신청해 주세요.",
     "no-table": "주문 저장소가 아직 준비되지 않았습니다. 관리자에게 알려 주세요.",
@@ -30,7 +33,7 @@
     var ready = res.status === 200 && !!pay.ready;
     $$("[data-pay-off]").forEach(function (el) { el.hidden = ready; });
     $$("[data-pay-test]").forEach(function (el) { el.hidden = !(ready && pay.test); });
-    return { ready: ready, test: !!pay.test, mobile: !!pay.mobile };
+    return { ready: ready, test: !!pay.test, mobile: !!pay.mobile, provider:pay.provider };
   });
 
   /* ---------------- 수량 스테퍼 ---------------- */
@@ -119,7 +122,9 @@
       var submitBtn = $("[data-od-submit]");
       var busy = function (on) { submitBtn.disabled = on; submitBtn.classList.toggle("is-busy", on); $("[data-od-total-btn]").parentNode.lastChild.textContent = on ? " 결제창을 여는 중…" : "원 결제하기"; };
 
+      var paymentProvider = "", currentAttempt;
       payState.then(function (ps) {
+        paymentProvider = ps.provider;
         loading.hidden = true;
         if (!ps.ready) { $("[data-pay-off]", orderPage).hidden = false; return; }
         $("[data-od-main]").hidden = false;
@@ -138,14 +143,23 @@
         if (!reqs.every(function (c) { return c.checked; })) { showErr("agree", "필수 항목에 모두 동의해 주세요."); ok = false; }
         if (!ok) { var first = $("[aria-invalid], [data-err]:not([hidden])", form); if (first) first.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
         busy(true);
-        api("POST", "/api/orders", {
+        var payload = {
           productId: product.id, qty: st.get(), name: el.name.value.trim(), phone: el.phone.value.trim(), email: el.email.value.trim(),
           startDate: product.start === "date" ? el.startDate.value : "", memo: el.memo.value.trim(), payMethod: el.payMethod.value,
           device: isMobile ? "mobile" : "pc", agreeTerms: el.agreeTerms.checked, agreePrivacy: el.agreePrivacy.checked, agreeRefund: el.agreeRefund.checked, website: el.website.value
-        }).then(function (res) {
+        };
+        if (paymentProvider === "payapp") {
+          var fingerprint = JSON.stringify(payload), attempt=currentAttempt;
+          try { attempt=JSON.parse(sessionStorage.getItem("sf_payapp_attempt") || "null") || currentAttempt; } catch (err) {}
+          if (!attempt || attempt.fingerprint !== fingerprint) attempt={fingerprint:fingerprint,id:crypto.randomUUID()};
+          currentAttempt=attempt; payload.requestId=attempt.id;
+          try { sessionStorage.setItem("sf_payapp_attempt",JSON.stringify(attempt)); } catch (err) {}
+        }
+        api("POST", "/api/orders", payload).then(function (res) {
           var j = res.j || {};
           if (!j.ok) {
             busy(false);
+            if (j.error === "pay-rejected") { currentAttempt=null; try { sessionStorage.removeItem("sf_payapp_attempt"); } catch (err) {} }
             if (j.error === "invalid" && j.fields) {
               Object.keys(j.fields).forEach(function (k) { showErr(k, k === "agree" ? "필수 항목에 모두 동의해 주세요." : (FIELD[j.fields[k]] || FIELD.required)); });
               if (j.fields.productId) notice("상품 정보가 바뀌었습니다. 이용권 목록에서 다시 골라 주세요.");
@@ -153,7 +167,14 @@
             return;
           }
           try { sessionStorage.setItem("sf_last_order", JSON.stringify({ oid: j.oid, t: j.token })); } catch (err) { /* 저장 못 해도 진행 */ }
-          if (j.pay.mode === "mobile") openMobile(j.pay); else openPc(j.pay, j);
+          if (j.pay.mode === "payapp") {
+            try {
+              var dest = new URL(j.pay.url);
+              var payappHost = dest.hostname === "payapp.kr" || /\.payapp\.kr$/.test(dest.hostname);
+              if (dest.protocol !== "https:" || dest.username || dest.password || dest.port || !(payappHost || (dest.origin === location.origin && dest.pathname === "/order-complete"))) throw new Error("payment-url");
+              location.assign(dest.href);
+            } catch (err) { busy(false); notice("결제창 주소를 확인하지 못했습니다. 카카오톡으로 문의해 주세요."); }
+          } else if (j.pay.mode === "mobile") openMobile(j.pay); else openPc(j.pay, j);
         });
       });
 
@@ -189,31 +210,56 @@
     var set = function (sel, v) { var el = $(sel); if (el) el.textContent = v; };
     var show = function (sel) { var el = $(sel); if (el) el.hidden = false; };
     var finish = function () { $("[data-oc-loading]").hidden = true; };
+    var attempts=0, timer, lastOrder;
+    var hide=function(sel){ var el=$(sel); if(el) el.hidden=true; };
+    var pending=function(o){
+      hide("[data-oc-fail]"); hide("[data-oc-done]"); show("[data-oc-pending]");
+      set("[data-oc-title]","결제 결과를 확인하고 있습니다");
+      set("[data-oc-lead]","승인 결과가 도착하면 자동으로 표시됩니다. 같은 주문을 다시 결제하지 마세요.");
+      var resume=$("[data-oc-resume]"); resume.hidden=true;
+      if (o && o.payurl) { try { var u=new URL(o.payurl); if(u.protocol==="https:" && !u.username && !u.password && !u.port && (u.hostname==="payapp.kr" || /\.payapp\.kr$/.test(u.hostname))) {resume.href=u.href;resume.hidden=false;} } catch(e) {} }
+      set("[data-oc-pending-note]", attempts<15 ? "잠시만 기다려 주세요…" : "아직 승인 결과를 받지 못했습니다. 결제를 마쳤다면 재결제하지 말고 주문번호와 함께 문의해 주세요.");
+    };
+    var refresh=$("[data-oc-refresh]");
+    if(refresh) refresh.addEventListener("click",function(){clearTimeout(timer);attempts=0;checkOrder();});
     var STATUS_CLASS = { paid: "done", used: "done", pending: "ing", refund_requested: "ing", refunded: "", cancelled: "", failed: "" };
     if (!oid) {
       finish(); show("[data-oc-notfound]"); set("[data-oc-title]", "주문을 찾을 수 없습니다"); set("[data-oc-lead]", "주문번호가 없는 주소입니다.");
     } else {
+      checkOrder();
+    }
+    function checkOrder() {
+      attempts++;
       api("GET", "/api/orders/status?oid=" + encodeURIComponent(oid) + "&t=" + encodeURIComponent(tok)).then(function (res) {
         finish();
         var o = res.j && res.j.order;
-        if (!o) { show("[data-oc-notfound]"); set("[data-oc-title]", "주문을 찾을 수 없습니다"); set("[data-oc-lead]", "주소를 다시 확인해 주세요."); return; }
+        if (!o && (!res.status || res.status>=500)) {
+          pending(lastOrder); set("[data-oc-lead]","서버 연결이 원활하지 않습니다. 재결제하지 말고 잠시 후 결과를 다시 확인해 주세요.");
+          if(attempts<15) timer=setTimeout(checkOrder,2000); return;
+        }
+        if (!o) { hide("[data-oc-pending]"); show("[data-oc-notfound]"); set("[data-oc-title]", "주문을 찾을 수 없습니다"); set("[data-oc-lead]", "주소를 다시 확인해 주세요."); return; }
+        lastOrder=o; hide("[data-oc-pending]"); hide("[data-oc-notfound]"); hide("[data-oc-fail]"); hide("[data-oc-done]");
         var paid = o.status === "paid" || o.status === "used";
+        if (paid) show("[data-oc-use-guide]"); else hide("[data-oc-use-guide]");
         if (paid) {
           show("[data-oc-done]"); set("[data-oc-oid]", o.oid); set("[data-oc-title]", "결제가 완료되었습니다"); set("[data-oc-lead]", o.productName + " 주문이 접수되었습니다. 주문번호를 꼭 보관해 주세요.");
           if (o.test) show("[data-oc-test]");
+        } else if (o.status === "pending" && o.provider === "payapp") {
+          pending(o); if(attempts<15) timer=setTimeout(checkOrder,2000);
         } else {
           show("[data-oc-fail]"); set("[data-oc-eyebrow]", "Payment failed"); set("[data-oc-title]", o.status === "pending" ? "결제가 완료되지 않았습니다" : o.statusLabel);
           set("[data-oc-lead]", o.status === "pending" ? "결제창이 닫혔거나 결제가 끝나지 않았습니다. 다시 시도해 주세요." : "이 주문은 " + o.statusLabel + " 상태입니다.");
-          if (params.fail || o.failMsg) set("[data-oc-fail-msg]", (params.fail || o.failMsg) + " — 돈이 빠져나갔다면 자동으로 취소되니 걱정하지 않으셔도 됩니다. 그래도 걱정되면 주문번호 " + o.oid + " 와 함께 알려 주세요.");
+          if (params.fail || o.failMsg) set("[data-oc-fail-msg]", (params.fail || o.failMsg) + " — 출금 또는 카드 승인이 확인되면 다시 결제하지 말고 주문번호 " + o.oid + " 와 함께 알려 주세요.");
           $("[data-oc-retry]").href = "/order?p=" + encodeURIComponent(o.productId) + "&qty=" + (o.qty || 1);
         }
         show("[data-oc-detail]");
         set("[data-oc-d-oid]", o.oid); set("[data-oc-d-product]", o.productName); set("[data-oc-d-amount]", won(o.amount)); set("[data-oc-d-pay]", o.payMethod + (o.cardName ? " · " + o.cardName : ""));
         if (o.startDate) { show("[data-oc-d-start-row]"); set("[data-oc-d-start-label]", o.startLabel || "이용 시작일"); set("[data-oc-d-start]", o.startDate); }
         set("[data-oc-d-validity]", o.validity || "—"); set("[data-oc-d-buyer]", o.buyerName + " · " + o.buyerPhone + (o.buyerEmail ? " · " + o.buyerEmail : ""));
+        if(o.refundedAmount) {show("[data-oc-refund-row]");set("[data-oc-refund]",won(o.refundedAmount)+"원");}
         set("[data-oc-d-paid]", o.paidAt || "—");
         var stEl = $("[data-oc-d-status]"); stEl.textContent = o.statusLabel; stEl.className = "mi-st " + (STATUS_CLASS[o.status] || "");
-        try { if (paid) sessionStorage.removeItem("sf_last_order"); } catch (e) { /* 없음 */ }
+        try { if (paid) {sessionStorage.removeItem("sf_last_order");sessionStorage.removeItem("sf_payapp_attempt");} } catch (e) { /* 없음 */ }
       });
     }
   }

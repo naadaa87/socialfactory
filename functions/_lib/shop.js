@@ -1,13 +1,15 @@
 /**
- * 주문 · 결제 공통 도구 (KG이니시스 표준결제 PC · 모바일)
+ * 주문 · 결제 공통 도구 (페이앱 · 기존 KG이니시스 PC/모바일)
  * ------------------------------------------------------------------
  * Cloudflare Pages 설정값
  *  - INICIS_MID             : 상점 아이디 (심사 기간에는 KG이니시스가 준 테스트 MID)
  *  - INICIS_SIGN_KEY        : 웹결제 Sign Key (PC 결제)
  *  - INICIS_MOBILE_HASH_KEY : 모바일 결제 위변조 Hash Key (모바일 결제) — 없으면 모바일도 PC 결제창을 씁니다
  *  - INICIS_TEST            : "1" 이면 화면에 '테스트 결제' 표시
- * 세 값이 없으면 상품은 보이되 결제 버튼 대신 '결제 준비 중' 안내가 나옵니다.
+ * 페이앱은 PAYAPP_* 키 4종 · PAYAPP_ENABLED=1 · SESSION_SECRET이 필요합니다.
+ * 준비되지 않은 결제사는 상품을 표시하되 결제 요청을 받지 않습니다.
  */
+import { payappConfig } from "./payapp.js";
 import { PRODUCT_MAP } from "./products.js";
 
 const enc = new TextEncoder();
@@ -17,7 +19,10 @@ export const sha512b64 = async (s) => btoa(String.fromCharCode(...new Uint8Array
 
 export function payConfig(env) {
   const mid = (env.INICIS_MID || "").trim(), signKey = (env.INICIS_SIGN_KEY || "").trim(), mobileKey = (env.INICIS_MOBILE_HASH_KEY || "").trim();
-  return { ready: !!(mid && signKey), mid, signKey, mobileKey, test: env.INICIS_TEST === "1" || /test/i.test(mid) };
+  const payapp = payappConfig(env);
+  const provider = env.SHOP_PAYMENT_PROVIDER || (payapp.configured ? "payapp" : "inicis");
+  return { provider, payapp, ready: provider === "payapp" ? payapp.live && !!env.SESSION_SECRET : provider === "inicis" && !!(mid && signKey),
+    mid, signKey, mobileKey, test: provider === "inicis" && (env.INICIS_TEST === "1" || /test/i.test(mid)) };
 }
 
 /* 주문번호: SF + 년월일시분초 + 무작위 4자 (이니시스 oid 규칙: 영문·숫자·-_ 40자 이내) */
@@ -104,7 +109,7 @@ export async function postForm(url, fields, env) {
 }
 export const parseNvp = (s) => Object.fromEntries(new URLSearchParams(s));
 
-export const PAY_METHOD = { Card: "신용 · 체크카드", DirectBank: "실시간 계좌이체", VBank: "가상계좌", HPP: "휴대폰", Kakaopay: "카카오페이", NaverPay: "네이버페이", Samsungpay: "삼성페이", Payco: "페이코", "0": "신용 · 체크카드", "1": "계좌이체", "2": "가상계좌", "3": "휴대폰" };
+export const PAY_METHOD = { "payapp:1": "카드", "payapp:2": "휴대폰", "payapp:4": "대면결제", "payapp:6": "계좌이체", "payapp:7": "가상계좌", "payapp:15": "카카오페이", "payapp:16": "네이버페이", "payapp:17": "등록결제", "payapp:21": "스마일페이", "payapp:22": "위챗페이", "payapp:23": "애플페이", "payapp:24": "내통장결제", "payapp:25": "토스페이", "payapp:26": "나나결제", Card: "신용 · 체크카드", DirectBank: "실시간 계좌이체", VBank: "가상계좌", HPP: "휴대폰", Kakaopay: "카카오페이", NaverPay: "네이버페이", Samsungpay: "삼성페이", Payco: "페이코", "0": "신용 · 체크카드", "1": "계좌이체", "2": "가상계좌", "3": "휴대폰" };
 
 /* 간단한 HTML 응답 (결제창 안에서 열리므로 맨 위 창을 이동시킨다) */
 export function htmlRedirect(to, note) {

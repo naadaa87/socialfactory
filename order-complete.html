@@ -67,9 +67,14 @@
         <p class="receipt mt-16" data-oc-oid>—</p>
         <p class="oc-test" data-oc-test hidden>테스트 결제로 처리된 주문입니다. 실제로 돈이 빠져나가지 않았습니다.</p>
       </div>
+      <div class="oc-card" data-oc-pending hidden aria-live="polite">
+        <h3>승인 확인 중</h3>
+        <p data-oc-pending-note>잠시만 기다려 주세요…</p>
+        <div class="actions"><button class="btn btn-primary" type="button" data-oc-refresh>결과 다시 확인</button><a class="btn btn-outline" data-oc-resume hidden>기존 결제창 이어서 열기</a><a class="btn btn-kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener">카카오톡 문의</a></div>
+      </div>
       <div class="oc-card form-fail" data-oc-fail hidden>
         <h3>결제가 완료되지 않았습니다</h3>
-        <p data-oc-fail-msg>결제창에서 결제가 취소되었거나 승인되지 않았습니다. 돈이 빠져나갔다면 자동으로 취소 처리되니 걱정하지 않으셔도 됩니다.</p>
+        <p data-oc-fail-msg>결제창에서 결제가 취소되었거나 승인되지 않았습니다. 출금 또는 카드 승인이 확인되면 다시 결제하지 말고 주문번호와 함께 문의해 주세요.</p>
         <div class="actions"><a class="btn btn-primary" data-oc-retry href="/shop">다시 주문하기</a><a class="btn btn-kakao" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg>카카오톡으로 문의</a></div>
       </div>
       <div class="oc-card form-fail" data-oc-notfound hidden>
@@ -84,6 +89,7 @@
           <div><dt>주문번호</dt><dd data-oc-d-oid>—</dd></div>
           <div><dt>상품</dt><dd data-oc-d-product>—</dd></div>
           <div><dt>결제 금액</dt><dd><b data-oc-d-amount>—</b>원 <small class="muted">(부가세 포함)</small></dd></div>
+          <div data-oc-refund-row hidden><dt>환불 금액</dt><dd data-oc-refund>—</dd></div>
           <div><dt>결제 수단</dt><dd data-oc-d-pay>—</dd></div>
           <div data-oc-d-start-row hidden><dt data-oc-d-start-label>이용 시작일</dt><dd data-oc-d-start>—</dd></div>
           <div><dt>유효기간</dt><dd data-oc-d-validity>—</dd></div>
@@ -91,6 +97,7 @@
           <div><dt>결제 시각</dt><dd data-oc-d-paid>—</dd></div>
           <div><dt>상태</dt><dd><span class="mi-st" data-oc-d-status>—</span></dd></div>
         </dl>
+        <div data-oc-use-guide hidden>
         <h3 class="h4 mt-32">다음 안내</h3>
         <ul class="checks mt-16">
           <li>이용 당일 현장에서 이름 또는 주문번호를 말씀하시거나, 문자로 안내받은 출입 방법으로 들어오시면 됩니다.</li>
@@ -101,6 +108,7 @@
           <a class="btn btn-kakao" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg>카카오톡 문의채널</a>
           <a class="btn btn-outline" href="/space#coworking">코워킹 공간 보기</a>
           <a class="btn btn-ghost" href="/mypage" data-member-link hidden>마이페이지에서 주문 보기</a>
+        </div>
         </div>
       </div>
       <p class="my-loading" data-oc-loading>주문 결과를 확인하고 있습니다…</p>
@@ -186,6 +194,6 @@
 <a class="kakao-fab" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener" aria-label="카카오톡으로 문의하기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span class="kf-t">카카오톡 문의</span></a>
 <script src="js/site-config.js?v=3361ee9a-room3-16"></script>
 <script src="js/main.js?v=980aaa85"></script>
-<script src="js/shop.js?v=c19b19af"></script>
+<script src="js/shop.js?v=20261103-payapp"></script>
 </body>
 </html>

@@ -221,6 +221,7 @@
     { id: "spacecloud", name: "스페이스클라우드", mark: "S", sub: "외부 예약 채널", links: [{ k: "호스트센터", s: "관리자", url: "https://partner.spacecloud.kr/manage/space" }, CT.spacecloud && { k: "공간 페이지", s: "고객", url: CT.spacecloud }] },
     CT.naver && { id: "naver", name: "네이버 예약", mark: "N", links: [{ k: "예약 페이지", s: "고객", url: CT.naver }] },
     { id: "gmail", name: "이메일", mark: "M", sub: CT.email || "", links: [{ k: "받은편지함", s: "메일함", url: "https://mail.google.com/mail/u/0/" }] },
+    { id: "payapp", name: "페이앱", mark: "P", sub: "온라인 결제 취소 · 정산", links: [{ k: "판매자센터", s: "관리자", url: "https://seller.payapp.kr/" }] },
     { id: "inicis", name: "KG이니시스", mark: "I", sub: "온라인 결제 취소 · 정산", links: [{ k: "가맹점관리자", s: "관리자", url: "https://iniweb.inicis.com/" }] },
     { id: "cloudflare", name: "Cloudflare", mark: "C", sub: "배포 · D1 · 설정값", links: [{ k: "대시보드", s: "관리자", url: "https://dash.cloudflare.com/" }] }
   ].filter(Boolean);
@@ -903,7 +904,7 @@
   /* =================== 주문 · 결제 =================== */
   var ORD = [];
   var OST = { pending: ["결제 대기", ""], paid: ["결제 완료", "ok"], used: ["이용 완료", "blue"], cancelled: ["취소", "gray"], refund_requested: ["환불 요청", "warn"], refunded: ["환불 완료", "gray"], failed: ["결제 실패", "bad"] };
-  var PGM = { Card: "카드", DirectBank: "계좌이체", VBank: "가상계좌", HPP: "휴대폰", Kakaopay: "카카오페이", NaverPay: "네이버페이", Samsungpay: "삼성페이", Payco: "페이코", "0": "카드", "1": "계좌이체", "2": "가상계좌", "3": "휴대폰" };
+  var PGM = { "payapp:1":"페이앱 · 카드", "payapp:2":"페이앱 · 휴대폰", "payapp:6":"페이앱 · 계좌이체", "payapp:7":"페이앱 · 가상계좌", "payapp:15":"페이앱 · 카카오페이", "payapp:16":"페이앱 · 네이버페이", "payapp:21":"페이앱 · 스마일페이", "payapp:23":"페이앱 · 애플페이", "payapp:25":"페이앱 · 토스페이", "payapp:pending":"페이앱 · 결제 대기", Card: "카드", DirectBank: "계좌이체", VBank: "가상계좌", HPP: "휴대폰", Kakaopay: "카카오페이", NaverPay: "네이버페이", Samsungpay: "삼성페이", Payco: "페이코", "0": "카드", "1": "계좌이체", "2": "가상계좌", "3": "휴대폰" };
   function loadOrd() {
     $("#ord-count").textContent = "불러오는 중…";
     api("/api/admin/orders?status=" + encodeURIComponent($("#ord-filter").value) + "&q=" + encodeURIComponent($("#ord-q").value.trim())).then(function (j) {
@@ -913,14 +914,14 @@
   function drawOrd() {
     var list = ORD.filter(function (o) { return $("#ord-test").checked || !o.test_mode; });
     $("#ord-rows").innerHTML = list.length ? list.map(function (o) {
-      var opts = ["paid", "used", "refund_requested", "refunded", "cancelled"];
+      var opts = o.payapp ? [o.status].concat(["used","refund_requested"].filter(function(k){return k!==o.status && ["paid","used","refund_requested"].indexOf(o.status)>=0;})) : ["paid", "used", "refund_requested", "refunded", "cancelled"];
       var sel = (o.status === "pending" || o.status === "failed") ? '<span class="st ' + OST[o.status][1] + '">' + OST[o.status][0] + "</span>" + (o.fail_msg ? "<small>" + esc(o.fail_msg) + "</small>" : "")
         : '<select class="select select-sm" data-ord-st="' + o.id + '">' + opts.map(function (k) { return '<option value="' + k + '"' + (o.status === k ? " selected" : "") + ">" + OST[k][0] + "</option>"; }).join("") + "</select>";
       var tel = String(o.buyer_phone || "").replace(/[^0-9+]/g, "");
       return '<tr><td><b class="mono">' + esc(o.oid) + "</b><small>" + esc(o.created_at) + "</small>" + (o.test_mode ? '<span class="st test">테스트</span> ' : "") + (o.member_id ? '<span class="st blue">회원 #' + esc(o.member_id) + "</span>" : "") + "</td>"
         + "<td>" + sel + "</td>"
         + "<td>" + esc(o.product_name) + "<small>" + esc(o.product_id) + " · " + esc(o.qty) + "개</small></td>"
-        + '<td class="nw"><b>' + won(o.amount) + "</b></td>"
+        + '<td class="nw"><b>' + won(o.amount) + "</b>" + (o.refunded_amount ? "<small>환불 " + won(o.refunded_amount) + "원 · 잔액 " + won(o.amount-o.refunded_amount) + "원</small>" : "") + "</td>"
         + "<td>" + esc(o.buyer_name) + (tel ? '<small><a href="tel:' + esc(tel) + '">' + esc(o.buyer_phone) + "</a></small>" : "") + (o.buyer_email ? "<small>" + esc(o.buyer_email) + "</small>" : "") + "</td>"
         + "<td>" + esc(PGM[o.pg_method] || (o.pay_method === "bank" ? "계좌이체" : "카드")) + (o.card_name ? " · " + esc(o.card_name) : "") + (o.card_num ? "<small>" + esc(o.card_num) + "</small>" : "") + (o.paid_at ? "<small>" + esc(o.paid_at) + "</small>" : "") + (o.tid ? '<small class="mono">TID ' + esc(o.tid) + "</small>" : "") + "<small>" + (o.device === "mobile" ? "모바일" : "PC") + "</small></td>"
         + "<td>" + (o.start_date ? "<b>" + esc(o.start_date) + "</b>" : "-") + (o.memo ? "<small>" + esc(o.memo) + "</small>" : "") + "</td>"
@@ -930,8 +931,8 @@
   $("#ord-rows").addEventListener("change", function (e) {
     var s = e.target.closest("[data-ord-st]");
     if (s) {
-      if (s.value === "refunded" && !confirm("KG이니시스 가맹점관리자에서 결제 취소를 마쳤나요? 여기서는 상태만 기록됩니다.")) { loadOrd(); return; }
-      api("/api/admin/orders", { method: "PATCH", body: { id: +s.dataset.ordSt, status: s.value } }).then(function () { toast("주문 상태를 바꿨습니다."); refreshCounts(); }).catch(function (x) { if (!guard(x)) toast(x.message); });
+      if (s.value === "refunded" && !confirm("결제사 가맹점관리자에서 결제 취소를 마쳤나요? 여기서는 상태만 기록됩니다.")) { loadOrd(); return; }
+      api("/api/admin/orders", { method: "PATCH", body: { id: +s.dataset.ordSt, status: s.value } }).then(function () { toast("주문 상태를 바꿨습니다."); refreshCounts(); }).catch(function (x) { loadOrd(); if (!guard(x)) toast(x.message); });
       return;
     }
     var m = e.target.closest("[data-ord-memo]");
@@ -940,7 +941,7 @@
   $("#ord-reload").addEventListener("click", loadOrd); $("#ord-filter").addEventListener("change", loadOrd); $("#ord-test").addEventListener("change", drawOrd);
   $("#ord-q").addEventListener("keydown", function (e) { if (e.key === "Enter") loadOrd(); });
   $("#ord-csv").addEventListener("click", function () {
-    var cols = ["oid", "created_at", "status", "product_id", "product_name", "qty", "amount", "buyer_name", "buyer_phone", "buyer_email", "start_date", "memo", "admin_memo", "pay_method", "pg_method", "card_name", "card_num", "tid", "paid_at", "device", "member_id", "test_mode"];
+    var cols = ["oid", "created_at", "status", "product_id", "product_name", "qty", "amount", "buyer_name", "buyer_phone", "buyer_email", "start_date", "memo", "admin_memo", "pay_method", "pg_method", "card_name", "card_num", "tid", "paid_at", "device", "member_id", "test_mode", "payapp", "refunded_amount"];
     csvDownload("소셜팩토리_주문.csv", cols, ORD.map(function (o) { return cols.map(function (k) { return o[k]; }); }));
   });
 
@@ -993,9 +994,9 @@
         + li(t.members && t.sessions, "회원 표 (members · sessions)", t.members ? "준비되어 있습니다." : "schema.sql 또는 schema-upgrade-members.sql 을 실행해 주세요.")
         + li(t.orders, "주문 표 (orders)", t.orders ? "준비되어 있습니다." : "schema-upgrade-orders.sql 을 D1 콘솔에서 실행해 주세요.");
       $("#set-pay").innerHTML =
-        li(st.inicis, "상점 아이디 · Sign Key (<code>INICIS_MID</code> · <code>INICIS_SIGN_KEY</code>)", st.inicis ? "설정되어 있습니다 (MID " + esc(st.inicisMid) + "). " + (st.inicisTest ? "지금은 테스트 결제 상태입니다 — 실제 돈이 오가지 않습니다." : "운영 결제 상태입니다.") : "없으면 상품은 보이되 '결제 준비 중'으로 표시됩니다.")
-        + li(st.inicisMobile, "모바일 Hash Key (<code>INICIS_MOBILE_HASH_KEY</code>)", st.inicisMobile ? "휴대폰에서는 이니시스 모바일 결제 페이지를 씁니다." : "없으면 휴대폰에서도 PC 결제창을 씁니다 (동작에는 문제 없음).", true)
-        + li(!st.inicisTest || !st.inicis, "운영 전환 (<code>INICIS_TEST</code> 지우기)", st.inicis && st.inicisTest ? "심사가 끝나고 실제 MID 를 받으면 INICIS_MID · INICIS_SIGN_KEY 를 실제 값으로 바꾸고 INICIS_TEST 를 지워 주세요." : "테스트 표시가 꺼져 있습니다.", true);
+        li(st.paymentReady, "온라인 결제 · " + (st.paymentProvider === "payapp" ? "페이앱" : "KG이니시스"), st.paymentReady ? "결제창을 사용할 수 있습니다." : "결제 설정이 완료되면 주문서에서 결제할 수 있습니다.")
+        + li(st.payappConfigured, "페이앱 연동키", st.payappConfigured ? "서버에 설정되어 있습니다. 비밀값은 화면에 표시하지 않습니다." : "판매자 아이디 · 연동 KEY · 연동 VALUE · 결제 KEY 설정이 필요합니다.", st.paymentProvider !== "payapp")
+        + li(st.payappEnabled, "페이앱 결제 사용", st.payappEnabled ? "승인 · 취소 결과를 주문 내역에 자동 반영합니다. 실제 환불은 페이앱 판매자센터에서 처리하세요." : "현재 페이앱 결제 요청이 꺼져 있거나 키가 준비되지 않았습니다.", st.paymentProvider !== "payapp");
       $("#set-opt").innerHTML =
         li(st.ipSalt, "IP 해시 소금값 (<code>IP_SALT</code>)", "접속 IP 를 그대로 저장하지 않기 위한 값입니다. 없어도 동작합니다.", true)
         + li(st.webhook, "알림 웹훅 (<code>NOTIFY_WEBHOOK</code>)", st.webhook ? "새 문의 · 결제 완료가 웹훅으로 전달됩니다." : "슬랙 · 디스코드 웹훅 주소를 넣으면 새 문의와 결제 완료를 바로 받을 수 있습니다.", true);
