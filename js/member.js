@@ -168,7 +168,7 @@
       ul.innerHTML = list.map(function (o) {
         var meta = [Number(o.amount).toLocaleString("ko-KR") + "원", o.payLabel, o.start_date ? "시작일 " + o.start_date : ""].filter(Boolean).join(" · ");
         return "<li><div class=\"mi-top\"><span class=\"mi-st " + (OSTATUS[o.status] || "") + "\">" + esc(o.statusLabel) + "</span><strong>" + esc(o.product_name) + "</strong><span class=\"mi-date\">" + esc((o.paid_at || o.created_at || "").slice(0, 16)) + "</span></div>" +
-          "<p class=\"mi-meta\">" + esc(meta) + "</p><p class=\"mi-receipt\">주문번호 " + esc(o.oid) + "</p></li>";
+          "<p class=\"mi-meta\">" + esc(meta) + "</p><p class=\"mi-receipt\">주문번호 " + esc(o.oid) + "</p><a class=\"btn btn-outline btn-sm mt-16\" href=\"/order-complete?oid=" + encodeURIComponent(o.oid) + "\">" + (/^\d{4}-\d{2}-\d{2} /.test(o.start_date || "") ? "주문 상세 · 이용 시간 변경" : "주문 상세 보기") + "</a></li>";
       }).join("");
       var empty = $("[data-my-orders-empty]"); if (empty) empty.hidden = list.length > 0;
     };
