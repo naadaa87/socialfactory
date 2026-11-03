@@ -60,3 +60,11 @@ https://:version.:project.pages.dev/*
 
 /workers/*
   X-Robots-Tag: noindex, nofollow
+
+/guest-orders
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
+/guest-orders.html
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store

@@ -1,5 +1,6 @@
 import {json,sameOrigin,clean,getMember,safeEqual} from '../../_lib/auth.js';
 import {orderToken} from '../../_lib/shop.js';
+import {getGuest,ownsGuestOrder} from "../../_lib/guest-orders.js";
 import {rescheduleWebsiteOrder} from '../../_lib/website-reschedule.js';
 export async function onRequestPost({request,env}){
  if(!sameOrigin(request))return json({ok:false,error:'origin'},403);
@@ -12,7 +13,8 @@ export async function onRequestPost({request,env}){
   if(!order)return json({ok:false,error:'not-found'},404);
   const member=await getMember(request,env);
   const token=clean(b.token,40),owner=member && order.member_id===member.id;
-  if(!owner && !(token && safeEqual(token,await orderToken(env,order.oid))))return json({ok:false,error:'forbidden'},403);
+  const guest=ownsGuestOrder(await getGuest(request,env),order);
+  if(!owner && !guest && !(token && safeEqual(token,await orderToken(env,order.oid))))return json({ok:false,error:'forbidden'},403);
   const r=await rescheduleWebsiteOrder(env,order,{startAt:b.startAt,expectedStart:b.expectedStart,requestId:b.requestId,actor:owner?'member:'+member.id:'guest'});
   return json(r,r.status||200);
  }catch{return json({ok:false,error:'save-failed',message:'변경을 저장하지 못했습니다. 새로 결제하지 말고 같은 내용으로 다시 시도해 주세요.'},500)}

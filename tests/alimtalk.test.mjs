@@ -96,7 +96,7 @@ test('알리고 인증정보가 있어도 검수 중에는 네트워크 호출 �
   assert(f.one("SELECT rendered FROM notification_jobs WHERE kind = 'purchase'").rendered.includes('4,000원'));
 });
 
-test('4종 모두 알리고 폼 형식으로 요청하고 접수 ID 저장, 문자 대체발송은 꺼짐', async t => {
+test('4종 모두 알리고 폼 형식으로 요청하고 접수 ID 저장, 문자 대체발송 활성화', async t => {
   const f = fixture(t, true), api = apiMock(t);
   await issuePassForPayment(f.env, f.pay());
   await runQueue(f.env);
@@ -111,7 +111,7 @@ test('4종 모두 알리고 폼 형식으로 요청하고 접수 ID 저장, 문�
   for (const request of api.requests) {
     assert.equal(request.url, 'https://kakaoapi.aligo.in/akv10/alimtalk/send/');
     assert.equal(request.form.get('receiver_1'), '01000000000');
-    assert.equal(request.form.get('failover'), 'N');
+    assert.equal(request.form.get('failover'), 'Y');
     assert(!request.form.get('message_1').includes('#{'));
     assert.equal(request.options.redirect, 'manual');
   }
@@ -211,7 +211,7 @@ test('고정 IP 중계는 전용 Bearer 인증을 쓰고 승인 문구·수신�
   assert.equal(request.form.get('receiver_1'), '01000000000');
   assert.equal(request.form.get('apikey'), f.env.ALIGO_API_KEY);
   assert.equal(request.form.get('testMode'), 'Y');
-  assert.equal(request.form.get('failover'), 'N');
+  assert.equal(request.form.get('failover'), 'Y');
   assert.equal(request.form.get('tpl_code'), 'PURCHASE');
 });
 
