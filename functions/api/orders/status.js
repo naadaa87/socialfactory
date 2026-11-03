@@ -19,7 +19,7 @@ export async function onRequestGet({ request, env }) {
   return json({ ok: true, order: {
     oid: o.oid, provider:payment ? "payapp" : "inicis", refundedAmount:payment ? payment.refunded_amount : 0, payurl:payment && o.status === "pending" ? payment.payurl : null, status: o.status, statusLabel: ORDER_STATUS[o.status] || o.status, productId: o.product_id, productName: o.product_name, qty: o.qty, amount: o.amount,
     buyerName: o.buyer_name, buyerPhone: o.buyer_phone, buyerEmail: o.buyer_email || "", startDate: o.start_date || "", startLabel: p.startLabel || "",
-    payMethod: PAY_METHOD[o.pg_method] || o.pg_method || (o.pay_method === "bank" ? "실시간 계좌이체" : "신용 · 체크카드"), paidAt: o.paid_at || "", tid: o.tid || "",
+    payMethod: PAY_METHOD[o.pg_method] || (payment ? "페이앱" : o.pg_method) || (o.pay_method === "bank" ? "실시간 계좌이체" : "신용 · 체크카드"), paidAt: o.paid_at || "", tid: o.tid || "",
     cardName: o.card_name || "", failMsg: o.fail_msg || "", createdAt: o.created_at, test: !!o.test_mode, validity: p.validity || ""
   } });
 }
