@@ -222,7 +222,6 @@
     CT.naver && { id: "naver", name: "네이버 예약", mark: "N", links: [{ k: "예약 페이지", s: "고객", url: CT.naver }] },
     { id: "gmail", name: "이메일", mark: "M", sub: CT.email || "", links: [{ k: "받은편지함", s: "메일함", url: "https://mail.google.com/mail/u/0/" }] },
     { id: "payapp", name: "페이앱", mark: "P", sub: "온라인 결제 취소 · 정산", links: [{ k: "판매자센터", s: "관리자", url: "https://seller.payapp.kr/" }] },
-    { id: "inicis", name: "KG이니시스", mark: "I", sub: "온라인 결제 취소 · 정산", links: [{ k: "가맹점관리자", s: "관리자", url: "https://iniweb.inicis.com/" }] },
     { id: "cloudflare", name: "Cloudflare", mark: "C", sub: "배포 · D1 · 설정값", links: [{ k: "대시보드", s: "관리자", url: "https://dash.cloudflare.com/" }] }
   ].filter(Boolean);
   (function drawLinks() {
@@ -994,7 +993,7 @@
         + li(t.members && t.sessions, "회원 표 (members · sessions)", t.members ? "준비되어 있습니다." : "schema.sql 또는 schema-upgrade-members.sql 을 실행해 주세요.")
         + li(t.orders, "주문 표 (orders)", t.orders ? "준비되어 있습니다." : "schema-upgrade-orders.sql 을 D1 콘솔에서 실행해 주세요.");
       $("#set-pay").innerHTML =
-        li(st.paymentReady, "온라인 결제 · " + (st.paymentProvider === "payapp" ? "페이앱" : "KG이니시스"), st.paymentReady ? "결제창을 사용할 수 있습니다." : "결제 설정이 완료되면 주문서에서 결제할 수 있습니다.")
+        li(st.paymentReady && st.paymentProvider === "payapp", "온라인 결제 · 페이앱", st.paymentReady && st.paymentProvider === "payapp" ? "결제창을 사용할 수 있습니다." : "결제 설정이 완료되면 주문서에서 결제할 수 있습니다.")
         + li(st.payappConfigured, "페이앱 연동키", st.payappConfigured ? "서버에 설정되어 있습니다. 비밀값은 화면에 표시하지 않습니다." : "판매자 아이디 · 연동 KEY · 연동 VALUE · 결제 KEY 설정이 필요합니다.", st.paymentProvider !== "payapp")
         + li(st.payappEnabled, "페이앱 결제 사용", st.payappEnabled ? "승인 · 취소 결과를 주문 내역에 자동 반영합니다. 실제 환불은 페이앱 판매자센터에서 처리하세요." : "현재 페이앱 결제 요청이 꺼져 있거나 키가 준비되지 않았습니다.", st.paymentProvider !== "payapp");
       $("#set-opt").innerHTML =
