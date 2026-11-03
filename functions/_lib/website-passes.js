@@ -13,14 +13,15 @@ export async function ensureWebsitePasses(env){
  await ensureSchema(env);
  await env.DB.batch(WEBSITE_PASS_SCHEMA.map(s=>env.DB.prepare(s)));
 }
-export function websiteTerms(product){
+export function websiteTerms(product,startAt=null){
  const rules={
   'cowork-2h':{group:'seat',duration:{hours:2},activation:'checkin',redeemDays:90,remind:[20]},
   'cowork-day':{group:'seat',duration:{days:1},activation:'checkin',redeemDays:90,endOfDay:true,remind:[120]},
   'cowork-month':{group:'seat',duration:{months:1},activation:'date',remind:[4320,1440]},
   'locker-month':{group:'locker',duration:{months:1},activation:'date',remind:[4320,1440]}
  };
- return product && rules[product.id] ? {id:product.id,name:product.name,...rules[product.id]} : null;
+ const rule=product && rules[product.id];
+ return rule ? {id:product.id,name:product.name,...rule,...(rule.activation==='checkin' && startAt ? {activation:'scheduled',startAt} : {})} : null;
 }
 const eligible="o.status IN ('paid','refund_requested') AND o.paid_at IS NOT NULL AND EXISTS(SELECT 1 FROM payapp_payments pg WHERE pg.oid=o.oid AND pg.mul_no=o.tid)";
 const payKey=(oid,unit)=>'WEB_'+oid+'_'+unit;
@@ -40,13 +41,13 @@ export async function syncWebsiteOrder(env,oid){
   ON CONFLICT(phone) DO UPDATE SET name=CASE WHEN COALESCE(customers.name,'')='' THEN excluded.name ELSE customers.name END,updated_at=datetime('now','+9 hours')`,phone,formatPhone(phone),order.buyer_name,oid)];
  if(!saved) batch.push(sql('INSERT OR IGNORE INTO website_order_terms(oid,terms) VALUES (?,?)',oid,JSON.stringify(terms)));
  const now=order.paid_at||kstNow(),redeem=terms.activation==='checkin'?fromMs(toMs(now)+terms.redeemDays*864e5):null;
- const base=terms.activation==='date' && /^\d{4}-\d{2}-\d{2}$/.test(order.start_date||'') ? order.start_date+' 00:00:00' : now;
+ const base=terms.activation==='scheduled' ? terms.startAt : terms.activation==='date' && /^\d{4}-\d{2}-\d{2}$/.test(order.start_date||'') ? order.start_date+' 00:00:00' : now;
  const unitAmount=Math.floor(order.amount/qty),before=await env.DB.prepare('SELECT COUNT(*) AS n FROM website_order_passes w JOIN pass_payments pp ON pp.payment_key=w.payment_key JOIN passes p ON p.payment_id=pp.id WHERE w.oid=?').bind(oid).first();
  let scheduledCursor=base;
  for(let n=1;n<=qty;n++){
   const key=payKey(oid,n),amount=unitAmount+(n<=order.amount%qty?1:0),{tax,supplyValue}=splitVat(amount);
   const starts=terms.activation==='checkin'?now:scheduledCursor;
-  const ends=redeem||addDuration(starts,terms.duration);
+  const ends=redeem||(terms.activation==='scheduled' && terms.endOfDay ? fromMs(toMs(starts.slice(0,10)+' 00:00:00')+864e5) : addDuration(starts,terms.duration));
   if(!redeem)scheduledCursor=ends;
   batch.push(sql(`INSERT OR IGNORE INTO website_order_passes(oid,unit,payment_key,redeem_by) SELECT o.oid,?,?,? FROM orders o WHERE o.oid=? AND ${eligible}`,n,key,redeem,oid));
   batch.push(sql(`INSERT OR IGNORE INTO pass_payments(payment_key,status,channel,customer_id,product_id,product_name,amount,tax,supply,pay_method,tid,card_issuer,masked_card,paid_at,test_mode,admin_memo)
@@ -63,7 +64,7 @@ export async function syncWebsiteOrder(env,oid){
  await syncWebsiteRefund(env,oid);
  const after=await env.DB.prepare('SELECT COUNT(*) AS n FROM website_order_passes w JOIN pass_payments pp ON pp.payment_key=w.payment_key JOIN passes p ON p.payment_id=pp.id WHERE w.oid=?').bind(oid).first();
  const {results:active}=await env.DB.prepare("SELECT p.* FROM website_order_passes w JOIN pass_payments pp ON pp.payment_key=w.payment_key JOIN passes p ON p.payment_id=pp.id WHERE w.oid=? AND p.status='active' AND pp.status='paid'").bind(oid).all();
- for(const pass of active){const pay=await env.DB.prepare('SELECT * FROM pass_payments WHERE id=?').bind(pass.payment_id).first();await queuePassNotices(env,pass,pay,{purchaseNotice:false});}
+ for(const pass of active){const pay=await env.DB.prepare('SELECT * FROM pass_payments WHERE id=?').bind(pass.payment_id).first();await queuePassNotices(env,pass,pay,{purchaseNotice:terms.activation==='scheduled'});}
  return {issued:Math.max(0,after.n-before.n)};
 }
 export async function syncWebsiteRefund(env,oid){

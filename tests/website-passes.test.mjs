@@ -9,6 +9,7 @@ import {onRequestPost as backfill} from '../functions/api/admin/website-passes.j
 import {onRequestGet as passes,onRequestPatch as patchPass} from '../functions/api/admin/passes.js';
 import {onRequestGet as sales} from '../functions/api/admin/sales.js';
 import {onRequestGet as dashboard} from '../functions/api/admin/dashboard.js';
+import {runQueue} from '../functions/_lib/notify.js';
 import {kstStamp} from '../functions/_lib/payapp.js';
 import {sha256} from '../functions/_lib/shop.js';
 const ORIGIN='https://socialfactory.test';
@@ -83,3 +84,43 @@ test('전체 취소 통보의 사본 반영 실패도 관리자 자동 복구로
  const f=fixture(t),o=f.seed();await syncWebsiteOrder(f.env,o.oid);f.db.prepare("UPDATE orders SET status='refunded' WHERE oid=?").run(o.oid);f.db.prepare('UPDATE payapp_payments SET refunded_amount=4000 WHERE oid=?').run(o.oid);assert.equal((await syncWebsiteOrders(f.env)).orders,1);assert.equal(f.items()[0].status,'cancelled');assert.equal(f.items()[0].refund_amount,4000);assert.equal((await syncWebsiteOrders(f.env)).orders,0);
 });
 test('이미 이용 완료로 처리한 과거 주문에 새 입실 권리를 부여하지 않음',async t=>{const f=fixture(t),o=f.seed('cowork-2h',1,{status:'used'});await syncWebsiteOrder(f.env,o.oid);assert.equal(f.items().length,0);assert.equal((await syncWebsiteOrders(f.env)).orders,0)});
+
+test('예약 2시간권은 선택 시각과 수량별 연속 기간을 고정하고 재시도·조회로 바꾸지 않음',async t=>{
+ const f=fixture(t),o=f.seed('cowork-2h',2,{startDate:'2026-11-05 14:30:00'});
+ f.db.prepare('INSERT INTO website_order_terms VALUES (?,?)').run(o.oid,JSON.stringify(websiteTerms({id:'cowork-2h',name:'코워킹 2시간권'},'2026-11-05 14:30:00')));
+ await syncWebsiteOrder(f.env,o.oid);let ps=f.items();assert.equal(ps[0].status,'active');assert.equal(ps[0].starts_at,'2026-11-05 14:30:00');assert.equal(ps[0].ends_at,'2026-11-05 16:30:00');assert.equal(ps[1].starts_at,ps[0].ends_at);assert.equal(ps[1].ends_at,'2026-11-05 18:30:00');
+ const r=await(await passes({env:f.env,request:f.req('/api/admin/passes?state=active')})).json();assert.equal(r.results.length,2);
+ const before=ps.map(p=>[p.starts_at,p.ends_at]);await checkInWebsitePass(f.env,ps[0].id);await syncWebsiteOrder(f.env,o.oid);await f.feedback(o);assert.deepEqual(f.items().map(p=>[p.starts_at,p.ends_at]),before);
+ assert.equal(f.db.prepare("SELECT COUNT(*) n FROM notification_jobs WHERE kind='purchase'").get().n,2);
+ const reminder=f.db.prepare("SELECT * FROM notification_jobs WHERE kind='expire_soon' AND status='queued'").get();assert.equal(reminder.send_after,'2026-11-05 18:10:00');assert.equal(JSON.parse(reminder.vars).만료,'11월 5일 18:30');
+});
+test('예약 데이패스는 선택한 날 자정에 끝나고 시작 전 만료 알림은 만들지 않음',async t=>{
+ const f=fixture(t),o=f.seed('cowork-day',2,{startDate:'2026-11-05 23:00:00'});
+ f.db.prepare('INSERT INTO website_order_terms VALUES (?,?)').run(o.oid,JSON.stringify(websiteTerms({id:'cowork-day',name:'데이패스'},'2026-11-05 23:00:00')));
+ await syncWebsiteOrder(f.env,o.oid);const ps=f.items();assert.equal(ps[0].starts_at,'2026-11-05 23:00:00');assert.equal(ps[0].ends_at,'2026-11-06 00:00:00');assert.equal(ps[1].starts_at,ps[0].ends_at);assert.equal(ps[1].ends_at,'2026-11-07 00:00:00');
+ const one=f.seed('cowork-day',1,{startDate:'2026-11-08 23:00:00'});f.db.prepare('INSERT INTO website_order_terms VALUES (?,?)').run(one.oid,JSON.stringify(websiteTerms({id:'cowork-day',name:'데이패스'},'2026-11-08 23:00:00')));await syncWebsiteOrder(f.env,one.oid);const last=f.items().at(-1);assert.equal(f.db.prepare("SELECT send_after FROM notification_jobs WHERE kind='expire_soon' AND status='queued' AND pass_id=?").get(last.id).send_after,'2026-11-08 23:00:00');
+});
+test('예약 주문의 지연 승인·환불은 확정 기간을 미루지 않고 알림을 취소',async t=>{
+ const f=fixture(t),o=f.seed('cowork-2h',1,{startDate:'2026-11-03 15:00:00'});f.db.prepare('INSERT INTO website_order_terms VALUES (?,?)').run(o.oid,JSON.stringify(websiteTerms({id:'cowork-2h',name:'2시간권'},'2026-11-03 15:00:00')));
+ await f.feedback(o);assert.equal(f.items()[0].starts_at,'2026-11-03 15:00:00');assert.equal(f.items()[0].ends_at,'2026-11-03 17:00:00');assert.equal(f.db.prepare("SELECT COUNT(*) n FROM notification_jobs WHERE kind='expire_soon' AND status='queued'").get().n,0);
+ await f.feedback(o,'9');assert.equal(f.items()[0].status,'cancelled');assert.equal(f.db.prepare("SELECT COUNT(*) n FROM notification_jobs WHERE status='queued' AND kind!='refund'").get().n,0);
+});
+
+test('예약 구매 알림은 승인 후 1회, 만료 알림은 확정 종료 20분 전에만 발송',async t=>{
+ const f=fixture(t),o=f.seed('cowork-2h',1,{startDate:'2026-11-05 18:00:00'});f.db.prepare('INSERT INTO website_order_terms VALUES (?,?)').run(o.oid,JSON.stringify(websiteTerms({id:'cowork-2h',name:'2시간권'},'2026-11-05 18:00:00')));
+ Object.assign(f.env,{ALIMTALK_ENABLED:'1',ALIMTALK_PROVIDER:'webhook',ALIMTALK_WEBHOOK_URL:'https://notifications.example.test'});const sent=[];
+ t.mock.method(globalThis,'fetch',async(url,opts)=>{assert.equal(url,f.env.ALIMTALK_WEBHOOK_URL);sent.push(JSON.parse(opts.body));return new Response('{"id":"mock-message"}')});
+ await syncWebsiteOrder(f.env,o.oid);await syncWebsiteOrder(f.env,o.oid);await runQueue(f.env);assert.equal(sent.length,1);assert.equal(sent[0].kind,'purchase');assert(sent[0].text.includes('11월 5일 18:00'));assert(sent[0].text.includes('11월 5일 20:00'));
+ let now=Date.parse('2026-11-05T10:39:00Z');t.mock.method(Date,'now',()=>now);await runQueue(f.env);assert.equal(sent.length,1);
+ now+=60000;await runQueue(f.env);await runQueue(f.env);assert.equal(sent.length,2);assert.equal(sent[1].kind,'expire_soon');assert(sent[1].text.includes('11월 5일 20:00'));
+});
+
+test('날짜가 떨어진 예약은 각 이용의 만료를 안내하고, 미래 예약이 앞 예약 알림을 막지 않음',async t=>{
+ const f=fixture(t);
+ for(const start of ['2026-11-05 18:00:00','2026-11-10 18:00:00']){
+  const o=f.seed('cowork-2h',1,{startDate:start});f.db.prepare('INSERT INTO website_order_terms VALUES (?,?)').run(o.oid,JSON.stringify(websiteTerms({id:'cowork-2h',name:'2시간권'},start)));await syncWebsiteOrder(f.env,o.oid);
+ }
+ assert.equal(f.db.prepare("SELECT COUNT(*) n FROM notification_jobs WHERE kind='expire_soon' AND status='queued'").get().n,2);
+ Object.assign(f.env,{ALIMTALK_ENABLED:'1',ALIMTALK_PROVIDER:'webhook',ALIMTALK_WEBHOOK_URL:'https://notifications.example.test'});const sent=[];t.mock.method(globalThis,'fetch',async(_,opts)=>{sent.push(JSON.parse(opts.body));return new Response('{"id":"mock"}')});await runQueue(f.env);
+ t.mock.method(Date,'now',()=>Date.parse('2026-11-05T10:40:00Z'));await runQueue(f.env);const reminders=sent.filter(j=>j.kind==='expire_soon');assert.equal(reminders.length,1);assert(reminders[0].text.includes('11월 5일 20:00'));
+});

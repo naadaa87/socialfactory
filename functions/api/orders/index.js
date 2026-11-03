@@ -6,6 +6,7 @@ import { PRODUCT_MAP } from "../../_lib/products.js";
 import { payConfig, makeOid, orderToken, pcPayFields, mobilePayFields, pcJsUrl, sha256 } from "../../_lib/shop.js";
 import { json, clean, normEmail, validEmail, phoneDigits, formatPhone, sameOrigin, getMember, ipHashOf } from "../../_lib/auth.js";
 
+import { validateWebsiteStart } from "../../_lib/website-start.js";
 import { ensureWebsitePasses, websiteTerms } from "../../_lib/website-passes.js";
 import { ensurePayapp, requestPayment } from "../../_lib/payapp.js";
 
@@ -40,6 +41,12 @@ export async function onRequestPost({ request, env }) {
       else if (startDate > limit) fields.startDate = "far";
     }
   }
+  let scheduledStart="";
+  if(product && product.start === "datetime"){
+    const selected=validateWebsiteStart(b.startAt);
+    if(selected.error && (selected.error==="datetime" || cfg.provider!=="payapp"))fields.startAt=selected.error;
+    scheduledStart=selected.value||"";
+  }
   if (b.agreeTerms !== true || b.agreePrivacy !== true || b.agreeRefund !== true) fields.agree = "required";
   if (cfg.provider === "payapp" && !/^[a-f0-9-]{32,36}$/i.test(b.requestId || "")) fields.requestId = "required";
   if (Object.keys(fields).length) return json({ ok: false, error: "invalid", fields }, 400);
@@ -49,7 +56,7 @@ export async function onRequestPost({ request, env }) {
   const order = {
     oid: makeOid(), product_id: product.id, product_name: product.name + (qty > 1 ? ` × ${qty}` : ""), qty,
     amount: product.price * qty, buyer_name: name, buyer_phone: formatPhone(phone), buyer_email: email,
-    start_date: product.start === "date" ? startDate : "", memo, pay_method: payMethod, device, member_id: member ? member.id : null
+    start_date: scheduledStart || (product.start === "date" ? startDate : ""), memo, pay_method: payMethod, device, member_id: member ? member.id : null
   };
   if (cfg.provider === "payapp") {
     return preparePayapp(request, env, cfg, order, ipHash, b.requestId);
@@ -89,6 +96,10 @@ async function preparePayapp(request, env, cfg, order, ipHash, requestId) {
     await ensureWebsitePasses(env);
     const existing = await env.DB.prepare("SELECT p.*, o.status, o.amount FROM payapp_payments p JOIN orders o ON o.oid=p.oid WHERE request_id=?").bind(requestId).first();
     if (existing) return reply(existing);
+    if(PRODUCT_MAP[order.product_id].start==="datetime"){
+      const selected=validateWebsiteStart(order.start_date.replace(" ","T").slice(0,16));
+      if(selected.error)return json({ok:false,error:"invalid",fields:{startAt:selected.error}},400);
+    }
     const recent = ipHash && await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE ip_hash=? AND created_at > datetime('now','+9 hours','-10 minutes')").bind(ipHash).first();
     if (recent && recent.n >= 30) return json({ok:false,error:"rate-limit"},429);
     const nonce = crypto.randomUUID();
@@ -97,7 +108,7 @@ async function preparePayapp(request, env, cfg, order, ipHash, requestId) {
         env.DB.prepare(`INSERT INTO orders (oid,status,product_id,product_name,qty,amount,buyer_name,buyer_phone,buyer_email,start_date,memo,pay_method,device,member_id,ip_hash,test_mode,pg_method)
           VALUES (?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,0,'payapp:pending')`).bind(order.oid,order.product_id,order.product_name,order.qty,order.amount,order.buyer_name,order.buyer_phone,order.buyer_email,order.start_date,order.memo,order.pay_method,order.device,order.member_id,ipHash),
         env.DB.prepare("INSERT INTO payapp_payments (oid,nonce,request_id,request_hash) VALUES (?,?,?,?)").bind(order.oid,nonce,requestId,hash),
-        env.DB.prepare("INSERT INTO website_order_terms (oid,terms) VALUES (?,?)").bind(order.oid,JSON.stringify(websiteTerms(PRODUCT_MAP[order.product_id])))
+        env.DB.prepare("INSERT INTO website_order_terms (oid,terms) VALUES (?,?)").bind(order.oid,JSON.stringify(websiteTerms(PRODUCT_MAP[order.product_id],PRODUCT_MAP[order.product_id].start === "datetime" ? order.start_date : null)))
       ]);
     } catch (e) {
       const concurrent = await env.DB.prepare("SELECT p.*, o.status, o.amount FROM payapp_payments p JOIN orders o ON o.oid=p.oid WHERE request_id=?").bind(requestId).first();

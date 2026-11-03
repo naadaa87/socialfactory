@@ -151,23 +151,34 @@ export async function queuePassNotices(env, pass, pay, { purchaseNotice = true, 
   if (stmts.length) await env.DB.batch(stmts);
 }
 
-/** 이 고객 · 그룹의 아직 안 보낸 만료 알림을 지우고, 지금 기준 마지막 만료 시각으로 다시 만듭니다 (이어 붙이기 · 기간 조정 · 취소 후 호출). */
+// 연속·겹치는 이용권은 마지막 종료만 안내하고, 날짜가 떨어진 예약은 각각 안내합니다.
+export function expiryEndpoints(passes) {
+  const endpoints=[];
+  for(const pass of [...passes].sort((a,b)=>a.starts_at.localeCompare(b.starts_at)||a.id-b.id)){
+    const last=endpoints[endpoints.length-1];
+    if(!last || pass.starts_at>last.ends_at)endpoints.push(pass);
+    else if(pass.ends_at>last.ends_at || (pass.ends_at===last.ends_at && pass.id>last.id))endpoints[endpoints.length-1]=pass;
+  }
+  return endpoints;
+}
+/** 고객·그룹의 만료 알림을 현재 이용 기간별로 다시 계산합니다. */
 export async function expiryNoticeStmts(env, c, group, now = kstNow()) {
   const out = [env.DB.prepare("UPDATE notification_jobs SET status = 'cancelled', updated_at = datetime('now', '+9 hours') WHERE customer_id = ?1 AND kind = 'expire_soon' AND status = 'queued' AND pass_group = ?2").bind(c.id, group)];
-  const last = await env.DB.prepare("SELECT * FROM passes WHERE customer_id = ?1 AND pass_group = ?2 AND status = 'active' AND ends_at > ?3 ORDER BY ends_at DESC LIMIT 1").bind(c.id, group, now).first();
-  if (!last) return out;
+  const {results:periods} = await env.DB.prepare("SELECT * FROM passes WHERE customer_id = ?1 AND pass_group = ?2 AND status = 'active' AND ends_at > ?3 ORDER BY starts_at,id").bind(c.id, group, now).all();
+  for(const last of expiryEndpoints(periods)){
   const lastPay = await env.DB.prepare("SELECT * FROM pass_payments WHERE id = ?1").bind(last.payment_id).first();
   const product = lastPay ? (await termsForPayment(env, lastPay) || {}) : {};
   for (const before of product.remind || []) {
-    const at = fromMs(toMs(last.ends_at) - before * 6e4);
+    const at = fromMs(Math.max(toMs(last.starts_at), toMs(last.ends_at) - before * 6e4));
     if (at <= now) continue;
     out.push(env.DB.prepare(
       `INSERT INTO notification_jobs (dedupe_key, kind, customer_id, pass_id, pass_group, phone, vars, send_after) VALUES (?1, 'expire_soon', ?2, ?3, ?4, ?5, ?6, ?7)
        ON CONFLICT(dedupe_key) DO UPDATE SET status = 'queued', send_after = excluded.send_after, vars = excluded.vars, updated_at = datetime('now', '+9 hours')
        WHERE notification_jobs.status = 'cancelled'`
     ).bind(`expire:${c.id}:${group}:${last.ends_at}:${before}`, c.id, last.id, group, c.phone, JSON.stringify({
-      고객: c.name || "고객", 이용권: last.product_name, 만료: kTime(last.ends_at), 남은시간: beforeText(before), __endsAt: last.ends_at
+      고객: c.name || "고객", 이용권: last.product_name, 만료: kTime(last.ends_at), 남은시간: beforeText(Math.round((toMs(last.ends_at)-toMs(at))/6e4)), __endsAt: last.ends_at
     }), at));
+  }
   }
   return out;
 }

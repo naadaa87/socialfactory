@@ -102,7 +102,8 @@ test('4종 모두 알리고 폼 형식으로 요청하고 접수 ID 저장, 문�
   await runQueue(f.env);
   const second = await issuePassForPayment(f.env, f.pay());
   await runQueue(f.env);
-  f.sqlite.prepare("UPDATE notification_jobs SET send_after = ? WHERE kind = 'expire_soon' AND status = 'queued'").run(kstNow());
+  const expiry=f.one("SELECT send_after FROM notification_jobs WHERE kind = 'expire_soon' AND status = 'queued'");
+  t.mock.method(Date, 'now', () => toMs(expiry.send_after)-9*3600e3);
   await runQueue(f.env);
   await cancelPass(f.env, second.pass, { refundAmount: 4000, refundConfirmed: true });
   await runQueue(f.env);
