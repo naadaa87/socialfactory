@@ -68,3 +68,16 @@ https://:version.:project.pages.dev/*
 /guest-orders.html
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
+
+/parking-order
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+
+/parking-order.html
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+
+/parking-purchase
+  Cache-Control: no-store

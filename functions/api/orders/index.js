@@ -80,10 +80,10 @@ export async function onRequestPost({ request, env }) {
 }
 
 
-async function preparePayapp(request, env, cfg, order, ipHash, requestId) {
+export async function preparePayapp(request, env, cfg, order, ipHash, requestId, options = {}) {
   const origin = new URL(request.url).origin;
   const hash = await sha256(JSON.stringify([order.product_id, order.qty, order.amount, order.buyer_name,
-    order.buyer_phone, order.buyer_email, order.start_date, order.memo, order.pay_method, order.member_id]));
+    order.buyer_phone, order.buyer_email, order.start_date, order.memo, order.pay_method, order.member_id, ...(options.fingerprint || [])]));
   const reply = async row => {
     if (row.request_hash !== hash) return json({ok:false, error:"request-conflict"},409);
     const token = await orderToken(env, row.oid);
@@ -96,7 +96,7 @@ async function preparePayapp(request, env, cfg, order, ipHash, requestId) {
     await ensureWebsitePasses(env);
     const existing = await env.DB.prepare("SELECT p.*, o.status, o.amount FROM payapp_payments p JOIN orders o ON o.oid=p.oid WHERE request_id=?").bind(requestId).first();
     if (existing) return reply(existing);
-    if(PRODUCT_MAP[order.product_id].start==="datetime"){
+    if(PRODUCT_MAP[order.product_id]?.start==="datetime"){
       const selected=validateWebsiteStart(order.start_date.replace(" ","T").slice(0,16));
       if(selected.error)return json({ok:false,error:"invalid",fields:{startAt:selected.error}},400);
     }
@@ -108,7 +108,8 @@ async function preparePayapp(request, env, cfg, order, ipHash, requestId) {
         env.DB.prepare(`INSERT INTO orders (oid,status,product_id,product_name,qty,amount,buyer_name,buyer_phone,buyer_email,start_date,memo,pay_method,device,member_id,ip_hash,test_mode,pg_method)
           VALUES (?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,0,'payapp:pending')`).bind(order.oid,order.product_id,order.product_name,order.qty,order.amount,order.buyer_name,order.buyer_phone,order.buyer_email,order.start_date,order.memo,order.pay_method,order.device,order.member_id,ipHash),
         env.DB.prepare("INSERT INTO payapp_payments (oid,nonce,request_id,request_hash) VALUES (?,?,?,?)").bind(order.oid,nonce,requestId,hash),
-        env.DB.prepare("INSERT INTO website_order_terms (oid,terms) VALUES (?,?)").bind(order.oid,JSON.stringify(websiteTerms(PRODUCT_MAP[order.product_id],PRODUCT_MAP[order.product_id].start === "datetime" ? order.start_date : null)))
+        env.DB.prepare("INSERT INTO website_order_terms (oid,terms) VALUES (?,?)").bind(order.oid,JSON.stringify(websiteTerms(PRODUCT_MAP[order.product_id],PRODUCT_MAP[order.product_id]?.start === "datetime" ? order.start_date : null))),
+        ...(options.statements || [])
       ]);
     } catch (e) {
       const concurrent = await env.DB.prepare("SELECT p.*, o.status, o.amount FROM payapp_payments p JOIN orders o ON o.oid=p.oid WHERE request_id=?").bind(requestId).first();

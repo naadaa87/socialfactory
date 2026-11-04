@@ -1,0 +1,75 @@
+import {json,clean,phoneDigits,formatPhone,safeEqual,getMember} from './auth.js';
+import {ensurePayapp} from './payapp.js';
+import {kstNow} from './admin.js';
+import {orderToken} from './shop.js';
+import {getGuest,ownsGuestOrder} from './guest-orders.js';
+export const PARKING_POLICY='sf-parking-20261104-v1';
+export const TICKETS={'1h':{label:'1시간권',price:4000,hours:1},'2h':{label:'2시간권',price:8000,hours:2},'3h':{label:'3시간권',price:12000,hours:3},daily:{label:'일일권',price:30000,hours:null}};
+export const PARKING_SCHEMA=[
+ `CREATE TABLE IF NOT EXISTS parking_settings(id INTEGER PRIMARY KEY CHECK(id=1),value TEXT NOT NULL)`,
+ `CREATE TABLE IF NOT EXISTS parking_orders(oid TEXT PRIMARY KEY REFERENCES orders(oid),ticket TEXT NOT NULL,plate TEXT NOT NULL,visit_date TEXT NOT NULL,terms TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'waiting',version INTEGER NOT NULL DEFAULT 0,operation_key TEXT,arrival_at TEXT,entry_id TEXT,entry_at TEXT,applied_at TEXT,request_at TEXT,request_reason TEXT,reviewed_at TEXT,memo TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT(datetime('now','+9 hours')),updated_at TEXT)`,
+ `CREATE INDEX IF NOT EXISTS idx_parking_queue ON parking_orders(status,visit_date)`,
+ `CREATE TABLE IF NOT EXISTS parking_events(id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL UNIQUE,oid TEXT NOT NULL REFERENCES parking_orders(oid),kind TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 0,refund_amount INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'queued',attempts INTEGER NOT NULL DEFAULT 0,message_id TEXT,last_error TEXT,created_at TEXT NOT NULL DEFAULT(datetime('now','+9 hours')),updated_at TEXT,sent_at TEXT)`,
+ `CREATE INDEX IF NOT EXISTS idx_parking_events_due ON parking_events(status,id)`,
+ `CREATE TABLE IF NOT EXISTS parking_history(id INTEGER PRIMARY KEY AUTOINCREMENT,oid TEXT NOT NULL,action TEXT NOT NULL,version INTEGER NOT NULL,note TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT(datetime('now','+9 hours')),UNIQUE(oid,version))`
+];
+export async function ensureParking(env){await ensurePayapp(env);await env.DB.batch(PARKING_SCHEMA.map(q=>env.DB.prepare(q)));}
+export const defaults={enabled:false,confirmed:false,daily_enabled:false,start_min:600,end_min:1080,cutoff_min:1070,process_minutes:10,daily_details:"이용일 당일 23:59까지(한국시간). 입차 후 24시간권이 아닙니다. 이용일 당일 23:59까지 유효합니다. 재입차는 구매 전에 문의해 주세요. 결제 후 입차 알림과 운영자의 등록이 필요합니다. 익일·초과 정산: 자정 이후 계속 주차하려면 다음 날 날짜의 시간권 또는 일일권을 별도로 구매해야 합니다. 야간·운영시간 외 등록·출차는 구매 전에 문의해 주세요.",holidays:["2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-03-01", "2026-03-02", "2026-05-05", "2026-05-24", "2026-05-25", "2026-06-03", "2026-06-06", "2026-07-17", "2026-08-15", "2026-08-17", "2026-09-24", "2026-09-25", "2026-09-26", "2026-10-03", "2026-10-05", "2026-10-09", "2026-12-25", "2027-01-01", "2027-02-06", "2027-02-07", "2027-02-08", "2027-02-09", "2027-03-01", "2027-05-05", "2027-05-13", "2027-06-06", "2027-07-17", "2027-07-19", "2027-08-15", "2027-08-16", "2027-09-14", "2027-09-15", "2027-09-16", "2027-10-03", "2027-10-04", "2027-10-09", "2027-10-11", "2027-12-25", "2027-12-27"]};
+export async function parkingSettings(env){const row=await env.DB.prepare('SELECT value FROM parking_settings WHERE id=1').first();let v={};try{v=JSON.parse(row?.value||'{}')}catch{}return {...defaults,...v};}
+export const hhmm=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
+export const operationText=s=>'등록 운영: 평일 '+hhmm(s.start_min)+'~'+hhmm(s.end_min)+' (주말·공휴일 제외, 입차 요청 '+hhmm(s.cutoff_min)+' 마감). 입차 요청 후 최대 '+s.process_minutes+'분 이내 처리합니다.';
+export function validDate(s){try{return /^\d{4}-\d{2}-\d{2}$/.test(s||'') && new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;}catch{return false}}
+export function openDate(s,cfg){if(!validDate(s))return false;const d=new Date(s+'T00:00:00Z').getUTCDay();return d!==0&&d!==6&&!cfg.holidays.includes(s);}
+export function arrivalOpen(s,now=kstNow()){const m=+now.slice(11,13)*60+ +now.slice(14,16);return s.confirmed&&openDate(now.slice(0,10),s)&&m>=s.start_min&&m<s.cutoff_min;}
+export function plateOf(v){const s=String(v||'').normalize('NFKC').replace(/[\s-]/g,'');return /^(?:[가-힣]{2})?\d{2,3}[가-힣]\d{4}$/.test(s)?s:null;}
+export function validateParking(b,s){
+ const ticket=typeof b.ticket==='string'&&Object.hasOwn(TICKETS,b.ticket)?TICKETS[b.ticket]:null,plate=plateOf(b.plate),date=clean(b.date,10),name=clean(b.name,30),phone=phoneDigits(b.phone);
+ if(!ticket)return {error:'주차권을 선택해 주세요.'};
+ if(b.ticket==='daily'&&!s.daily_enabled)return {error:'일일권 판매 조건을 확인 중입니다. 카카오톡으로 문의해 주세요.'};
+ if(!plate||plateOf(b.plateConfirm)!==plate)return {error:'차량번호 전체를 두 번 동일하게 입력해 주세요. 예: 123가4567'};
+ const today=kstNow().slice(0,10),limit=new Date(Date.now()+9*3600e3+90*864e5).toISOString().slice(0,10);
+ if(!openDate(date,s)||date<today||date>limit)return {error:'오늘부터 90일 안의 평일을 선택해 주세요. 주말·공휴일은 등록하지 않습니다.'};
+ if(date===today&&!arrivalOpen(s))return {error:'당일 주차 등록 접수 시간이 지났거나 시작 전입니다. 이용일 또는 카카오톡 안내를 확인해 주세요.'};
+ if(!name||!/^01[016789]\d{7,8}$/.test(phone))return {error:'이름과 휴대폰 번호를 확인해 주세요.'};
+ if(b.agreeTerms!==true||b.agreePrivacy!==true||b.agreeRefund!==true||b.confirmed!==true||b.policy!==PARKING_POLICY)return {error:'구매 내용과 주차 등록·취소 안내를 확인해 주세요.'};
+ return {ticket:b.ticket,plate,date,name,phone:formatPhone(phone),...ticket};
+}
+export const PARKING_JOIN=`SELECT p.*,o.id AS order_id,o.status AS payment_status,o.product_id,o.product_name,o.amount,o.buyer_name,o.buyer_phone,o.member_id,o.paid_at,o.test_mode,pg.refunded_amount,pg.payurl FROM parking_orders p JOIN orders o ON o.oid=p.oid JOIN payapp_payments pg ON pg.oid=p.oid`;
+export async function parkingOrder(env,oid){return env.DB.prepare(PARKING_JOIN+' WHERE p.oid=?').bind(oid).first();}
+export const PARKING_STATUS={waiting:'입차 요청 대기',requested:'입차 요청 접수',processing:'등록 처리 중',applied:'할인 적용 완료',issue:'등록 확인 필요'};
+export function publicParking(p){let terms={};try{terms=JSON.parse(p.terms)}catch{}return {oid:p.oid,ticket:p.ticket,ticketLabel:TICKETS[p.ticket]?.label,plate:p.plate,date:p.visit_date,status:p.status,statusLabel:PARKING_STATUS[p.status],paymentStatus:p.payment_status,amount:p.amount,refundedAmount:p.refunded_amount,arrivalAt:p.arrival_at,appliedAt:p.applied_at,requestedAt:p.request_at,reviewedAt:p.reviewed_at,version:p.version,operation:terms.operation||'',dailyDetails:terms.dailyDetails||'',createdAt:p.created_at};}
+export async function parkingAccess(request,env,oid,token){const o=await env.DB.prepare('SELECT * FROM orders WHERE oid=?').bind(oid).first();if(!o)return false;const m=await getMember(request,env);return safeEqual(String(token||''),await orderToken(env,oid))||!!(m&&m.id===o.member_id)||ownsGuestOrder(await getGuest(request,env),o);}
+export function eventStmt(env,p,kind,{version=p.version,refund=p.refunded_amount||0,operation=null}={}){const key=p.oid+':'+kind+':'+(kind==='refund'?refund:kind==='paid'||kind==='arrival'?0:version);return env.DB.prepare(`INSERT OR IGNORE INTO parking_events(event_key,oid,kind,version,refund_amount) SELECT ?,?,?,?,? FROM parking_orders p JOIN orders o ON o.oid=p.oid JOIN payapp_payments pg ON pg.oid=p.oid WHERE p.oid=? AND p.version=? AND (? IS NULL OR p.operation_key=?) AND o.test_mode=0 AND (CASE WHEN ?='refund' THEN pg.refunded_amount>=? AND ?>0 ELSE o.status='paid' AND o.paid_at IS NOT NULL AND o.tid=pg.mul_no AND pg.refunded_amount=0 END)`).bind(key,p.oid,kind,version,refund,p.oid,version,operation,operation,kind,refund,refund);}
+// 콜백 재시도·누락 복구도 동일 이벤트 키를 쓰므로 한 번만 발송 대기열에 들어갑니다.
+export async function syncParkingOrder(env,oid){await ensureParking(env);const p=await parkingOrder(env,oid);if(!p)return;const batch=[];if(p.payment_status==='paid'&&p.paid_at&&!p.refunded_amount)batch.push(eventStmt(env,p,'paid'));if(p.refunded_amount>0)batch.push(eventStmt(env,p,'refund'));if(batch.length)await env.DB.batch(batch);}
+export async function parkingAction(env,p,b,admin=false){
+ const s=await parkingSettings(env),now=kstNow(),action=b.action,version=p.version+1,operation=crypto.randomUUID(),sql=(q,...a)=>env.DB.prepare(q.startsWith('UPDATE parking_orders SET ')?q.replace(' SET '," SET operation_key='"+operation+"',"):q).bind(...a);let update,event,note='';
+ if(!Number.isInteger(b.expectedVersion)||b.expectedVersion!==p.version)return {error:'상태가 변경되었습니다. 새로고침 후 확인해 주세요.',status:409};
+ const paid="EXISTS(SELECT 1 FROM orders o JOIN payapp_payments pg ON pg.oid=o.oid WHERE o.oid=parking_orders.oid AND o.status='paid' AND o.paid_at IS NOT NULL AND pg.refunded_amount=0)";
+ if(action==='arrival'&&!admin){
+  if(p.arrival_at)return {ok:true,duplicate:true};
+  if(!arrivalOpen(s)||p.visit_date!==now.slice(0,10))return {error:'이용일 당일의 등록 접수 시간에 요청해 주세요. '+operationText(s),status:409};
+  update=sql(`UPDATE parking_orders SET status='requested',arrival_at=?,version=?,updated_at=? WHERE oid=? AND version=? AND status='waiting' AND (request_at IS NULL OR reviewed_at IS NOT NULL) AND ${paid}`,now,version,now,p.oid,p.version);event='arrival';
+ }else if(action==='request'&&!admin){
+  note=clean(b.reason,300);if(!note)return {error:'취소·정정 문의 내용을 입력해 주세요.',status:400};
+  if(p.request_at&&!p.reviewed_at)return {ok:true,duplicate:true};
+  update=sql(`UPDATE parking_orders SET request_at=?,request_reason=?,reviewed_at=NULL,version=?,updated_at=? WHERE oid=? AND version=? AND ${paid}`,now,note,version,now,p.oid,p.version);
+ }else if(admin&&action==='claim'){
+  const at=String(b.entryAt||'').replace('T',' ').slice(0,16)+':00',entry=clean(b.entryId,80);
+  if(!p.arrival_at||!['requested','issue'].includes(p.status)||p.visit_date!==now.slice(0,10)||!s.confirmed)return {error:'이용일 당일 접수된 입차 요청만 처리해 주세요.',status:409};
+  if(plateOf(b.plateConfirm)!==p.plate||b.confirmEntry!==true||!entry||!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00$/.test(at)||!validDate(at.slice(0,10))||at.slice(0,10)!==p.visit_date||at>now)return {error:'아마노 입차번호·입차시각·차량번호를 확인해 주세요.',status:400};
+  update=sql(`UPDATE parking_orders SET status='processing',entry_id=?,entry_at=?,version=?,memo=?,updated_at=? WHERE oid=? AND version=? AND (request_at IS NULL OR reviewed_at IS NOT NULL) AND ${paid}`,entry,at,version,clean(b.memo,500),now,p.oid,p.version);
+ }else if(admin&&action==='complete'){
+  if(p.status!=='processing'||b.confirmApplied!==true||!p.entry_id||!p.entry_at)return {error:'아마노에서 실제 할인 적용을 완료했는지 확인해 주세요.',status:409};
+  update=sql(`UPDATE parking_orders SET status='applied',applied_at=?,version=?,memo=?,updated_at=? WHERE oid=? AND version=? AND status='processing' AND (request_at IS NULL OR reviewed_at IS NOT NULL) AND ${paid}`,now,version,clean(b.memo,500),now,p.oid,p.version);event='applied';
+ }else if(admin&&action==='issue'){
+  note=clean(b.memo,500);if(!note||!p.arrival_at||p.status==='applied')return {error:'확인이 필요한 사유를 입력해 주세요. 이미 적용된 주문은 되돌리지 않습니다.',status:400};
+  update=sql(`UPDATE parking_orders SET status='issue',memo=?,version=?,updated_at=? WHERE oid=? AND version=? AND ${paid}`,note,version,now,p.oid,p.version);
+ }else if(admin&&action==='review'){
+  note=clean(b.memo,500);if(!p.request_at||p.reviewed_at||!note)return {error:'문의 처리 메모를 입력해 주세요.',status:400};
+  update=sql('UPDATE parking_orders SET reviewed_at=?,memo=?,version=?,updated_at=? WHERE oid=? AND version=?',now,note,version,now,p.oid,p.version);
+ }else return {error:'지원하지 않는 요청입니다.',status:400};
+ const batch=[update,sql('INSERT OR IGNORE INTO parking_history(oid,action,version,note) SELECT oid,?,?,? FROM parking_orders WHERE oid=? AND version=? AND operation_key=?',action,version,note,p.oid,version,operation)];
+ if(event)batch.push(eventStmt(env,p,event,{version,operation}));
+ const result=await env.DB.batch(batch);if(!result[0].meta.changes)return {error:'결제·처리 상태가 변경되었습니다. 새로고침 후 확인해 주세요.',status:409};return {ok:true};
+}

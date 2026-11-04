@@ -311,6 +311,7 @@
           if(attempts<15) timer=setTimeout(checkOrder,2000); return;
         }
         if (!o) { hide("[data-oc-pending]"); show("[data-oc-notfound]"); set("[data-oc-title]", "주문을 찾을 수 없습니다"); set("[data-oc-lead]", "주소를 다시 확인해 주세요."); return; }
+        if(o.parking){location.replace("/parking-order?oid="+encodeURIComponent(oid)+(tok?"&t="+encodeURIComponent(tok):""));return;}
         lastOrder=o; renderChange(o); hide("[data-oc-pending]"); hide("[data-oc-notfound]"); hide("[data-oc-fail]"); hide("[data-oc-done]");
         var paid = o.status === "paid" || o.status === "used";
         if (paid) show("[data-oc-use-guide]"); else hide("[data-oc-use-guide]");
