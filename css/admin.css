@@ -514,3 +514,6 @@ details.help ol { padding-left: 20px; margin-bottom: 0; }
 .pc-line small { display: block; color: var(--muted); }
 .linkbtn { border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
 .linkbtn:hover b { color: var(--blue); text-decoration: underline; }
+
+/* 주차 등록 관리 */
+.pk-admin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.pk-admin-grid .f{display:flex;flex-direction:column;gap:8px}.pk-admin-grid textarea{width:100%}#pk-admin-editor{padding:24px}#pk-admin-editor .input{max-width:100%}#pk-admin-editor .f{display:flex;flex-direction:column;gap:8px;margin-top:16px}#view-parking details{padding:20px}#view-parking summary{font-weight:700;cursor:pointer}#pk-admin-status{white-space:pre-line}#pk-admin-q{max-width:320px}@media(max-width:800px){.pk-admin-grid{grid-template-columns:1fr}#pk-admin-editor{padding:18px}}

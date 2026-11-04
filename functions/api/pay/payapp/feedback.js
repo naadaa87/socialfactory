@@ -1,7 +1,9 @@
+import {syncParkingOrder} from '../../../_lib/parking.js';
+import {runParkingQueue} from '../../../_lib/parking-notify.js';
 import {syncWebsiteOrder} from "../../../_lib/website-passes.js";
 import { payappConfig, validFeedback, equalSecret, ensurePayapp } from "../../../_lib/payapp.js";
 const response=(text,status=200)=>new Response(text,{status,headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-store"}});
-export async function onRequestPost({request,env}) {
+export async function onRequestPost({request,env,waitUntil}) {
   if (!env.DB) return response("FAIL",503);
   if (Number(request.headers.get("content-length"))>32768) return response("FAIL",413);
   const raw=await request.text();
@@ -49,6 +51,7 @@ export async function onRequestPost({request,env}) {
       await sql("UPDATE orders SET status='cancelled',fail_msg='페이앱 결제 요청 취소' WHERE oid=? AND status='pending'",oid).run();
     }
     await syncWebsiteOrder(env,oid);
+    if(row.product_id.startsWith("parking-")){await syncParkingOrder(env,oid);if(waitUntil)waitUntil(runParkingQueue(env));}
     return response("SUCCESS");
   } catch { return response("FAIL",500); }
 }

@@ -21,7 +21,7 @@
     ["card_offline", "카드결제(오프라인)", "현장 단말기 · 수기 결제"],
     ["card_online", "카드결제(온라인)", "결제 링크 등 온라인 카드 결제"]
   ];
-  var PAYL = { orders: "이용권 온라인 결제", kiosk: "토스프론트 이용권" }; PAY.forEach(function (p) { PAYL[p[0]] = p[1]; });
+  var PAYL = { orders: "홈페이지 온라인 결제", kiosk: "토스프론트 이용권" }; PAY.forEach(function (p) { PAYL[p[0]] = p[1]; });
   var PST = { paid: ["결제 완료", "ok"], unpaid: ["결제 전", "warn"], refunded: ["환불", "gray"] };
   var SPACE_LIST = [["r1", "1번룸"], ["r2", "2번룸"], ["r3", "3번룸"], ["r4", "4번룸"], ["r5", "5번룸"], ["coworking", "코워킹 라운지"], ["office", "독립사무실"], ["other", "기타"]];
   var SPL = {}; SPACE_LIST.forEach(function (s) { SPL[s[0]] = s[1]; });

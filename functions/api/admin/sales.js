@@ -6,7 +6,7 @@ import { ensureSpacecloudSales, SALES_SOURCE } from "../../_lib/spacecloud-sales
  * - 예약 매출: 결제 완료 · 환불 건의 (금액 − 환불 금액). 결제 전(미수) 건은 매출에 넣지 않고 미수금으로 따로 셉니다.
  *   취소했어도 환불하지 않은 금액(취소 수수료)은 매출로 남습니다.
  * - basis=use  : 이용일 기준  · basis=paid : 결제일 기준 (기본)
- * - orders=1   : 홈페이지에서 온라인으로 결제한 이용권 주문도 '이용권 온라인 결제'로 함께 더합니다 (테스트 결제 제외).
+ * - orders=1   : 홈페이지에서 온라인으로 결제한 주문도 '홈페이지 온라인 결제'로 함께 더합니다 (테스트 결제 제외).
  *               토스프론트 · 관리자 직접 발급 이용권(pass_payments)도 '토스프론트 이용권'으로 함께 더합니다 (결제일 기준, 환불 차감).
  */
 import { loadSpacecloud, mergeCalendarRows } from "../../_lib/spacecloud.js";
@@ -45,7 +45,7 @@ export async function onRequestGet({ request, env }) {
   for (const r of await all(`SELECT substr(date, 1, 7) AS ym, SUM(amount) AS s FROM ${SALES_SOURCE} WHERE pay_status = 'unpaid' AND status = 'confirmed' AND substr(date, 1, 4) = ?1 GROUP BY ym`, year)) {
     if (byYm[r.ym]) byYm[r.ym].unpaid = Number(r.s) || 0;
   }
-  // 이용권 온라인 결제 (결제일 기준)
+  // 홈페이지 온라인 결제 (결제일 기준)
   if (withOrders) {
     for (const r of await all(`SELECT substr(paid_at, 1, 7) AS ym, COUNT(*) AS n, SUM(${netOrderAmount}) AS s FROM orders WHERE status IN ('paid', 'used', 'refund_requested') AND test_mode = 0 AND paid_at IS NOT NULL AND substr(paid_at, 1, 4) = ?1 GROUP BY ym`, year)) {
       const m = byYm[r.ym]; if (!m) continue;
@@ -105,7 +105,7 @@ export async function onRequestGet({ request, env }) {
   const missing = mergeCalendarRows(recorded, external.results).filter(x => x.external && x.date.slice(0,4) === year && !importedIds.has((x.source_url || '').split('/').pop()));
   return json({
     ok: true, today, year, basis, withOrders, years,
-    methods: methods.map((k) => ({ key: k, label: k === "orders" ? "이용권 온라인 결제" : k === "kiosk" ? "토스프론트 이용권" : PAY_METHODS[k] })),
+    methods: methods.map((k) => ({ key: k, label: k === "orders" ? "홈페이지 온라인 결제" : k === "kiosk" ? "토스프론트 이용권" : PAY_METHODS[k] })),
     months, byMethod, countBy, total, n, refunds,
     bySpace, byChannel, channelTotal: total, unrecordedSpacecloud: missing.length, spacecloud: external.info,
     allTime: { total: (Number(resAll.s) || 0) + (Number(ordAll.s) || 0) + (Number(kioskAll.s) || 0), n: (Number(resAll.n) || 0) + (Number(ordAll.n) || 0) + (Number(kioskAll.n) || 0) },
