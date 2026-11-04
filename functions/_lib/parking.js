@@ -1,4 +1,4 @@
-import {json,clean,phoneDigits,formatPhone,safeEqual,getMember} from './auth.js';
+import {json,clean,phoneDigits,formatPhone,safeEqual,getMember,sha256Hex} from './auth.js';
 import {ensurePayapp} from './payapp.js';
 import {kstNow} from './admin.js';
 import {orderToken} from './shop.js';
@@ -16,6 +16,7 @@ export const PARKING_SCHEMA=[
 export async function ensureParking(env){await ensurePayapp(env);await env.DB.batch(PARKING_SCHEMA.map(q=>env.DB.prepare(q)));}
 export const defaults={enabled:false,confirmed:false,daily_enabled:false,start_min:600,end_min:1080,cutoff_min:1070,process_minutes:10,daily_details:"이용일 당일 23:59까지(한국시간). 입차 후 24시간권이 아닙니다. 이용일 당일 23:59까지 유효합니다. 재입차는 구매 전에 문의해 주세요. 결제 후 입차 알림과 운영자의 등록이 필요합니다. 익일·초과 정산: 자정 이후 계속 주차하려면 다음 날 날짜의 시간권 또는 일일권을 별도로 구매해야 합니다. 야간·운영시간 외 등록·출차는 구매 전에 문의해 주세요.",holidays:["2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-03-01", "2026-03-02", "2026-05-05", "2026-05-24", "2026-05-25", "2026-06-03", "2026-06-06", "2026-07-17", "2026-08-15", "2026-08-17", "2026-09-24", "2026-09-25", "2026-09-26", "2026-10-03", "2026-10-05", "2026-10-09", "2026-12-25", "2027-01-01", "2027-02-06", "2027-02-07", "2027-02-08", "2027-02-09", "2027-03-01", "2027-05-05", "2027-05-13", "2027-06-06", "2027-07-17", "2027-07-19", "2027-08-15", "2027-08-16", "2027-09-14", "2027-09-15", "2027-09-16", "2027-10-03", "2027-10-04", "2027-10-09", "2027-10-11", "2027-12-25", "2027-12-27"]};
 export async function parkingSettings(env){const row=await env.DB.prepare('SELECT value FROM parking_settings WHERE id=1').first();let v={};try{v=JSON.parse(row?.value||'{}')}catch{}return {...defaults,...v};}
+export const parkingPolicyTag=s=>sha256Hex(JSON.stringify([PARKING_POLICY,s.start_min,s.end_min,s.cutoff_min,s.process_minutes,s.daily_enabled,s.daily_details,s.holidays,TICKETS]));
 export const hhmm=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
 export const operationText=s=>'등록 운영: 평일 '+hhmm(s.start_min)+'~'+hhmm(s.end_min)+' (주말·공휴일 제외, 입차 요청 '+hhmm(s.cutoff_min)+' 마감). 입차 요청 후 최대 '+s.process_minutes+'분 이내 처리합니다.';
 export function validDate(s){try{return /^\d{4}-\d{2}-\d{2}$/.test(s||'') && new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;}catch{return false}}
