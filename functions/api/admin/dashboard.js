@@ -7,6 +7,7 @@ import { ensureSpacecloudSales, SALES_SOURCE, attachCalendarPayments } from "../
  */
 import { json } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, kstToday, addDaysIso } from "../../_lib/admin.js";
+import { ensureTossSales, TOSS_SOURCE, PASS_SALES_SOURCE } from "../../_lib/toss-sales.js";
 
 import { loadSpacecloud, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
 
@@ -16,6 +17,7 @@ export async function onRequestGet({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
   await ensurePayapp(env);
   await ensureSpacecloudSales(env);
+  await ensureTossSales(env);
   const today = kstToday(), tomorrow = addDaysIso(today, 1), in7 = addDaysIso(today, 7), ym = today.slice(0, 7);
   const all = async (sql, ...a) => { try { return (await env.DB.prepare(sql).bind(...a).all()).results || []; } catch (e) { console.error("dash", e && e.message); return []; } };
   const one = async (sql, ...a) => { try { return (await env.DB.prepare(sql).bind(...a).first()) || {}; } catch (e) { console.error("dash", e && e.message); return {}; } };
@@ -47,7 +49,9 @@ export async function onRequestGet({ request, env }) {
   byChannel.web.amount += Number(ord.s) || 0; byChannel.web.n += Number(ord.n) || 0;
   // 토스프론트 이용권 매출은 '토스프론트' 채널로 따로 보여 줍니다 (kio 는 아래에서 계산)
   const resMonth = await one("SELECT COUNT(*) AS n, COALESCE(SUM(end_min - start_min), 0) AS mins FROM reservations WHERE status = 'confirmed' AND substr(date, 1, 7) = ?1", ym);
-  const kio = await one("SELECT COUNT(*) AS n, COALESCE(SUM(MAX(amount - refund_amount, 0)), 0) AS s FROM pass_payments WHERE channel <> 'website' AND status IN ('paid', 'refunded') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1", ym);
+  const kio = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(MAX(amount - sales_refund, 0)), 0) AS s FROM ${PASS_SALES_SOURCE} WHERE channel <> 'website' AND status IN ('paid', 'refunded') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1`, ym);
+  const terminal=await one(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS s FROM ${TOSS_SOURCE} WHERE substr(paid_at,1,7)=?1`,ym);
+  byChannel.toss_terminal={amount:Number(terminal.s)||0,n:Number(terminal.n)||0};
   if (Number(kio.n)) byChannel.kiosk = { amount: Number(kio.s) || 0, n: Number(kio.n) || 0 };
   // 토스프론트 이용권: 지금 이용 중 · 오늘 만료 · 알림 발송 실패 (표가 아직 없으면 0)
   const nowTs = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 19).replace("T", " ");
@@ -61,6 +65,6 @@ export async function onRequestGet({ request, env }) {
     counts: { today: todayList.length, tomorrow: tomorrowList.length, upcoming: upcoming.length, unpaid: Number(unpaidSum.n) || 0, unpaidAmount: Number(unpaidSum.s) || 0, newInquiries: Number(newInqN.n) || 0, refundRequests: Number(refundReq.n) || 0,
       passInUse: Number(passNow.n) || 0, passEndsToday: Number(passToday.n) || 0, notifyFailed: Number(jobFail.n) || 0 },
     todayList, tomorrowList, upcoming, unpaid, newInquiries: newInq, ordersRecent,
-    month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, kiosk: Number(kio.s) || 0, kioskN: Number(kio.n) || 0, total: resTotal + (Number(ord.s) || 0) + (Number(kio.s) || 0), byMethod, byChannel, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }
+    month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, kiosk: Number(kio.s) || 0, kioskN: Number(kio.n) || 0, terminal:Number(terminal.s)||0,terminalN:Number(terminal.n)||0, total: resTotal + (Number(ord.s) || 0) + (Number(kio.s) || 0)+(Number(terminal.s)||0), byMethod, byChannel, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }
   });
 }
