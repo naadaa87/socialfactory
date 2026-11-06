@@ -1,5 +1,5 @@
 import {PARKING_TEMPLATES} from './parking-templates.js';
-import {ensureParking,parkingOrder,parkingSettings} from './parking.js';
+import {ensureParking,parkingOrder,parkingSettings,TICKETS} from './parking.js';
 import {approvedWebsiteTemplate,sendAligo} from './aligo.js';
 import {orderToken} from './shop.js';
 import {kstNow} from './admin.js';
@@ -23,7 +23,7 @@ export async function runParkingQueue(env,{limit=20}={}){
   if(!latest || latest.buyer_phone!==p.buyer_phone || latest.refunded_amount!==p.refunded_amount || (e.kind!=='refund'&&latest.payment_status!=='paid')){await env.DB.prepare("UPDATE parking_events SET status='cancelled' WHERE id=?").bind(e.id).run();out.cancelled++;continue;}
   let accepted=false;
   try{
-   const terms=JSON.parse(p.terms),vars={주문번호:p.oid,주문토큰:await orderToken(env,p.oid),차량끝번호:p.plate.slice(-4),이용일:p.visit_date,주차권:p.product_name,결제금액:Number(p.amount).toLocaleString('ko-KR'),누적환불금액:Number(e.refund_amount).toLocaleString('ko-KR'),남은결제금액:Math.max(0,p.amount-e.refund_amount).toLocaleString('ko-KR'),운영안내:terms.operation,처리일시:(e.kind==='applied'?p.applied_at:p.arrival_at||e.created_at).slice(0,16)};
+   const terms=JSON.parse(p.terms),refund=e.kind==='refund'?(p.amount===p.payment_amount?e.refund_amount:p.amount):0,vars={주문번호:p.payment_oid,주문토큰:await orderToken(env,p.payment_oid),차량끝번호:p.plate.slice(-4),이용일:p.visit_date,주차권:'주차권 '+TICKETS[p.ticket].label,결제금액:Number(p.amount).toLocaleString('ko-KR'),누적환불금액:Number(refund).toLocaleString('ko-KR'),남은결제금액:Math.max(0,p.amount-refund).toLocaleString('ko-KR'),운영안내:terms.operation,처리일시:(e.kind==='applied'?p.applied_at:p.arrival_at||e.created_at).slice(0,16)};
    const result=await sendAligo(env,{phone:p.buyer_phone},parkingMessage(t,vars),t);accepted=true;
    await env.DB.prepare("UPDATE parking_events SET status=?,message_id=?,sent_at=?,updated_at=?,last_error=NULL WHERE id=?").bind(result.test?'test':'accepted',result.messageId,now,now,e.id).run();out.sent++;
   }catch(err){const uncertain=accepted||err.retryable===false;await env.DB.prepare('UPDATE parking_events SET status=?,last_error=?,updated_at=? WHERE id=?').bind(uncertain?'unknown':'failed',uncertain?'접수 여부 미확인 — 알리고 전송내역 확인 필요':'알리고 요청 거절 — 설정과 전송내역 확인 필요',now,e.id).run();out.failed++;}
