@@ -1,4 +1,5 @@
 import { ensurePayapp, netOrderAmount } from "../../_lib/payapp.js";
+import {ensurePayappSales,payappSource} from '../../_lib/payapp-sales.js';
 import { ensureSpacecloudSales, SALES_SOURCE, attachCalendarPayments } from "../../_lib/spacecloud-sales.js";
 /**
  * GET /api/admin/dashboard — 관리자 첫 화면 '오늘 확인할 것'
@@ -16,6 +17,7 @@ const RES = "code, status, space, space_note, date, start_min, end_min, customer
 export async function onRequestGet({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
   await ensurePayapp(env);
+  await ensurePayappSales(env);
   await ensureSpacecloudSales(env);
   await ensureTossSales(env);
   const today = kstToday(), tomorrow = addDaysIso(today, 1), in7 = addDaysIso(today, 7), ym = today.slice(0, 7);
@@ -51,6 +53,9 @@ export async function onRequestGet({ request, env }) {
   const resMonth = await one("SELECT COUNT(*) AS n, COALESCE(SUM(end_min - start_min), 0) AS mins FROM reservations WHERE status = 'confirmed' AND substr(date, 1, 7) = ?1", ym);
   const kio = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(MAX(amount - sales_refund, 0)), 0) AS s FROM ${PASS_SALES_SOURCE} WHERE channel <> 'website' AND status IN ('paid', 'refunded') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1`, ym);
   const terminal=await one(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS s FROM ${TOSS_SOURCE} WHERE substr(paid_at,1,7)=?1`,ym);
+  const payapp=await one(`SELECT COUNT(*) n,COALESCE(SUM(amount-refund_amount),0) s FROM ${payappSource(env)} WHERE substr(paid_at,1,7)=?1`,ym);
+  byMethod.payapp_direct=Number(payapp.s)||0;
+  byChannel.payapp_direct={amount:Number(payapp.s)||0,n:Number(payapp.n)||0};
   byChannel.toss_terminal={amount:Number(terminal.s)||0,n:Number(terminal.n)||0};
   if (Number(kio.n)) byChannel.kiosk = { amount: Number(kio.s) || 0, n: Number(kio.n) || 0 };
   // 토스프론트 이용권: 지금 이용 중 · 오늘 만료 · 알림 발송 실패 (표가 아직 없으면 0)
@@ -65,6 +70,6 @@ export async function onRequestGet({ request, env }) {
     counts: { today: todayList.length, tomorrow: tomorrowList.length, upcoming: upcoming.length, unpaid: Number(unpaidSum.n) || 0, unpaidAmount: Number(unpaidSum.s) || 0, newInquiries: Number(newInqN.n) || 0, refundRequests: Number(refundReq.n) || 0,
       passInUse: Number(passNow.n) || 0, passEndsToday: Number(passToday.n) || 0, notifyFailed: Number(jobFail.n) || 0 },
     todayList, tomorrowList, upcoming, unpaid, newInquiries: newInq, ordersRecent,
-    month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, kiosk: Number(kio.s) || 0, kioskN: Number(kio.n) || 0, terminal:Number(terminal.s)||0,terminalN:Number(terminal.n)||0, total: resTotal + (Number(ord.s) || 0) + (Number(kio.s) || 0)+(Number(terminal.s)||0), byMethod, byChannel, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }
+    month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, kiosk: Number(kio.s) || 0, kioskN: Number(kio.n) || 0, terminal:Number(terminal.s)||0,terminalN:Number(terminal.n)||0,payapp:Number(payapp.s)||0, total: resTotal + (Number(ord.s) || 0) + (Number(kio.s) || 0)+(Number(terminal.s)||0)+(Number(payapp.s)||0), byMethod, byChannel, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }
   });
 }

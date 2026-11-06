@@ -811,11 +811,14 @@
   });
 
   /* =================== 매출 =================== */
-  var SL = { year: null, basis: "paid", data: null };
+  var SL = { year: null, basis: "paid", data: null,requestSeq:0 };
   function loadSales() {
     if (!SL.year) SL.year = todayIso().slice(0, 4);
-    $$("#sl-basis [data-basis]").forEach(function (b) { b.classList.toggle("on", b.dataset.basis === SL.basis); });
-    api("/api/admin/sales?year=" + SL.year + "&basis=" + SL.basis + "&orders=" + ($("#sl-orders").checked ? 1 : 0)).then(function (d) { SL.data = d; drawSales(); }).catch(fail($("#sl-methods")));
+    var onlyPayapp=$("#sl-provider").value==='payapp';
+    $$("#sl-basis [data-basis]").forEach(function (b) { b.classList.toggle("on", b.dataset.basis === (onlyPayapp?'paid':SL.basis));b.disabled=onlyPayapp; });
+    $("#sl-orders").disabled=onlyPayapp;
+    var requestSeq=++SL.requestSeq;
+    api("/api/admin/sales?year=" + SL.year + "&basis=" + SL.basis + "&orders=" + ($("#sl-orders").checked ? 1 : 0)+'&provider='+$("#sl-provider").value).then(function (d) { if(requestSeq!==SL.requestSeq)return;SL.data = d; drawSales(); }).catch(function(e){if(requestSeq===SL.requestSeq)fail($("#sl-methods"))(e);});
   }
   function bars(items, total) {
     var max = Math.max.apply(null, items.map(function (x) { return x.v; }).concat([1]));
@@ -827,6 +830,7 @@
     var d = SL.data, ms = d.methods || [], cur = todayIso().slice(0, 7);
     $("#sl-year").innerHTML = (d.years || [d.year]).map(function (y) { return '<option value="' + y + '"' + (y === d.year ? " selected" : "") + ">" + y + "년</option>"; }).join("");
     $("#sl-year-label").textContent = d.year + "년 · " + (d.basis === "paid" ? "결제일" : "이용일") + " 기준";
+    $('#sl-table-help').textContent=d.provider==='payapp'?'페이앱 거래번호로 확인된 결제 · 결제일 기준':'월을 누르면 그 달의 예약 목록이 열립니다';
     $("#sl-kpis").innerHTML = '<div class="kpi accent"><small>누적 총매출</small><b>' + num(d.allTime.total) + "<em>원</em></b><span>전체 기간 " + num(d.allTime.n) + "건</span></div>"
       + '<div class="kpi"><small>' + esc(d.year) + "년 매출</small><b>" + num(d.total) + "<em>원</em></b><span>" + num(d.n) + "건" + (d.refunds ? " · 환불 " + won(d.refunds) + " 차감" : "") + "</span></div>"
       + '<div class="kpi"><small>이번 달 (' + (+d.thisMonth.ym.slice(5, 7)) + "월)</small><b>" + num(d.thisMonth.total) + "<em>원</em></b><span>" + num(d.thisMonth.n) + "건</span></div>"
@@ -854,12 +858,13 @@
     $("#sl-channel-details").innerHTML = '<table class="tbl"><thead><tr><th>채널</th><th>결제 건수</th><th>매출액</th><th>총매출 비중</th></tr></thead><tbody>' + chs.map(function (x) {
       return '<tr><td>' + esc(x.k) + '</td><td>' + esc(x.s) + '</td><td>' + won(x.v) + '</td><td>' + (d.total ? x.v / d.total * 100 : 0).toFixed(1) + '%</td></tr>';
     }).join('') + '</tbody><tfoot><tr><th>합계</th><td>' + num(d.n) + '건</td><td>' + won(d.total) + '</td><td>' + (d.total ? '100%' : '0%') + '</td></tr></tfoot></table>';
-    $("#sl-channel-note").textContent = '채널별 비중은 선택한 연도 총매출 기준입니다. 홈페이지 이용권 포함 여부도 동일하게 적용합니다. 스페이스클라우드 금액 미등록 일정 ' + num(d.unrecordedSpacecloud || 0) + '건은 합계에서 제외됩니다. 캘린더는 결제금액을 제공하지 않습니다. 정산 엑셀 일괄 가져오기 또는 예약 상세에서 금액을 등록해 주세요.';
+    $("#sl-channel-note").textContent = d.provider==='payapp'?'페이앱 거래번호로 확인한 결제를 결제일 기준으로 집계합니다. 기존 예약에 반영된 페이앱 결제도 여기에는 포함하며, 전체 매출에는 중복 가산하지 않습니다.':'채널별 비중은 선택한 연도 총매출 기준입니다. 홈페이지 이용권 포함 여부도 동일하게 적용합니다. 스페이스클라우드 금액 미등록 일정 ' + num(d.unrecordedSpacecloud || 0) + '건은 합계에서 제외됩니다. 캘린더는 결제금액을 제공하지 않습니다. 정산 엑셀 일괄 가져오기 또는 예약 상세에서 금액을 등록해 주세요.';
   }
   $("#sl-year").addEventListener("change", function () { SL.year = this.value; loadSales(); });
   $("#sl-basis").addEventListener("click", function (e) { var b = e.target.closest("[data-basis]"); if (!b) return; SL.basis = b.dataset.basis; loadSales(); });
   $("#sl-orders").addEventListener("change", loadSales);
-  function openMonth(ym) { var d = parseIso(ym + "-01"); setRange("custom"); $("#ls-from").value = ym + "-01"; $("#ls-to").value = isoOf(new Date(d.getFullYear(), d.getMonth() + 1, 0, 12)); LS.range = "custom"; $("#ls-status").value = ""; $("#ls-pstatus").value = ""; go("list"); }
+  $("#sl-provider").addEventListener("change",loadSales);
+  function openMonth(ym) { if(SL.data&&SL.data.provider==='payapp'){$('#payapp-sales-panel').scrollIntoView({behavior:'smooth',block:'start'});return;}var d = parseIso(ym + "-01"); setRange("custom"); $("#ls-from").value = ym + "-01"; $("#ls-to").value = isoOf(new Date(d.getFullYear(), d.getMonth() + 1, 0, 12)); LS.range = "custom"; $("#ls-status").value = ""; $("#ls-pstatus").value = ""; go("list"); }
   $("#sl-table").addEventListener("click", function (e) { var tr = e.target.closest("tr[data-ym]"); if (tr) openMonth(tr.dataset.ym); });
   $("#sl-chart").addEventListener("click", function (e) { var c = e.target.closest("[data-ym]"); if (c) openMonth(c.dataset.ym); });
   $("#sl-csv").addEventListener("click", function () {
