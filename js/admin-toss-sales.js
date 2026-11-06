@@ -85,6 +85,6 @@
   });
   $('#ts-refresh').addEventListener('click',load);
   $('#ts-from').addEventListener('change',reset);$('#ts-to').addEventListener('change',reset);
-  $('#ts-from').value='2020-01-01';$('#ts-to').value=new Date(Date.now()+9*3600e3).toISOString().slice(0,10);
+  $('#ts-from').value='2022-01-01';$('#ts-to').value=new Date(Date.now()+9*3600e3).toISOString().slice(0,10);
   var previous=A.LOAD.sales;A.LOAD.sales=function(){previous();load();};
 })();
