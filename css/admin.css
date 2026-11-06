@@ -533,3 +533,9 @@ details.help ol { padding-left: 20px; margin-bottom: 0; }
 .ts-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:12px 0}.ts-toolbar .input{width:auto}.ts-toolbar label{display:flex;align-items:center;gap:6px}.ts-review[hidden]{display:none}.ts-review h4{margin-bottom:8px}.ts-review .frow{margin:14px 0}#ts-recent td:last-child{min-width:230px}#ts-recent input[type=checkbox]{width:18px;height:18px}#ts-review-status{white-space:pre-line}
 .ts-product-cell{min-width:190px;max-width:360px;white-space:normal;overflow-wrap:anywhere}.ts-product+.ts-product{margin-top:8px}.ts-product-cell details{margin-top:8px}
 .ts-memo{white-space:pre-wrap}#ts-label-form textarea{width:100%;resize:vertical}#ts-label-reference{overflow-wrap:anywhere}
+#ts-recent{scrollbar-gutter:stable}
+#ts-recent .ts-ledger{table-layout:fixed;width:100%;min-width:1200px}
+.ts-ledger .ts-col-select{width:5%}.ts-ledger .ts-col-date{width:17%}.ts-ledger .ts-col-product{width:25%}.ts-ledger .ts-col-method{width:9%}.ts-ledger .ts-col-amount{width:11%}.ts-ledger .ts-col-refund{width:10%}.ts-ledger .ts-col-state{width:23%}
+#ts-recent .ts-ledger td{white-space:normal;overflow-wrap:anywhere;vertical-align:top}
+#ts-recent .ts-ledger td:nth-child(5),#ts-recent .ts-ledger td:nth-child(6){white-space:nowrap}
+.ts-sort{display:inline-flex;align-items:center;gap:6px;padding:0;border:0;background:none;color:inherit;font:inherit;font-weight:inherit;white-space:nowrap;cursor:pointer}.ts-sort span{width:1em}.ts-sort:hover{color:var(--blue)}.ts-sort:focus-visible{outline:2px solid var(--blue);outline-offset:4px;border-radius:2px}

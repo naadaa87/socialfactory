@@ -150,6 +150,27 @@ test('ledger pagination reaches older imports and exclusion filters cover the fu
   assert.equal((await status({env:f.env,request:f.get('/api/admin/toss-sales?page=-1')})).status,400);
 });
 
+test('payment amount sorting is numeric across pages, stable for ties, scoped to filters and rejects unknown SQL orders',async t=>{
+  const f=fixture(t),payments=Array.from({length:55},(_,i)=>payment({id:String(640000000000000001n+BigInt(i)),amount:i<2?100:(i+1)*1000}));
+  await f.post({action:'commit',payments});
+  const list=async q=>(await(await status({env:f.env,request:f.get('/api/admin/toss-sales'+q)})).json());
+  const desc=await list('?sort=amount-desc'),asc=await list('?sort=amount-asc');
+  assert.equal(desc.total,55);assert.equal(desc.rows[0].amount,55000);assert.equal(asc.rows[0].amount,100);
+  assert.equal(asc.rows[0].payment_id,payments[1].id);assert.equal(asc.rows[1].payment_id,payments[0].id);
+  for(const sort of ['amount-asc','amount-desc']){
+    const rows=[...(await list('?sort='+sort)).rows,...(await list('?sort='+sort+'&page=2')).rows];
+    assert.equal(new Set(rows.map(r=>r.payment_id)).size,55);
+    assert(rows.every((r,i)=>!i||(sort==='amount-asc'?rows[i-1].amount<=r.amount:rows[i-1].amount>=r.amount)));
+  }
+  await f.post({action:'review',paymentIds:[payments[3].id,payments[50].id],decision:'exclude',note:'주차 결제'});
+  const excluded=await list('?filter=exclude&sort=amount-desc');assert.equal(excluded.total,2);assert.equal(excluded.rows[0].payment_id,payments[50].id);
+  await saveOrderProducts(f.env,[productOrder({lineItems:[{item:{title:'금액 입력'},quantity:1}]})]);
+  await f.post({action:'label',paymentId:payments[54].id,productName:'주차',memo:''});
+  const pending=await list('?filter=amount-input-empty&sort=amount-desc');assert.equal(pending.total,54);assert.equal(pending.rows[0].amount,54000);
+  for(const sort of ['amount','amount-desc;DELETE FROM toss_payments','amount-asc DESC'])assert.equal((await status({env:f.env,request:f.get('/api/admin/toss-sales?sort='+encodeURIComponent(sort))})).status,400);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM toss_payments').get().n,55);
+});
+
 test('amount-input filter uses original product titles across the full ledger, preserving labels and revenue decisions',async t=>{
   const f=fixture(t),payments=Array.from({length:51},(_,i)=>payment({id:String(640000000000000001n+BigInt(i))}));
   const other=payment({id:'640000000000000099',orderId:'620000000000000099'});
