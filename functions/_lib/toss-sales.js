@@ -83,7 +83,9 @@ export const MANUAL_CANDIDATE = `(EXISTS (SELECT 1 FROM reservations r
   WHERE r.pay_method='card_offline' AND r.pay_status IN ('paid','refunded') AND t.source_type IN ('CARD','BARCODE')
     AND r.amount=t.amount AND substr(COALESCE(r.paid_at,r.date),1,10)=substr(t.paid_at,1,10))
   OR EXISTS (SELECT 1 FROM pass_payments p WHERE p.channel='admin' AND p.status IN ('paid','refunded')
-    AND p.amount=t.amount AND substr(p.paid_at,1,10)=substr(t.paid_at,1,10)
+    -- Directly issued passes can be registered several days after the terminal
+    -- charge. Hold nearby equal amounts for review rather than count both.
+    AND p.amount=t.amount AND ABS(julianday(substr(p.paid_at,1,10))-julianday(substr(t.paid_at,1,10)))<=7
     AND ((p.pay_method='card_offline' AND t.source_type IN ('CARD','BARCODE'))
       OR (p.pay_method='cash' AND t.source_type='CASH') OR (p.pay_method='bank_other' AND t.source_type='ACCOUNT_TRANSFER'))))`;
 export const TOSS_SOURCE = `(SELECT t.* FROM toss_payments t

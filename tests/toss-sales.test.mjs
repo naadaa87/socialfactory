@@ -153,6 +153,15 @@ test('administrator-issued offline passes without approval identifiers are held 
   const d=await(await status({env:f.env,request:f.get('/api/admin/toss-sales')})).json();assert.equal(d.rows[0].disposition,'review');
 });
 
+test('an offline pass registered days after a terminal payment stays on hold until reviewed',async t=>{
+  const f=fixture(t);f.seedPass();
+  f.db.prepare("UPDATE pass_payments SET channel='admin',approval_number=NULL,pay_method='card_offline',paid_at=datetime(?,'+4 days')").run(currentDay);
+  await f.send();assert.equal(f.included().length,0);assert.equal((await f.getSales()).total,12000);
+  const d=await(await status({env:f.env,request:f.get('/api/admin/toss-sales')})).json();assert.equal(d.rows[0].disposition,'review');
+  f.db.prepare("UPDATE pass_payments SET paid_at=datetime(?,'+8 days')").run(currentDay);
+  assert.equal(f.included().length,1);
+});
+
 test('approval timestamps determine deduplication even when result reporting crossed midnight',async t=>{
   const f=fixture(t);f.seedPass();f.db.prepare("UPDATE pass_payments SET paid_at='2027-01-01 00:00:03',approved_ts=?").run(Date.parse(paidAt));
   await f.send();assert.equal(f.included().length,0);
