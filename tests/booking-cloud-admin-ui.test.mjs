@@ -109,3 +109,13 @@ test('a failed save cannot keep the private login link after its original expiry
  const deadline=[...h.timers].find(([,timer])=>timer.ms===240000);assert(deadline);now=original+1;deadline[1].fn();await h.flush();
  assert.equal(h.node('#booking-cloud-login').hidden,true);assert.equal(h.node('#booking-cloud-view').href,undefined);assert.equal(h.node('#booking-cloud-save').disabled,true);assert.equal(h.node('#booking-cloud-revalidate').hidden,false);assert.equal(h.calls.filter(c=>c.options.method==='POST').length,2);
 });
+
+test('public-api-v1 mode needs no guest login, hides its controls and never launches an authentication request',async()=>{
+ const h=harness(()=>({...cloudStatus(),booking_enabled:true,login_saved:true,public_login_saved:false,public_candidate_saved:true,public_verification:{mode:'public-api-v1',configured:true}}));
+ h.A.LOAD.booking();await h.flush();assert(h.node('#booking-cloud-status').textContent.includes('공개 일정 조회 사용 · 고객 로그인 불필요'));assert(h.node('#booking-cloud-status').textContent.includes('접수 중'));assert.equal(h.node('#booking-cloud-guest-start').hidden,true);assert.equal(h.node('#booking-cloud-revalidate').hidden,true);assert.equal(h.node('#booking-cloud-start').hidden,false);
+ h.node('#booking-cloud-guest-start').events.click();await h.flush();h.node('#booking-cloud-revalidate').events.click();await h.flush();assert.equal(h.calls.filter(c=>c.options.method==='POST').length,0);
+});
+test('an unsupported explicit verifier is not presented as ready even when a guest profile was saved',async()=>{
+ const h=harness(()=>({...cloudStatus(),booking_enabled:true,login_saved:true,public_login_saved:true,public_verification:{mode:'unsupported',configured:false}}));
+ h.A.LOAD.booking();await h.flush();assert(h.node('#booking-cloud-status').textContent.includes('조회 방식 설정 확인 필요'));assert(!h.node('#booking-cloud-status').textContent.includes('접수 중'));assert.equal(h.node('#booking-cloud-guest-start').hidden,true);assert.equal(h.node('#booking-cloud-revalidate').hidden,true);
+});

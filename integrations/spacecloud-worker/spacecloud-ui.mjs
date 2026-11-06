@@ -1,5 +1,6 @@
 import { ReviewRequired, memoFor } from './safety.mjs';
 import { calendarGridDates, parseCalendarEntry, publicSlotExpectations } from './calendar.mjs';
+import { PUBLIC_AVAILABILITY_MODE, readPublicAvailability as fetchPublicAvailability } from './public-availability.mjs';
 
 export const TIME_RADIO_NAME=/^시간\s*단위\s*예약하기\s*\(\s*최소\s*2\s*시간\s*부터\s*\)$/;
 export const ROOMS = Object.freeze({r1:{product:140236,max:36},r2:{product:140235,max:40},r3:{product:140486,max:16},r4:{product:140487,max:48},r5:{product:140492,max:30}});
@@ -70,7 +71,10 @@ export class SpacecloudReadiness {
 
 export class SpacecloudUI {
   constructor(context,config) { this.context=context;this.config=config;this.room=null;this.job=null;this.readiness=new WeakMap(); }
-  async initialize() {this.host=await this.context.newPage();this.guest=this.config.publicPage || await (this.config.publicContext || this.context).newPage();this.host.setDefaultTimeout(15000);this.guest.setDefaultTimeout(15000);this.observe(this.host);this.observe(this.guest);}
+  async initialize() {
+    this.host=await this.context.newPage();this.host.setDefaultTimeout(15000);this.observe(this.host);
+    if(this.config.publicAvailabilityMode!==PUBLIC_AVAILABILITY_MODE){this.guest=this.config.publicPage || await (this.config.publicContext || this.context).newPage();this.guest.setDefaultTimeout(15000);this.observe(this.guest);}
+  }
   observe(page){let state=this.readiness.get(page);if(!state){state=new SpacecloudReadiness(page,{report:diagnostic=>this.reportReview?.(diagnostic)});this.readiness.set(page,state);}return state;}
   async click(locator,label='화면 조작') {
     // Responsive layouts can retain hidden copies. Only one visible target may receive input.
@@ -245,6 +249,7 @@ export class SpacecloudUI {
     if(await this.host.locator('#reserve_name').inputValue()!==segment.marker
       ||await this.host.locator('#reserve_memo').inputValue()!==memoFor(segment))throw new ReviewRequired('외부 예약 표식 입력을 확인하지 못했습니다.');
     await this.beforeWrite();
+    if(this.config.publicAvailabilityMode===PUBLIC_AVAILABILITY_MODE){await this.assertPublicAvailable(segment);await this.beforeWrite();}
     await this.click(this.host.locator('a#_addExternalSchedule'),'외부예약 등록 확인');
     await this.host.locator('#reserve_name').waitFor({state:'hidden'});
   }
@@ -322,8 +327,37 @@ export class SpacecloudUI {
     await this.openPublicDate(today);
     return {guest_ready:true};
   }
+  async readPublicAvailability(segment) {
+    if(this.config.publicAvailabilityMode!==PUBLIC_AVAILABILITY_MODE)throw new ReviewRequired('공개 예약 가능 시간 조회 모드를 확인해 주세요.');
+    if(!Number.isInteger(segment.start_min) || !Number.isInteger(segment.end_min) || segment.start_min<0 || segment.end_min>1440
+      || segment.start_min>=segment.end_min || segment.start_min%60 || segment.end_min%60)throw new ReviewRequired('공개 예약 시간 확인은 같은 날짜의 1시간 단위만 지원합니다.');
+    return fetchPublicAvailability({room:this.room,date:segment.date});
+  }
+  async assertPublicAvailable(segment) {
+    const snapshot=await this.readPublicAvailability(segment);
+    if(snapshot.day_available!==true)throw new ReviewRequired('공개 예약 화면에서 이용할 수 없는 날짜로 확인되어 등록과 결제를 보류합니다.');
+    for(const slot of publicSlotExpectations(segment,[]))if(snapshot.hours[slot.index]!==true)throw new ReviewRequired('공개 예약 화면에서 이미 이용할 수 없는 시간이 확인되어 등록과 결제를 보류합니다.');
+  }
+  async waitPublicPropagation() {await new Promise(resolve=>setTimeout(resolve,1000));}
+  async verifyPublicAPI(segment,remaining) {
+    const expected=publicSlotExpectations(segment,remaining);
+    for(let attempt=0;attempt<3;attempt++) {
+      this.publicAttempt=attempt+1;
+      const snapshot=await this.publicStep('slots','read',()=>this.readPublicAvailability(segment));
+      let matches=true;this.publicProgress('slots','compare-before');
+      for(const slot of expected) {
+        const selectable=snapshot.day_available && snapshot.hours[slot.index],disabled=!selectable;
+        if(typeof selectable!=='boolean' || disabled!==slot.disabled){matches=false;this.publicProgress('slots','mismatch',{index:slot.index,expected_disabled:slot.disabled,actual_disabled:disabled,actual_selectable:selectable});}
+      }
+      this.publicProgress('slots','compare-after',{matches});
+      if(matches)return;
+      if(attempt<2)await this.waitPublicPropagation();
+    }
+    throw new ReviewRequired('공개 예약 가능 시간에서 차단·해제 반영을 확인하지 못했습니다.');
+  }
   async verifyPublic(segment,remaining) {
     const expected=publicSlotExpectations(segment,remaining);this.publicStartedAt=Date.now();
+    if(this.config.publicAvailabilityMode===PUBLIC_AVAILABILITY_MODE)return this.verifyPublicAPI(segment,remaining);
     for(let attempt=0;attempt<3;attempt++) {
       this.publicAttempt=attempt+1;
       await this.openPublicDate(segment.date);

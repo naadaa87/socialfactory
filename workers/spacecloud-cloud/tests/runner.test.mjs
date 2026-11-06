@@ -249,6 +249,41 @@ test('host authentication alone cannot acknowledge automatic work or lease a boo
   const status=await f.runner.status(f.env);assert.equal(status.login_saved,true);assert.equal(status.public_login_saved,false);assert.equal(status.public_session_updated_at,null);
 });
 
+test('explicit public API verification needs only the host profile and never creates or saves a guest context',async()=>{
+  const f=fixture({PUBLIC_AVAILABILITY_MODE:'public-api-v1'});await ensureStore(f.env);await saveState(f.env,PRIVATE_STATE);
+  const status=await f.runner.status(f.env);assert.deepEqual(status.public_verification,{mode:'public-api-v1',configured:true});assert.equal(status.public_login_saved,false);
+  const wake=await f.runner.fetch(request(f,'/run',{token:f.env.SPACECLOUD_WORKER_TOKEN}),f.env);assert.equal(wake.status,202);assert.equal(f.counters.claims,0);
+  const result=await f.runner.runOne(f.env);assert.equal(result.status,'succeeded');assert.equal(f.counters.claims,1);assert.equal(f.counters.contexts.length,1);
+  assert.deepEqual(f.counters.restored,[PRIVATE_STATE]);assert.equal(f.counters.drivers[0].config.publicAvailabilityMode,'public-api-v1');assert.equal(f.counters.drivers[0].config.publicContext,undefined);
+  assert.deepEqual(f.counters.storageReads,[f.counters.contexts[0].context]);assert.equal(await loadPublicState(f.env),null);assert.equal(f.counters.guestVerifications,0);assert.equal(f.sessions.size,0);
+});
+
+test('public API mode does not read or overwrite an old guest profile even when its ciphertext is unreadable',async()=>{
+  const f=await ready(fixture({PUBLIC_AVAILABILITY_MODE:'public-api-v1'}));f.sqlite.prepare("UPDATE cloud_session SET cipher='not-json-private-legacy-state' WHERE id='spacecloud_public'").run();
+  await f.runner.runOne(f.env);assert.equal(f.sqlite.prepare("SELECT cipher FROM cloud_session WHERE id='spacecloud_public'").get().cipher,'not-json-private-legacy-state');
+  assert.equal(f.counters.contexts.length,1);assert.equal(f.counters.guestVerifications,0);
+});
+
+test('an unsupported explicit public verification mode never falls back to saved guest authentication',async()=>{
+  for(const mode of ['public-api-v2','PUBLIC-API-V1','public-api-v1 ','guest-browser']){
+    const f=await ready(fixture({PUBLIC_AVAILABILITY_MODE:mode}));await assert.rejects(f.runner.runOne(f.env),{code:'public-verification-mode'});
+    const response=await f.runner.fetch(request(f,'/run',{token:f.env.SPACECLOUD_WORKER_TOKEN}),f.env);assert.equal(response.status,503);assert.equal((await response.json()).error,'public-verification-mode');
+    assert.deepEqual((await f.runner.status(f.env)).public_verification,{mode:'unsupported',configured:false});assert.equal(f.counters.claims,0);assert.equal(f.counters.launches,0);
+  }
+});
+
+test('public API mode cannot bypass a missing host profile or browser budget',async()=>{
+  const missing=fixture({PUBLIC_AVAILABILITY_MODE:'public-api-v1'});await ensureStore(missing.env);await savePublicState(missing.env,PUBLIC_STATE);
+  await assert.rejects(missing.runner.runOne(missing.env),{code:'login-required'});assert.equal(missing.counters.claims,0);assert.equal(missing.counters.launches,0);
+  const budget=fixture({PUBLIC_AVAILABILITY_MODE:'public-api-v1',DAILY_BROWSER_BUDGET_MS:'0'});await ensureStore(budget.env);await saveState(budget.env,PRIVATE_STATE);
+  await assert.rejects(budget.runner.runOne(budget.env),{code:'daily-budget'});assert.equal(budget.counters.claims,0);assert.equal(budget.counters.launches,0);
+});
+
+test('legacy guest revalidation still checks actual guest authentication when public API mode is configured',async()=>{
+  const f=await ready(fixture({PUBLIC_AVAILABILITY_MODE:'public-api-v1'}));await f.runner.revalidateGuest(f.env);
+  assert.equal(f.counters.drivers[0].config.publicAvailabilityMode,'guest-browser');assert.equal(f.counters.guestVerifications,1);assert.deepEqual(f.counters.restored,[PUBLIC_STATE]);
+});
+
 test('manual guest login opens the observed customer login route and saves only verified guest state',async()=>{
   const f=fixture();await ensureStore(f.env);await saveState(f.env,PRIVATE_STATE);
   const host=f.sqlite.prepare("SELECT cipher FROM cloud_session WHERE id='spacecloud'").get().cipher;

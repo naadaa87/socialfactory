@@ -7,8 +7,19 @@ const TIMEOUT_MS=5000,MAX_BODY=16384;
 const unavailable=()=>Object.assign(new Error('온라인 예약 연동을 점검 중입니다. 잠시 후 다시 시도하거나 카카오톡으로 문의해 주세요.'),{code:'cloud-admission-unavailable',status:503});
 const integer=value=>Number.isSafeInteger(value) && value>=0;
 
+/** An explicitly selected verifier can never fall back to a different proof source. */
+export function publicVerificationReady(data) {
+  if(!data || typeof data!=='object')return false;
+  if(!Object.hasOwn(data,'public_verification'))return data.public_login_saved===true;
+  const proof=data.public_verification;
+  if(!proof || typeof proof!=='object' || Array.isArray(proof) || typeof proof.configured!=='boolean')return false;
+  if(proof.mode==='public-api-v1')return proof.configured===true;
+  if(proof.mode==='guest-browser')return proof.configured===true && data.public_login_saved===true;
+  return false;
+}
+
 function ready(data,now) {
-  if(data?.ok!==true || data.enabled!==true || data.allow_writes!==true || data.login_saved!==true || data.public_login_saved!==true
+  if(data?.ok!==true || data.enabled!==true || data.allow_writes!==true || data.login_saved!==true || !publicVerificationReady(data)
     || !data.runner || data.runner.review!==false || typeof data.runner.busy!=='boolean' || !data.budget)return false;
   const budget=data.budget,day=new Date(now).toISOString().slice(0,10);
   if(budget.utc_day!==day || budget.utc_month!==day.slice(0,7))return false;

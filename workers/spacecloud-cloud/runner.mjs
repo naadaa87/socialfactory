@@ -11,6 +11,16 @@ const response=(value,status=200)=>new Response(JSON.stringify(value),{status,he
 function equal(a,b){if(typeof a!=='string' || typeof b!=='string')return false;let diff=a.length^b.length;for(let i=0;i<Math.max(a.length,b.length);i++)diff|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);return diff===0;}
 function controlAllowed(request,env){const token=String(env.CLOUD_ADMIN_TOKEN || '');return token.length>=32 && equal(request.headers.get('authorization') || '','Bearer '+token);}
 function wakeAllowed(request,env){const token=String(env.SPACECLOUD_WORKER_TOKEN || '');return token.length>=32 && equal(request.headers.get('authorization') || '','Bearer '+token);}
+function availabilityMode(env){
+  if(env.PUBLIC_AVAILABILITY_MODE===undefined || env.PUBLIC_AVAILABILITY_MODE==='')return 'guest-browser';
+  if(env.PUBLIC_AVAILABILITY_MODE==='public-api-v1')return 'public-api-v1';
+  throw problem('public-verification-mode','공개 예약 시간 확인 방식의 설정을 확인해 주세요.',503);
+}
+function verificationStatus(env,publicSaved){
+  if(env.PUBLIC_AVAILABILITY_MODE==='public-api-v1')return {mode:'public-api-v1',configured:true};
+  if(env.PUBLIC_AVAILABILITY_MODE===undefined || env.PUBLIC_AVAILABILITY_MODE==='')return {mode:'guest-browser',configured:!!publicSaved};
+  return {mode:'unsupported',configured:false};
+}
 function guestDiagnostic(value) {
   const result={};
   for(const [key,allowed] of [['phase',['public-progress','request-readiness']],['step',['goto','ready','room','time','month','date','slots']],['type',['document','xhr','fetch']]])if(allowed.includes(value?.[key]))result[key]=value[key];
@@ -21,6 +31,7 @@ function guestDiagnostic(value) {
   return result;
 }
 function configured(env){
+  availabilityMode(env);
   if(!env.BROWSER)throw problem('browser-binding','클라우드 브라우저 연결이 필요합니다.',503);
   if(!(paidIncluded(env) || (env.CLOUD_PLAN_MODE!=='paid-included' && env.CLOUD_PLAN_CONFIRMED_FREE==='true')))
     throw problem('cost-not-confirmed','요금제와 포함 사용량 확인 전에는 클라우드 브라우저를 실행하지 않습니다.',503);
@@ -64,7 +75,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
     // An orphaned expired lock is uncertain; it must never silently authorize another browser.
     await env.STATE_DB.prepare("UPDATE cloud_runner_lock SET review=1 WHERE id=1 AND token IS NOT NULL AND expires_at<=?1").bind(now()).run();
   }
-  async function runBrowser(env,{kind='run',job,queue,storageState,publicStorageState,candidate,token,budget,activeMs}={}) {
+  async function runBrowser(env,{kind='run',job,queue,storageState,publicStorageState,candidate,publicAvailabilityMode='guest-browser',token,budget,activeMs}={}) {
     let browser,context,sessionId,closed=false,recorded=false,timer,leaseTimer,deadlineReached=false,launchAttempted=false,leaseLost=false,beating=false;
     const started=budget.started_at,expires=started+activeMs;
     const live=()=>{if(leaseLost || deadlineReached || now()>=expires)throw problem('browser-deadline','안전 실행시간이나 작업 임대를 넘겨 추가 변경을 중단했습니다.');};
@@ -83,9 +94,9 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         live();
         if(job)leaseTimer=setInterval(async()=>{if(beating || leaseLost)return;beating=true;try{await heartbeat();}catch{leaseLost=true;}finally{beating=false;}},20000);
         // Customer login is a separately saved profile, never the host profile.
-        const publicContext=kind==='run'?await browser.newContext({storageState:publicStorageState,locale:'ko-KR',timezoneId:'Asia/Seoul',viewport:{width:1600,height:1100}}):undefined;
+        const publicContext=kind==='run' && publicAvailabilityMode!=='public-api-v1'?await browser.newContext({storageState:publicStorageState,locale:'ko-KR',timezoneId:'Asia/Seoul',viewport:{width:1600,height:1100}}):undefined;
         live();
-        const driver=new Driver(context,{allowWrites:kind==='run' && env.ALLOW_WRITES==='true',accountLabel:accountLabel(env),publicContext:kind==='guestcheck'?context:publicContext});
+        const driver=new Driver(context,{allowWrites:kind==='run' && env.ALLOW_WRITES==='true',accountLabel:accountLabel(env),publicContext:kind==='guestcheck'?context:publicContext,publicAvailabilityMode});
         driver.reportReview=diagnostic=>console.error('spacecloud-cloud',kind==='guestcheck'?'guest-revalidate':'job-review',kind==='guestcheck'?guestDiagnostic(diagnostic):diagnostic);
         await driver.initialize();live();
         if(kind==='guestcheck'){
@@ -101,7 +112,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         }
         const result=await execute(job,driver,heartbeat);live();
         await saveState(env,await context.storageState({indexedDB:true}));live();
-        if(result.status==='succeeded'){
+        if(result.status==='succeeded' && publicContext){
           await savePublicState(env,await publicContext.storageState({indexedDB:true}));live();
         }
         await queue.complete(job,result);
@@ -125,8 +136,9 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
     await ensureStore(env);await maintenance(env);configured(env);
     if(!check && (env.ENABLED!=='true' || env.ALLOW_WRITES!=='true'))throw problem('runner-disabled','자동 연동은 아직 활성화하지 않았습니다.',503);
     const storageState=await loadState(env);if(!storageState)throw problem('login-required','클라우드 전용 브라우저에 먼저 로그인해 주세요.',503);
-    const publicStorageState=check?null:await loadPublicState(env);
-    if(!check && !publicStorageState)throw problem('guest-login-required','고객 예약 화면을 확인하려면 클라우드 게스트 로그인을 먼저 연결해 주세요.',503);
+    const publicAvailabilityMode=availabilityMode(env);
+    const publicStorageState=check || publicAvailabilityMode==='public-api-v1'?null:await loadPublicState(env);
+    if(!check && publicAvailabilityMode!=='public-api-v1' && !publicStorageState)throw problem('guest-login-required','고객 예약 화면을 확인하려면 클라우드 게스트 로그인을 먼저 연결해 주세요.',503);
     const qconfig=check?null:queueConfig(env),token=await lockRunner(env,{duration:240000,now:now()});
     if(!token)throw problem('runner-busy','다른 클라우드 작업을 처리하고 있습니다.');
     const activeMs=Math.max(30000,Math.min(120000,Number(env.RUN_BUDGET_MS)||90000));
@@ -136,7 +148,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       // Do not lease a website booking before login and budget are known to be ready.
       const queue=check?null:new Queue(qconfig);
       if(!check){job=await queue.claim();if(!job){await settleBudget(env,budget,{closed:true,notStarted:true,now:now()});await unlockRunner(env,token);return {ok:true,idle:true};}}
-      delegated=true;return await runBrowser(env,{kind:check?'check':'run',job,queue,storageState,publicStorageState,token,budget,activeMs});
+      delegated=true;return await runBrowser(env,{kind:check?'check':'run',job,queue,storageState,publicStorageState,publicAvailabilityMode,token,budget,activeMs});
     } catch(error) {
       // Delegation is explicit. Missing metadata never proves a browser was not acquired.
       if(!delegated){if(budget)await settleBudget(env,budget,{closed:true,notStarted:true,now:now()});await unlockRunner(env,token);}
@@ -314,7 +326,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       if(browser)try{await bounded(browser.close(),2000);}catch{}
     }
   }
-  async function status(env){await ensureStore(env);const session=await env.STATE_DB.prepare("SELECT updated_at FROM cloud_session WHERE id='spacecloud'").first(),publicSession=await env.STATE_DB.prepare("SELECT updated_at FROM cloud_session WHERE id='spacecloud_public'").first(),lock=await env.STATE_DB.prepare('SELECT expires_at,review FROM cloud_runner_lock WHERE id=1').first();return {ok:true,enabled:env.ENABLED==='true',allow_writes:env.ALLOW_WRITES==='true',login_saved:!!session,session_updated_at:session?.updated_at || null,public_login_saved:!!publicSession,public_session_updated_at:publicSession?.updated_at || null,...await publicCandidateStatus(env,{now:now()}),budget:await budgetStatus(env),runner:{busy:lock.expires_at>now(),review:!!lock.review}};}
+  async function status(env){await ensureStore(env);const session=await env.STATE_DB.prepare("SELECT updated_at FROM cloud_session WHERE id='spacecloud'").first(),publicSession=await env.STATE_DB.prepare("SELECT updated_at FROM cloud_session WHERE id='spacecloud_public'").first(),lock=await env.STATE_DB.prepare('SELECT expires_at,review FROM cloud_runner_lock WHERE id=1').first();return {ok:true,enabled:env.ENABLED==='true',allow_writes:env.ALLOW_WRITES==='true',login_saved:!!session,session_updated_at:session?.updated_at || null,public_login_saved:!!publicSession,public_session_updated_at:publicSession?.updated_at || null,public_verification:verificationStatus(env,!!publicSession),...await publicCandidateStatus(env,{now:now()}),budget:await budgetStatus(env),runner:{busy:lock.expires_at>now(),review:!!lock.review}};}
   async function providerStatus(env){
     await ensureStore(env);
     const row=await env.STATE_DB.prepare('SELECT state,expires_at,session_id FROM cloud_login ORDER BY started_at DESC,rowid DESC LIMIT 1').first();
@@ -346,7 +358,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
           if(env.ENABLED!=='true' || env.ALLOW_WRITES!=='true')throw problem('runner-disabled','자동 연동은 아직 활성화하지 않았습니다.',503);
           configured(env);await ensureStore(env);
           if(!await loadState(env))throw problem('login-required','클라우드 전용 브라우저에 먼저 로그인해 주세요.',503);
-          if(!await loadPublicState(env))throw problem('guest-login-required','고객 예약 화면을 확인하려면 클라우드 게스트 로그인을 먼저 연결해 주세요.',503);
+          if(availabilityMode(env)!=='public-api-v1' && !await loadPublicState(env))throw problem('guest-login-required','고객 예약 화면을 확인하려면 클라우드 게스트 로그인을 먼저 연결해 주세요.',503);
           return response({ok:true,scheduled:true,message:'상시 클라우드 스케줄에서 예약 작업을 처리합니다.'},202);
         }
         if(url.pathname==='/check')return response(await runOne(env,{check:true}));

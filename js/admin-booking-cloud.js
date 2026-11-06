@@ -4,15 +4,21 @@
   var $=A.$,status=$('#booking-cloud-status'),budget=$('#booking-cloud-budget'),message=$('#booking-cloud-message');
   var start=$('#booking-cloud-start'),guestStart=$('#booking-cloud-guest-start'),revalidate=$('#booking-cloud-revalidate'),refresh=$('#booking-cloud-refresh'),save=$('#booking-cloud-save'),cancel=$('#booking-cloud-cancel'),panel=$('#booking-cloud-login'),link=$('#booking-cloud-view'),expiry=$('#booking-cloud-expiry');
   if(!status || !start)return;
-  var snapshot=null,busy=false,loading=false,loginId='',loginPurpose='',expiresAt=0,expiryTimer;
+  var snapshot=null,busy=false,loading=false,loginId='',loginPurpose='',expiresAt=0,expiryTimer,verificationMode='legacy';
+  function publicReady(j){
+    if(!Object.hasOwn(j,'public_verification'))return j.public_login_saved===true;
+    var p=j.public_verification;if(!p || typeof p!=='object' || Array.isArray(p) || typeof p.configured!=='boolean')return false;
+    return p.mode==='public-api-v1'?p.configured===true:p.mode==='guest-browser' && p.configured===true && j.public_login_saved===true;
+  }
   function purposeName(purpose){return purpose==='guest'?'고객 달력':'호스트';}
   function minutes(ms){return (Math.ceil(Number(ms)/6000)/10).toLocaleString('ko-KR',{maximumFractionDigits:1});}
   function time(ms){return new Date(ms).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'});}
   function safeView(value){if(typeof value!=='string' || value.length>8192)return '';try{var u=new URL(value);return u.protocol==='https:' && u.hostname==='live.browser.run' && !u.username && !u.password && !u.port?u.href:'';}catch(e){return '';}}
-  function candidate(){return !!(snapshot && snapshot.public_candidate_saved && !snapshot.public_login_saved && (typeof snapshot.public_candidate_expires_at!=='number' || snapshot.public_candidate_expires_at>Date.now()));}
+  function candidate(){return !!(verificationMode==='legacy' && snapshot && snapshot.public_candidate_saved && !snapshot.public_login_saved && (typeof snapshot.public_candidate_expires_at!=='number' || snapshot.public_candidate_expires_at>Date.now()));}
   function controls(){
     var unavailable=busy || loading || !snapshot || snapshot.runner.busy || snapshot.runner.review;
-    start.disabled=unavailable || !!loginId;guestStart.disabled=start.disabled;
+    start.disabled=unavailable || !!loginId;guestStart.disabled=start.disabled;guestStart.hidden=verificationMode!=='legacy';
+    save.hidden=verificationMode!=='legacy' && loginPurpose==='guest';link.hidden=save.hidden;
     refresh.disabled=busy || loading;save.disabled=busy || loading || !loginId || expiresAt<=Date.now();cancel.disabled=busy || loading || !loginId;
     revalidate.hidden=!candidate();revalidate.disabled=unavailable || !!loginId || !candidate();
     panel.hidden=!loginId;
@@ -32,10 +38,12 @@
   }
   function render(j){
     snapshot=j;
+    verificationMode=!Object.hasOwn(j,'public_verification') || j.public_verification?.mode==='guest-browser'?'legacy':j.public_verification?.mode==='public-api-v1'?'public-api-v1':'unsupported';
     var login=j.login_saved?'호스트 로그인 상태 저장됨'+(j.session_updated_at?' · 마지막 저장 '+time(j.session_updated_at):''):'호스트 로그인 연결 필요';
-    var guest=j.public_login_saved?'고객 달력 로그인 상태 저장됨'+(j.public_session_updated_at?' · 마지막 저장 '+time(j.public_session_updated_at):''):j.public_candidate_saved?'고객 달력 로그인 상태 보관됨 · 복원 확인 필요'+(j.public_candidate_updated_at?' · 보관 '+time(j.public_candidate_updated_at):''):'고객 달력 로그인 연결 필요';
+    var guest=verificationMode==='public-api-v1'?(publicReady(j)?'공개 일정 조회 사용 · 고객 로그인 불필요':'공개 일정 조회 설정 확인 필요 · 고객 로그인 불필요'):verificationMode==='unsupported'?'일정 조회 방식 설정 확인 필요':j.public_login_saved?'고객 달력 로그인 상태 저장됨'+(j.public_session_updated_at?' · 마지막 저장 '+time(j.public_session_updated_at):''):j.public_candidate_saved?'고객 달력 로그인 상태 보관됨 · 복원 확인 필요'+(j.public_candidate_updated_at?' · 보관 '+time(j.public_candidate_updated_at):''):'고객 달력 로그인 연결 필요';
     var runner=j.runner.review?'이전 작업 결과 확인 필요':j.runner.busy?'현재 작업 중':'작업 대기 중';
-    status.textContent=login+' / '+guest+' / '+runner+' / '+(j.booking_enabled && j.enabled && j.allow_writes && j.login_saved && j.public_login_saved?'홈페이지 자동 예약 접수 중':'홈페이지 자동 예약 접수 준비 중');
+    status.textContent=login+' / '+guest+' / '+runner+' / '+(j.booking_enabled && j.enabled && j.allow_writes && j.login_saved && publicReady(j)?'홈페이지 자동 예약 접수 중':'홈페이지 자동 예약 접수 준비 중');
+    var help=$('#booking-cloud-verification-note');if(help)help.textContent=verificationMode==='public-api-v1'?'공개 일정은 고객 로그인 없이 확인합니다. 호스트 로그인은 예약 시간을 막고 해제할 때 사용합니다.':verificationMode==='unsupported'?'일정 조회 방식이 확인되지 않아 새 예약을 보류합니다. 로그인 재시도보다 조회 설정을 먼저 확인해 주세요.':'호스트와 고객 달력 로그인은 따로 관리합니다. 보관한 로그인은 복원 확인 전까지 예약에 사용하지 않습니다.';
     budget.textContent='최근 32일 '+minutes(j.budget.rolling_32d_reserved_ms)+'분 / 한도 '+minutes(j.budget.rolling_32d_limit_ms)+'분 · 오늘 '+minutes(j.budget.daily_reserved_ms)+'분 / '+minutes(j.budget.daily_limit_ms)+'분 · 이번 달 '+minutes(j.budget.monthly_reserved_ms)+'분 / '+minutes(j.budget.monthly_limit_ms)+'분 (일·월 집계는 UTC 기준)';
   }
   function load(){
@@ -46,6 +54,7 @@
     if(busy || loading)return;
     var selectedPurpose=which==='revalidate'?'guest':which==='start'?purpose:loginPurpose;
     if(['host','guest'].indexOf(selectedPurpose)===-1)return;
+    if(verificationMode!=='legacy' && selectedPurpose==='guest' && which!=='cancel'){message.textContent='현재 일정 조회 방식에서는 고객 로그인 작업을 시작하지 않습니다. 조회 설정을 확인해 주세요.';return;}
     if(which==='revalidate' && (!candidate() || loginId)){message.textContent='남아 있는 로그인 화면을 저장하거나 종료한 뒤 보관 상태를 확인해 주세요.';return;}
     if(['save','cancel'].indexOf(which)!==-1 && (!loginId || (which==='save' && expiresAt<=Date.now()))){clearLogin();message.textContent='로그인 화면의 유효시간이 지났습니다. 보관된 상태가 있으면 저장 상태 재확인을 이용해 주세요.';controls();return;}
     busy=true;controls();message.textContent=which==='start'?purposeName(selectedPurpose)+' 로그인 화면을 준비하고 있습니다. 최대 30초 정도 걸릴 수 있습니다.':which==='save'?purposeName(selectedPurpose)+' 로그인을 확인하고 안전하게 저장하고 있습니다.':which==='revalidate'?'보관한 로그인 상태를 복원하여 확인하고 있습니다. 새 로그인 입력은 필요하지 않습니다.':'로그인 화면을 종료하고 있습니다.';

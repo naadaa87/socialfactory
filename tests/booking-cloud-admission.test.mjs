@@ -113,3 +113,16 @@ test('host-only login creates no new booking, queue job or provider request whil
   }
  }finally{env.sqlite.close();}
 });
+
+test('the configured public-api-v1 verifier permits guest-free admission but still requires the host and all budgets',async()=>{
+ const data=status();data.public_login_saved=false;data.public_verification={mode:'public-api-v1',configured:true};
+ await assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)});
+ data.login_saved=false;await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)}),denied);data.login_saved=true;
+ data.budget.rolling_32d_reserved_ms=7200000;await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)}),denied);
+});
+test('unknown or malformed explicit verification modes never fall back to a saved guest profile',async()=>{
+ for(const proof of [null,[],{},'public-api-v1',{mode:'unknown',configured:true},{mode:'unsupported',configured:false},{mode:'public-api-v1',configured:false},{mode:'public-api-v1',configured:'true'},{mode:'guest-browser',configured:false}]){
+  const data=status();data.public_verification=proof;await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)}),denied);
+ }
+ const legacy=status();legacy.public_verification={mode:'guest-browser',configured:true};await assertCloudAdmission(config(),{fetcher:async()=>Response.json(legacy)});legacy.public_login_saved=false;await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(legacy)}),denied);
+});

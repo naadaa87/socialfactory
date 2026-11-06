@@ -68,6 +68,13 @@ export async function executeJob(rawJob, driver, heartbeat) {
       receipt.observed_at=Date.now();
       return {status:owned ? 'review' : 'conflict',receipt,message:'스페이스클라우드의 다른 예약과 겹칩니다. 기존 예약은 변경하지 않았습니다.'};
     }
+    if(job.action==='block' && driver.config?.publicAvailabilityMode==='public-api-v1'){
+      // Check every unowned date before the first mutation, including tomorrow.
+      for(let i=0;i<job.segments.length;i++)if(!initial[i].own){
+        if(typeof driver.assertPublicAvailable!=='function')throw new ReviewRequired('공개 일정 사전 확인을 사용할 수 없습니다.');
+        phase='verify-public-available';await heartbeat();await driver.assertPublicAvailable(job.segments[i]);
+      }
+    }
     // A read-only verification needs one fresh host observation and the public
     // check. Never reuse this branch for a creation, removal or partial block.
     if(job.action==='verify' || (job.action==='block' && initial.every(x=>x.own))) {
@@ -92,20 +99,21 @@ export async function executeJob(rawJob, driver, heartbeat) {
       if (job.action === 'release') {
         if (current.own) { phase='remove-owned';await heartbeat(); await driver.removeSegment(segment,current.own); changed=true; }
         phase='read-after-release';
+        const hostObservedAt=Date.now();
         const after=inspectRecords(await driver.recordsFor(segment.date),segment);
         if (after.own) throw new ReviewRequired('등록한 차단의 해제를 확인하지 못했습니다.');
         phase='verify-public-release';await driver.verifyPublic(segment,after.conflicts);
-        observationTimes.push(Date.now());
+        observationTimes.push(hostObservedAt);
       } else {
         if (current.conflicts.length) throw new ReviewRequired('작업 도중 다른 예약이 확인되었습니다. 결제를 보류합니다.');
         if (!current.own) {
           if (job.action === 'verify') throw new ReviewRequired('홈페이지 예약의 외부 차단을 찾지 못했습니다.');
           phase='create-owned';await heartbeat(); await driver.createSegment(segment); changed=true;
         }
-        phase='read-after-block';const after=inspectRecords(await driver.recordsFor(segment.date),segment);
+        phase='read-after-block';const hostObservedAt=Date.now();const after=inspectRecords(await driver.recordsFor(segment.date),segment);
         if (!after.own || after.conflicts.length) throw new ReviewRequired('차단 등록 또는 다른 예약 유무를 확인하지 못했습니다.');
         phase='verify-public-block';await driver.verifyPublic(segment,[after.own]);
-        observationTimes.push(Date.now());
+        observationTimes.push(hostObservedAt);
       }
     }
     receipt.observed_at=Math.min(...observationTimes);

@@ -120,3 +120,9 @@ test('guest save and revalidation allow bounded cleanup time while ordinary cont
  for(const body of [{action:'save',purpose:'guest',login_id:id},{action:'revalidate',purpose:'guest'},{action:'save',purpose:'host',login_id:id},{action:'start',purpose:'host'}])assert.equal((await change({env,request:request(body)})).status,200);
  assert.deepEqual(delays,[65000,65000,35000,35000]);
 });
+
+test('public HTTP verifier status remains distinct from guest authentication and drops arbitrary extra fields',async t=>{
+ const data={...payload(),public_login_saved:false,public_verification:{mode:'public-api-v1',configured:true,url:'https://evil.test',token:secret}};mock(t,async()=>Response.json(data));
+ const r=await status({env,request:request()}),j=await r.json();assert.equal(r.status,200);assert.equal(j.public_login_saved,false);assert.deepEqual(j.public_verification,{mode:'public-api-v1',configured:true});assert(!JSON.stringify(j).includes('evil.test'));assert(!JSON.stringify(j).includes(secret));
+ for(const proof of [null,[],{mode:'unknown',configured:true},{mode:'public-api-v1',configured:'true'}]){mock(t,async()=>Response.json({...data,public_verification:proof}));const value=await(await status({env,request:request()})).json();assert.deepEqual(value.public_verification,{mode:'unsupported',configured:false});}
+});

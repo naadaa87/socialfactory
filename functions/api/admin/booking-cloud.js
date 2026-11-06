@@ -12,6 +12,13 @@ function config(env){
 }
 function finite(value,maximum){if(!Number.isSafeInteger(value) || value<0 || value>maximum)throw Error('cloud-shape');return value;}
 function timestamp(value){return value===null?null:finite(value,8640000000000000);}
+function publicVerification(data){
+  if(!Object.hasOwn(data,'public_verification'))return undefined;
+  const proof=data.public_verification;
+  if(!proof || typeof proof!=='object' || Array.isArray(proof) || typeof proof.configured!=='boolean'
+    || !['public-api-v1','guest-browser'].includes(proof.mode))return {mode:'unsupported',configured:false};
+  return {mode:proof.mode,configured:proof.configured};
+}
 function statusFields(data,env){
   if(!data || !data.budget || !data.runner || ['enabled','allow_writes','login_saved'].some(key=>typeof data[key]!=='boolean')
     || (data.public_login_saved!==undefined && typeof data.public_login_saved!=='boolean')
@@ -25,6 +32,7 @@ function statusFields(data,env){
     public_candidate_saved:data.public_candidate_saved===true,
     public_candidate_updated_at:timestamp(data.public_candidate_updated_at===undefined?null:data.public_candidate_updated_at),
     public_candidate_expires_at:timestamp(data.public_candidate_expires_at===undefined?null:data.public_candidate_expires_at),
+    ...(publicVerification(data)===undefined?{}:{public_verification:publicVerification(data)}),
     runner:{busy:data.runner.busy,review:data.runner.review},budget:{utc_day:b.utc_day,utc_month:b.utc_month,
       daily_limit_ms:finite(b.daily_limit_ms,5400000),monthly_limit_ms:finite(b.monthly_limit_ms,7200000),rolling_32d_limit_ms:finite(b.rolling_32d_limit_ms,7200000),
       daily_reserved_ms:finite(b.daily_reserved_ms,32*86400000),monthly_reserved_ms:finite(b.monthly_reserved_ms,32*86400000),rolling_32d_reserved_ms:finite(b.rolling_32d_reserved_ms,32*86400000)}};

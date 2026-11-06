@@ -207,3 +207,25 @@ test('queue never forwards credentials across redirects and uses exact job lease
   let calls=0;const redirected=new QueueClient(config,async()=>{calls++;return new Response('',{status:302,headers:{Location:'https://other.test'}});});
   await assert.rejects(redirected.claim(),{code:'queue-http-302'});assert.equal(calls,1);
 });
+
+test('creation and release receipts keep the post-write host observation time before slow public verification',async()=>{
+ const actualNow=Date.now;
+ try{
+  for(const action of ['block','release']){
+   let clock=1000,lastHostStarted=0;Date.now=()=>clock;const job=makeJob({action}),segment=planJob(job).segments[0],driver=fakeDriver(action==='release'?[own(segment)]:[]);
+   driver.recordsFor=async function(date){lastHostStarted=clock;this.hostReads.push(date);clock+=1000;return this.records;};
+   driver.verifyPublic=async function(){clock+=60000;this.publicChecks.push({});};
+   const result=await executeJob(job,driver,async()=>{});assert.equal(result.status,'succeeded');assert.equal(result.receipt.observed_at,lastHostStarted);assert(clock-result.receipt.observed_at>30000,'a slow public read does not refresh the host snapshot');
+  }
+ }finally{Date.now=actualNow;}
+});
+test('a later overnight segment unavailable in the public API prevents every new external write',async()=>{
+ const job=makeJob({start_min:1380,end_min:1560}),segments=planJob(job).segments,driver=fakeDriver();driver.config={publicAvailabilityMode:'public-api-v1'};const checked=[];
+ driver.assertPublicAvailable=async segment=>{checked.push(segment.date);if(segment.date===segments[1].date)throw new ReviewRequired('public unavailable');};
+ const result=await executeJob(job,driver,async()=>{});assert.equal(result.status,'review');assert.deepEqual(checked,segments.map(s=>s.date));assert.equal(driver.created.length,0);assert.equal(driver.removed.length,0);assert.equal(driver.publicChecks.length,0);
+});
+test('public API preflight is required for new writes while already-owned verification keeps its blocked-slot proof',async()=>{
+ const missing=fakeDriver();missing.config={publicAvailabilityMode:'public-api-v1'};assert.equal((await executeJob(makeJob(),missing,async()=>{})).status,'review');assert.equal(missing.created.length,0);
+ const job=makeJob({action:'verify'}),driver=fakeDriver(planJob(job).segments.map(own));driver.config={publicAvailabilityMode:'public-api-v1'};driver.assertPublicAvailable=async()=>{throw Error('owned block is intentionally unavailable');};
+ const result=await executeJob(job,driver,async()=>{});assert.equal(result.status,'succeeded');assert.equal(driver.created.length,0);assert.equal(driver.publicChecks.length,1);
+});
