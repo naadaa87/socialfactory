@@ -75,6 +75,49 @@ test('preview is read-only, import is idempotent and creates no passes/reservati
   for(const table of ['passes','pass_payments','reservations','notification_jobs'])assert.equal(f.db.prepare('SELECT COUNT(*) n FROM '+table).get().n,0);
 });
 
+test('batch exclusions remove other-store and parking revenue, survive reimport/cancellation, and can be restored',async t=>{
+  const f=fixture(t),p=payment(),q=payment({id:'640000000000000002',amount:8000});
+  await f.post({action:'commit',payments:[p,q]});
+  let r=await f.post({action:'review',paymentIds:[p.id,q.id],decision:'exclude',note:'메가스팟 결제 · 주차 포함'});
+  assert.equal(r.status,200);assert.equal((await r.json()).changed,2);
+  assert.equal((await f.getSales()).total,0);assert.equal(f.included().length,0);
+  await f.post({action:'commit',payments:[p,q]});await f.send(p,'approval-after-exclusion');
+  const cancelled={...q,state:'CANCELLED',cancelledAt:currentDay+'T11:00:00+09:00',updatedAt:currentDay+'T11:00:00+09:00'};
+  await f.send(cancelled,'cancel-after-exclusion');assert.equal((await f.getSales()).total,0);
+  let d=await(await status({env:f.env,request:f.get('/api/admin/toss-sales?filter=exclude')})).json();
+  assert.equal(d.total,2);assert(d.rows.every(r=>r.disposition==='exclude'&&r.review_note.includes('메가스팟')));
+  assert.equal((await f.post({action:'review',paymentIds:[p.id,q.id],decision:'include',note:'소셜팩토리 결제로 재확인'})).status,200);
+  assert.equal((await f.getSales()).total,12000);
+  const dash=await(await dashboard({env:f.env,request:f.get('/api/admin/dashboard')})).json();assert.equal(dash.month.terminal,12000);
+  for(const table of ['passes','pass_payments','reservations','notification_jobs'])assert.equal(f.db.prepare('SELECT COUNT(*) n FROM '+table).get().n,0);
+});
+
+test('invalid or mixed review batches do not partially change any sale and automatic duplicates remain excluded',async t=>{
+  const f=fixture(t),p=payment(),external=payment({id:'2',sourceType:'EXTERNAL'});
+  await f.post({action:'commit',payments:[p,external]});
+  for(const ids of [[],[p.id,p.id],[p.id,'bad'],[p.id,'999'],[p.id,external.id],Array.from({length:51},(_,i)=>String(i+1))]){
+    assert.equal((await f.post({action:'review',paymentIds:ids,decision:'exclude',note:'주차 결제'})).status,400);
+    assert.equal(f.db.prepare('SELECT review_state FROM toss_payments WHERE payment_id=?').get(p.id).review_state,'auto');
+  }
+  assert.equal((await admin({env:f.env,request:f.request({action:'review',paymentIds:[p.id],decision:'exclude',note:'주차 결제'},false)})).status,401);
+  f.seedPass(p);
+  await f.post({action:'review',paymentIds:[p.id],decision:'include',note:'합산 재확인'});
+  assert.equal(f.included().length,0);assert.equal((await f.getSales()).total,12000);
+});
+
+test('ledger pagination reaches older imports and exclusion filters cover the full ledger',async t=>{
+  const f=fixture(t),payments=Array.from({length:55},(_,i)=>payment({id:String(640000000000000001n+BigInt(i))}));
+  await f.post({action:'commit',payments});
+  const list=async q=>(await(await status({env:f.env,request:f.get('/api/admin/toss-sales'+q)})).json());
+  const first=await list('?page=1'),second=await list('?page=2');
+  assert.equal(first.total,55);assert.equal(first.rows.length,50);assert.equal(second.rows.length,5);
+  assert.equal(new Set([...first.rows,...second.rows].map(r=>r.payment_id)).size,55);
+  const id=second.rows[0].payment_id;await f.post({action:'review',paymentIds:[id],decision:'exclude',note:'주차 결제'});
+  const excluded=await list('?filter=exclude');assert.equal(excluded.total,1);assert.equal(excluded.rows[0].payment_id,id);
+  assert.equal((await list('?filter=included')).total,54);
+  assert.equal((await status({env:f.env,request:f.get('/api/admin/toss-sales?page=-1')})).status,400);
+});
+
 test('general terminal appears in all totals/months/channels/dashboard even with passes unchecked',async t=>{
   const f=fixture(t);await f.post({action:'commit',payments:[payment()]});
   for(const extra of ['','&orders=0','&basis=use']){

@@ -10,7 +10,7 @@
   <title>관리자 | 소셜팩토리</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=toss20261105">
+  <link rel="stylesheet" href="/css/admin.css?v=toss-exclusions20261106">
   <link rel="stylesheet" href="/css/admin-kiosk-ui.css?v=d24708b714">
 </head>
 <body class="adm">
@@ -178,9 +178,17 @@
         <p id="ts-import-status" class="small" role="status" aria-live="polite"></p>
         <div id="ts-preview" class="tbl-wrap"></div>
         <button class="btn btn-primary btn-sm" type="button" id="ts-commit" hidden>조회한 내역을 매출에 반영</button>
-        <h3 class="mt">최근 가져온 결제</h3>
-        <p class="tiny muted">최근 100건. ‘확인 필요’는 합산 전 보류된 내역입니다. 수기 매출과 별개 거래임을 확인한 경우에만 추가 합산하세요.</p>
+        <h3 class="mt">가져온 결제 · 매출 합산 관리</h3>
+        <p class="small muted">메가스팟·주차 결제는 선택해 소셜팩토리 매출에서 제외하세요. 원거래는 보관되며 다시 합산할 수 있습니다. ‘확인 필요’는 합산 전 보류된 내역입니다.</p>
+        <div class="ts-toolbar"><label for="ts-filter">표시</label><select class="input" id="ts-filter"><option value="all">전체 내역</option><option value="included">매출 합산</option><option value="exclude">선택 제외</option><option value="review">확인 필요</option><option value="duplicate">이용권 자동 중복 제외</option></select><label><input type="checkbox" id="ts-select-all"> 이 페이지 선택</label><span id="ts-selection" class="small" role="status">0건 선택</span><button class="btn btn-light btn-sm" type="button" id="ts-exclude-selected" disabled>선택한 내역 제외</button><button class="btn btn-light btn-sm" type="button" id="ts-include-selected" disabled>선택한 내역 다시 합산</button></div>
+        <form id="ts-review-form" class="ts-review card mt-s" hidden>
+          <h4 id="ts-review-title"></h4><p class="small muted">매출 집계에만 적용됩니다. 토스 결제를 취소하거나 환불하지 않습니다. 이용권 자동 중복 제외는 유지됩니다.</p>
+          <div class="frow"><div class="f" id="ts-reason-field"><label for="ts-reason">제외 사유</label><select class="input" id="ts-reason"><option value="">사유 선택</option><option>메가스팟 결제</option><option>주차 결제</option><option>기타</option></select></div><div class="f"><label for="ts-review-note">메모</label><input class="input" id="ts-review-note" maxlength="250" placeholder="구분할 내용을 적어주세요 (기타 사유는 필수)"></div></div>
+          <div class="ts-toolbar"><button class="btn btn-primary btn-sm" type="submit" id="ts-review-save">선택한 처리 저장</button><button class="btn btn-light btn-sm" type="button" id="ts-review-cancel">닫기</button></div>
+        </form>
+        <p id="ts-review-status" class="small" role="status" aria-live="polite"></p>
         <div id="ts-recent" class="tbl-wrap"></div>
+        <div class="ts-toolbar mt-s"><button class="btn btn-light btn-sm" type="button" id="ts-prev" disabled>이전 페이지</button><span id="ts-page" class="small"></span><button class="btn btn-light btn-sm" type="button" id="ts-next" disabled>다음 페이지</button></div>
       </div>
       <div class="card mt"><h2>스페이스클라우드 자동 매출 동기화</h2>
         <p class="small muted">연결된 PC의 크롬에서 15분마다 수집합니다. 매출은 로그인한 모든 관리자에게 동일하게 표시됩니다. PC 절전·크롬 종료·호스트센터 로그인 만료 시 수집이 멈춥니다.</p>
@@ -591,7 +599,7 @@
 </div>
 <script src="/js/site-config.js?v=3361ee9a-room3-16"></script>
 <script src="/js/admin.js?v=toss20261105"></script>
-<script src="/js/admin-toss-sales.js?v=20261106-history-range"></script>
+<script src="/js/admin-toss-sales.js?v=20261106-exclusions"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
