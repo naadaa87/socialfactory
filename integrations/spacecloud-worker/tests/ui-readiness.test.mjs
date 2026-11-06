@@ -135,6 +135,14 @@ test('public reservation verification uses the supplied anonymous context',async
   await ui.initialize();assert.equal(ui.host,host);assert.equal(ui.guest,guest);assert.deepEqual(observed,[host,guest]);
 });
 
+test('guest source verification retains the original customer tab without navigating or creating a replacement',async()=>{
+  const timeouts=[],host={setDefaultTimeout(value){timeouts.push(['host',value]);}},source={setDefaultTimeout(value){timeouts.push(['source',value]);},async goto(){assert.fail('initialize must not navigate the original customer tab');}};
+  let newPages=0;
+  const ui=new SpacecloudUI({async newPage(){newPages++;return host;}},{allowWrites:false,publicPage:source,publicContext:{async newPage(){assert.fail('the original customer tab must not be replaced');}}});
+  const observed=[];ui.observe=page=>observed.push(page);
+  await ui.initialize();assert.equal(newPages,1);assert.equal(ui.host,host);assert.equal(ui.guest,source);assert.deepEqual(observed,[host,source]);assert.deepEqual(timeouts,[['host',15000],['source',15000]]);
+});
+
 test('the observed customer login modal produces a clear guest authentication failure',async()=>{
   const ui=new SpacecloudUI(null,{});ui.guest={getByText(pattern){assert(pattern.test('로그인/회원가입해주세요.'));return {filter(options){assert.deepEqual(options,{visible:true});return {async count(){return 1;}};}};}};
   await assert.rejects(ui.assertNoGuestLoginPrompt(),{name:'ReviewRequired',message:'스페이스클라우드 고객용 로그인이 필요합니다. 관리자에서 고객 로그인을 연결해 주세요.'});

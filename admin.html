@@ -477,8 +477,8 @@
         <h2 class="ch"><span>클라우드 연동</span><button class="btn btn-light btn-sm" type="button" id="booking-cloud-refresh">상태 다시 확인</button></h2>
         <p id="booking-cloud-status" class="small" role="status" aria-live="polite">예약 탭을 열면 로그인 저장 여부와 작업 상태를 확인합니다.</p>
         <p id="booking-cloud-budget" class="small muted"></p>
-        <p class="small muted">노트북을 꺼도 클라우드에서 예약을 처리합니다. 정해 둔 사용 한도에 도달하면 추가 실행을 멈춥니다. 호스트 로그인은 예약 시간을 막고 해제할 때, 고객 달력 로그인은 실제 판매 달력을 확인할 때 사용합니다. 각 로그인 화면은 5분 동안만 사용할 수 있으며, 로그인 후 이 화면에서 저장을 눌러 주세요.</p>
-        <div class="acts"><button class="btn btn-light btn-sm" type="button" id="booking-cloud-start" disabled>호스트 로그인 다시 연결</button><button class="btn btn-light btn-sm" type="button" id="booking-cloud-guest-start" disabled>고객 달력 로그인 연결</button></div>
+        <p class="small muted">노트북을 꺼도 클라우드에서 예약을 처리합니다. 정해 둔 사용 한도에 도달하면 추가 실행을 멈춥니다. 호스트 로그인은 예약 시간을 막고 해제할 때, 고객 달력 로그인은 실제 판매 달력을 확인할 때 사용합니다. 각 로그인 화면은 원래의 5분 유효시간 안에서 유지됩니다. 확인이 끝나지 않아도 보관된 상태는 복원 확인 전까지 예약에 사용하지 않습니다.</p>
+        <div class="acts"><button class="btn btn-light btn-sm" type="button" id="booking-cloud-start" disabled>호스트 로그인 다시 연결</button><button class="btn btn-light btn-sm" type="button" id="booking-cloud-guest-start" disabled>카카오로 고객 달력 연결</button><button class="btn btn-light btn-sm" type="button" id="booking-cloud-revalidate" hidden>저장 상태 재확인</button></div>
         <div id="booking-cloud-login" class="mt" hidden>
           <div class="acts"><a class="btn btn-primary btn-sm" id="booking-cloud-view" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">로그인 화면 열기 ↗</a><button class="btn btn-primary btn-sm" type="button" id="booking-cloud-save">로그인 저장</button><button class="btn btn-light btn-sm" type="button" id="booking-cloud-cancel">연결 취소</button></div>
           <p id="booking-cloud-expiry" class="small muted"></p>
@@ -663,7 +663,7 @@
 <script src="/js/site-config.js?v=20261106-sync"></script>
 <script src="/js/admin.js?v=payapp-sales20261106"></script>
 <script src="/js/admin-bookings.js?v=20261106-sync"></script>
-<script src="/js/admin-booking-cloud.js?v=20261107-dual-login"></script>
+<script src="/js/admin-booking-cloud.js?v=20261107-preserve-login"></script>
 <script src="/js/admin-toss-sales.js?v=20261106-sort"></script>
 <script src="/js/admin-payapp-sales.js?v=20261106"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>

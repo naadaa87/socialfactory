@@ -70,7 +70,7 @@ export class SpacecloudReadiness {
 
 export class SpacecloudUI {
   constructor(context,config) { this.context=context;this.config=config;this.room=null;this.job=null;this.readiness=new WeakMap(); }
-  async initialize() {this.host=await this.context.newPage();this.guest=await (this.config.publicContext || this.context).newPage();this.host.setDefaultTimeout(15000);this.guest.setDefaultTimeout(15000);this.observe(this.host);this.observe(this.guest);}
+  async initialize() {this.host=await this.context.newPage();this.guest=this.config.publicPage || await (this.config.publicContext || this.context).newPage();this.host.setDefaultTimeout(15000);this.guest.setDefaultTimeout(15000);this.observe(this.host);this.observe(this.guest);}
   observe(page){let state=this.readiness.get(page);if(!state){state=new SpacecloudReadiness(page,{report:diagnostic=>this.reportReview?.(diagnostic)});this.readiness.set(page,state);}return state;}
   async click(locator,label='화면 조작') {
     // Responsive layouts can retain hidden copies. Only one visible target may receive input.

@@ -13,6 +13,8 @@ export const schema=[
     budget_id TEXT NOT NULL, started_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active')`,
   `CREATE TABLE IF NOT EXISTS cloud_guest_login (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, lock_token TEXT NOT NULL,
     budget_id TEXT NOT NULL, started_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active')`,
+  `CREATE TABLE IF NOT EXISTS cloud_auth_candidates (id TEXT PRIMARY KEY, version TEXT NOT NULL, cipher TEXT NOT NULL,
+    created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS cloud_browser_runs (id TEXT PRIMARY KEY,session_id TEXT NOT NULL,lock_token TEXT NOT NULL,
     budget_id TEXT NOT NULL,started_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,state TEXT NOT NULL DEFAULT 'active')`
 ];
@@ -33,12 +35,46 @@ export const loadState=env=>loadStoredState(env,'spacecloud');
 export const loadPublicState=env=>loadStoredState(env,'spacecloud_public');
 const spacecloudHost=host=>{const clean=String(host || '').replace(/^\./,'').toLowerCase();return clean==='spacecloud.kr' || clean.endsWith('.spacecloud.kr');};
 export function onlySpacecloudState(state){return {cookies:(state?.cookies || []).filter(cookie=>spacecloudHost(cookie.domain)),origins:(state?.origins || []).filter(origin=>{try{const url=new URL(origin.origin);return url.protocol==='https:' && spacecloudHost(url.hostname);}catch{return false;}})};}
-async function saveStoredState(env,id,state){const cipher=await encryptState(onlySpacecloudState(state),env.SESSION_ENCRYPTION_KEY);await env.STATE_DB.prepare(`INSERT INTO cloud_session(id,cipher,updated_at) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET cipher=excluded.cipher,updated_at=excluded.updated_at`).bind(id,cipher,Date.now()).run();}
-export const saveState=(env,state)=>saveStoredState(env,'spacecloud',state);
-export const savePublicState=(env,state)=>saveStoredState(env,'spacecloud_public',state);
+async function saveStoredState(env,id,state,{guard=()=>{}}={}){guard();const cipher=await encryptState(onlySpacecloudState(state),env.SESSION_ENCRYPTION_KEY);guard();await env.STATE_DB.prepare(`INSERT INTO cloud_session(id,cipher,updated_at) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET cipher=excluded.cipher,updated_at=excluded.updated_at`).bind(id,cipher,Date.now()).run();}
+export const saveState=(env,state,options)=>saveStoredState(env,'spacecloud',state,options);
+export const savePublicState=(env,state,options)=>saveStoredState(env,'spacecloud_public',state,options);
+const candidateId='spacecloud_public_candidate';
+export async function savePublicCandidate(env,state,{now=Date.now(),guard=()=>{}}={}){
+  guard();
+  const version=crypto.randomUUID(),expires_at=now+30*60000;
+  const cipher=await encryptState({version,state:onlySpacecloudState(state)},env.SESSION_ENCRYPTION_KEY);
+  guard();
+  await env.STATE_DB.prepare(`INSERT INTO cloud_auth_candidates(id,version,cipher,created_at,expires_at) VALUES(?1,?2,?3,?4,?5)
+    ON CONFLICT(id) DO UPDATE SET version=excluded.version,cipher=excluded.cipher,created_at=excluded.created_at,expires_at=excluded.expires_at`)
+    .bind(candidateId,version,cipher,now,expires_at).run();
+  return {version,state:onlySpacecloudState(state),created_at:now,expires_at};
+}
+export async function publicCandidateStatus(env,{now=Date.now()}={}){
+  const row=await env.STATE_DB.prepare('SELECT created_at,expires_at FROM cloud_auth_candidates WHERE id=?1 AND expires_at>?2').bind(candidateId,now).first();
+  return {public_candidate_saved:!!row,public_candidate_updated_at:row?.created_at || null,public_candidate_expires_at:row?.expires_at || null};
+}
+export async function loadPublicCandidate(env,{now=Date.now()}={}){
+  const row=await env.STATE_DB.prepare('SELECT version,cipher,created_at,expires_at FROM cloud_auth_candidates WHERE id=?1 AND expires_at>?2').bind(candidateId,now).first();
+  if(!row)return null;
+  const value=await decryptState(row.cipher,env.SESSION_ENCRYPTION_KEY);
+  if(value.version!==row.version || !value.state || !Array.isArray(value.state.cookies) || !Array.isArray(value.state.origins))throw problem('guest-candidate-unverified','저장된 고객 로그인 후보를 확인해야 합니다. 운영용 로그인은 변경하지 않았습니다.',409);
+  return {version:row.version,state:value.state,created_at:row.created_at,expires_at:row.expires_at};
+}
+export async function promotePublicCandidate(env,candidate,state,{now=Date.now(),guard=()=>{}}={}){
+  guard();
+  const cipher=await encryptState(onlySpacecloudState(state),env.SESSION_ENCRYPTION_KEY);
+  guard();
+  const result=await env.STATE_DB.batch([
+    env.STATE_DB.prepare(`INSERT INTO cloud_session(id,cipher,updated_at)
+      SELECT 'spacecloud_public',?1,?2 WHERE EXISTS(SELECT 1 FROM cloud_auth_candidates WHERE id=?3 AND version=?4 AND expires_at>?2)
+      ON CONFLICT(id) DO UPDATE SET cipher=excluded.cipher,updated_at=excluded.updated_at`).bind(cipher,now,candidateId,candidate.version),
+    env.STATE_DB.prepare('DELETE FROM cloud_auth_candidates WHERE id=?1 AND version=?2 AND expires_at>?3').bind(candidateId,candidate.version,now)
+  ]);
+  if(!Number(result[0]?.meta?.changes))throw problem('guest-candidate-unverified','로그인 후보가 만료되었거나 변경되었습니다. 운영용 로그인은 변경하지 않았습니다.',409);
+}
 export const paidIncluded=env=>env.CLOUD_PLAN_MODE==='paid-included' && env.INCLUDED_BUDGET_CONFIRMED==='true';
 const configuredNumber=(value,fallback)=>value!==undefined && value!=='' && Number.isFinite(Number(value))?Number(value):fallback;
-export const dailyLimit=env=>Math.max(0,Math.min(paidIncluded(env)?3600000:540000,configuredNumber(env.DAILY_BROWSER_BUDGET_MS,paidIncluded(env)?3600000:540000)));
+export const dailyLimit=env=>Math.max(0,Math.min(paidIncluded(env)?5400000:540000,configuredNumber(env.DAILY_BROWSER_BUDGET_MS,paidIncluded(env)?5400000:540000)));
 export const monthlyLimit=env=>Math.max(0,Math.min(7200000,configuredNumber(env.MONTHLY_BROWSER_BUDGET_MS,7200000)));
 export const rollingLimit=env=>Math.max(0,Math.min(7200000,configuredNumber(env.ROLLING_32D_BROWSER_BUDGET_MS,7200000)));
 export async function lockRunner(env,{duration=120000,now=Date.now()}={}){

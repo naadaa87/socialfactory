@@ -11,7 +11,7 @@ const admin='test-only-admission-private-admin-token-more-than-thirty-two';
 const config=()=>({SPACECLOUD_SYNC_ENABLED:'true',SPACECLOUD_RUNNER_URL:RUNNER,CLOUD_ADMIN_TOKEN:admin});
 const status=()=>({ok:true,enabled:true,allow_writes:true,login_saved:true,public_login_saved:true,runner:{busy:false,review:false},budget:{
   utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),
-  daily_limit_ms:3600000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
+  daily_limit_ms:5400000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
 const denied={code:'cloud-admission-unavailable',status:503};
 
 test('admission checks only a configured private Worker status and permits a healthy busy runner',async()=>{
@@ -37,11 +37,11 @@ test('each usage cap requires three worst-case browser reservations without rese
   }
 });
 
-test('the paid daily ceiling accepts 60 minutes while monthly and rolling limits remain two hours',async()=>{
-  const data=status();assert.equal(data.budget.daily_limit_ms,60*60000);
+test('the paid daily ceiling accepts 90 minutes while monthly and rolling limits remain two hours',async()=>{
+  const data=status();assert.equal(data.budget.daily_limit_ms,90*60000);
   assert.equal(data.budget.monthly_limit_ms,2*3600000);assert.equal(data.budget.rolling_32d_limit_ms,2*3600000);
   await assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)});
-  for(const [field,limit] of [['daily_limit_ms',3600000],['monthly_limit_ms',7200000],['rolling_32d_limit_ms',7200000]]){
+  for(const [field,limit] of [['daily_limit_ms',5400000],['monthly_limit_ms',7200000],['rolling_32d_limit_ms',7200000]]){
     const invalid=status();invalid.budget[field]=limit+1;
     await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(invalid)}),denied);
   }
@@ -108,7 +108,7 @@ test('healthy admission creates only a local hold and duplicate receipts remain 
 
 test('host-only login creates no new booking, queue job or provider request while the customer calendar is inaccessible',async()=>{
  const env=fixture();try{
-  for(const guest of [false,undefined]){const data=status();if(guest===undefined)delete data.public_login_saved;else data.public_login_saved=guest;
+  for(const guest of [false,undefined]){const data=status();data.public_candidate_saved=true;data.public_candidate_updated_at=Date.now();if(guest===undefined)delete data.public_login_saved;else data.public_login_saved=guest;
    await withCloud(data,async calls=>{const response=await submit({request:request(input()),env});assert.equal(response.status,503);assert.equal((await response.json()).error,denied.code);assert.equal(env.sqlite.prepare('SELECT COUNT(*) n FROM booking_requests').get().n,0);assert.equal(env.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sync_jobs').get().n,0);assert.equal(calls.length,1);assert.equal(calls[0].url,RUNNER+'/status');});
   }
  }finally{env.sqlite.close();}

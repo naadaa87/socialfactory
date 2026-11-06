@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { ensureStore,encryptState,decryptState,saveState,loadState,savePublicState,loadPublicState,reserveBudget,settleBudget,lockRunner,dailyLimit,monthlyLimit,rollingLimit } from '../store.mjs';
+import { ensureStore,encryptState,decryptState,saveState,loadState,savePublicState,loadPublicState,savePublicCandidate,loadPublicCandidate,promotePublicCandidate,publicCandidateStatus,reserveBudget,settleBudget,lockRunner,dailyLimit,monthlyLimit,rollingLimit } from '../store.mjs';
 import { createRunner } from '../runner.mjs';
 import { persistentConnector } from '../connection.mjs';
 import { QueueClient } from '../../../integrations/spacecloud-worker/queue.mjs';
@@ -20,12 +20,20 @@ function fixture(overrides={}) {
       const task=tail.then(async()=>{sqlite.exec('BEGIN');try{const result=[];for(const statement of statements)result.push(await statement.run());sqlite.exec('COMMIT');return result;}catch(error){sqlite.exec('ROLLBACK');throw error;}});
       tail=task.catch(()=>{});return task;
     }};
-  const counters={claims:0,maintenance:0,heartbeats:0,completions:[],launches:0,connects:0,acquires:0,closes:[],disconnects:0,driverInitializations:0,guestVerifications:0,rooms:[],restored:[],contexts:[],storageReads:[],drivers:[],navigations:[],liveViews:[]};
+  const counters={claims:0,maintenance:0,heartbeats:0,completions:[],launches:0,connects:0,acquires:0,closes:[],disconnects:0,driverInitializations:0,guestVerifications:0,rooms:[],restored:[],contexts:[],storageReads:[],drivers:[],navigations:[],liveViews:[],liveViewTargets:[],popupClicks:0};
   const sessions=new Map();
-  let nextSession=0,clock=CLOCK,closeFails=false,knownMissing404=false,launchFails=false,currentJob=job;
-  function context(savedState=PRIVATE_STATE){let currentState=structuredClone(savedState);const pages=[],ctx={pages:()=>pages,setStorageState(value){currentState=structuredClone(value);},
-    async newPage(){let url='about:blank';const page={async goto(value){url=value;counters.navigations.push(value);if(value==='https://www.spacecloud.kr/auth/login?source=detail-page')currentState=PUBLIC_STATE;},url:()=>url};pages.push(page);return page;},
-    async newCDPSession(){return {async send(command,options){assert.equal(command,'Cloudflare.getLiveView');assert(['tab','full'].includes(options.mode));counters.liveViews.push(options);return {devtoolsFrontendUrl:'https://live.browser.run/ui/view?jwt=PRIVATE-SHORT-LIVED-VIEW'};}};},
+  let nextSession=0,clock=CLOCK,closeFails=false,knownMissing404=false,launchFails=false,currentJob=job,popupURL='https://accounts.kakao.com/login',callbackIncomplete=false;
+  function context(savedState=PRIVATE_STATE){let currentState=structuredClone(savedState);const pages=[],pageWaiters=[];
+    function makePage(initial='about:blank'){let url=initial;return {async goto(value){url=value;counters.navigations.push(value);if(value==='https://www.spacecloud.kr/auth/login?source=detail-page')currentState=PUBLIC_STATE;},url:()=>url,
+      getByText(text,options){assert.equal(text,'카카오로 로그인');assert.deepEqual(options,{exact:true});return {filter(options){assert.deepEqual(options,{visible:true});return this;},async waitFor(options){assert.deepEqual(options,{state:'visible',timeout:10000});},async count(){return 1;},async click(){counters.popupClicks++;const popup=makePage(popupURL);pages.push(popup);assert(pageWaiters.length);pageWaiters.shift()(popup);}};},
+      async waitForURL(predicate,options){if(url==='https://www.spacecloud.kr/auth/login?source=detail-page'){
+        assert.deepEqual(options,{waitUntil:'domcontentloaded',timeout:8000});if(!callbackIncomplete)url='https://www.spacecloud.kr/space/82026';
+        if(!predicate(new URL(url)))throw Object.assign(new Error('callback has not completed'),{name:'TimeoutError'});
+      }else if(!predicate(new URL(url)))throw new Error('popup destination is not allowed');}};}
+    const ctx={pages:()=>pages,setStorageState(value){currentState=structuredClone(value);},
+    async newPage(){const page=makePage();pages.push(page);return page;},
+    waitForEvent(event){assert.equal(event,'page');return new Promise(resolve=>pageWaiters.push(resolve));},
+    async newCDPSession(page){counters.liveViewTargets.push(page);return {async send(command,options){assert.equal(command,'Cloudflare.getLiveView');assert(['tab','full'].includes(options.mode));counters.liveViews.push(options);return {devtoolsFrontendUrl:'https://live.browser.run/ui/view?jwt=PRIVATE-SHORT-LIVED-VIEW'};}};},
     async storageState(){counters.storageReads.push(ctx);return structuredClone(currentState);}};return ctx;}
   function browserFor(id){const state=sessions.get(id);assert(state,'fake session must exist');return {sessionId:()=>id,contexts:()=>[state.context],
     async newContext(options){const ctx=context(options.storageState || PUBLIC_STATE);counters.restored.push(options.storageState);counters.contexts.push({context:ctx,options});return ctx;},async close(){counters.disconnects++;}};}
@@ -41,7 +49,7 @@ function fixture(overrides={}) {
   const env={STATE_DB:DB,BROWSER,ENABLED:'true',ALLOW_WRITES:'true',CLOUD_PLAN_MODE:'free',CLOUD_PLAN_CONFIRMED_FREE:'true',LOGIN_CLEANUP_SCHEDULED:'true',
     SESSION_ENCRYPTION_KEY:'test-only-encryption-key-more-than-thirty-two-chars',CLOUD_ADMIN_TOKEN:'test-only-cloud-administrator-token-long-enough',
     SPACECLOUD_WORKER_TOKEN:'test-only-website-worker-token-thirty-two-chars',API_ORIGIN:'https://site.example',...overrides};
-  return {env,sqlite,counters,deps,sessions,runner:createRunner(deps),advance(ms){clock+=ms;},setJob(value){currentJob=value;},setCloseFailure(value=true){closeFails=value;},setMissing404(value=true){knownMissing404=value;},setLaunchFailure(value=true){launchFails=value;},now:()=>clock};
+  return {env,sqlite,counters,deps,sessions,runner:createRunner(deps),advance(ms){clock+=ms;},setJob(value){currentJob=value;},setCallbackIncomplete(value=true){callbackIncomplete=value;},setPopupURL(value){popupURL=value;},setCloseFailure(value=true){closeFails=value;},setMissing404(value=true){knownMissing404=value;},setLaunchFailure(value=true){launchFails=value;},now:()=>clock};
 }
 async function ready(f){await ensureStore(f.env);await saveState(f.env,PRIVATE_STATE);await savePublicState(f.env,PUBLIC_STATE);return f;}
 const reservation=(f)=>f.sqlite.prepare('SELECT * FROM cloud_budget_reservations ORDER BY started_at DESC,rowid DESC LIMIT 1').get();
@@ -86,19 +94,19 @@ test('zero configured caps stop use and paid inclusion does not raise caps beyon
   const f=fixture({DAILY_BROWSER_BUDGET_MS:'0'});await ensureStore(f.env);
   assert.equal(dailyLimit(f.env),0);await assert.rejects(reserveBudget(f.env,1),{code:'daily-budget'});
   assert.equal(dailyLimit({DAILY_BROWSER_BUDGET_MS:'99999999'}),540000);
-  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999'}),3600000);
+  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999'}),5400000);
   assert.equal(monthlyLimit({MONTHLY_BROWSER_BUDGET_MS:'999999999'}),7200000);
   assert.equal(rollingLimit({ROLLING_32D_BROWSER_BUDGET_MS:'999999999'}),7200000);
 });
 
-test('the paid 60-minute day cannot overshoot a day or increase either two-hour total cap or the free nine-minute ceiling',async()=>{
+test('the paid 90-minute day cannot overshoot a day or increase either two-hour total cap or the free nine-minute ceiling',async()=>{
   const f=fixture({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999',MONTHLY_BROWSER_BUDGET_MS:'99999999',ROLLING_32D_BROWSER_BUDGET_MS:'99999999'});
   await ensureStore(f.env);
-  await assert.rejects(reserveBudget(f.env,3600001,{now:CLOCK}),{code:'daily-budget'});
-  await reserveBudget(f.env,3600000,{now:CLOCK});
+  await assert.rejects(reserveBudget(f.env,5400001,{now:CLOCK}),{code:'daily-budget'});
+  await reserveBudget(f.env,5400000,{now:CLOCK});
   await assert.rejects(reserveBudget(f.env,1,{now:CLOCK}),{code:'daily-budget'});
-  await reserveBudget(f.env,3600000,{now:CLOCK+86400000});
-  assert.equal(budget(f).month_ms,7200000);assert.equal(budget(f).day_ms,3600000);
+  await reserveBudget(f.env,1800000,{now:CLOCK+86400000});
+  assert.equal(budget(f).month_ms,7200000);assert.equal(budget(f).day_ms,1800000);
   await assert.rejects(reserveBudget(f.env,1,{now:CLOCK+2*86400000}),{code:'daily-budget'});
   assert.equal(f.sqlite.prepare('SELECT SUM(reserved_ms) total FROM cloud_budget_reservations').get().total,7200000);
   assert.equal(dailyLimit({CLOUD_PLAN_MODE:'free',DAILY_BROWSER_BUDGET_MS:'3600000'}),540000);
@@ -137,7 +145,7 @@ test('run wake endpoint is scoped, only acknowledges and never leases or launche
   const f=await ready(fixture());
   let res=await f.runner.fetch(request(f,'/run',{token:f.env.SPACECLOUD_WORKER_TOKEN}),f.env);assert.equal(res.status,202);assert.equal((await res.json()).scheduled,true);
   assert.equal(f.counters.claims,0);assert.equal(f.counters.launches,0);assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_budget_reservations').get().n,0);
-  for(const path of ['/status','/login/start','/guest-login/start','/guest-login/save','/guest-login/cancel','/guest-login/view','/check','/maintenance']){
+  for(const path of ['/status','/login/start','/guest-login/start','/guest-login/save','/guest-login/cancel','/guest-login/view','/guest-login/revalidate','/check','/maintenance']){
     res=await f.runner.fetch(request(f,path,{token:f.env.SPACECLOUD_WORKER_TOKEN,method:path==='/status'?'GET':'POST'}),f.env);assert.equal(res.status,401,path);
   }
   res=await f.runner.fetch(request(f,'/run',{token:'incorrect-token'}),f.env);assert.equal(res.status,401);
@@ -245,14 +253,14 @@ test('manual guest login opens the observed customer login route and saves only 
   const f=fixture();await ensureStore(f.env);await saveState(f.env,PRIVATE_STATE);
   const host=f.sqlite.prepare("SELECT cipher FROM cloud_session WHERE id='spacecloud'").get().cipher;
   const started=await f.runner.startGuestLogin(f.env);assert.equal(started.purpose,'guest');assert.deepEqual(f.counters.navigations,['https://www.spacecloud.kr/auth/login?source=detail-page']);
-  assert.equal(f.counters.liveViews[0].mode,'full');
+  assert.equal(f.counters.liveViews[0].mode,'tab');
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_login').get().n,0);assert.equal(f.sqlite.prepare('SELECT state FROM cloud_guest_login WHERE id=?').get(started.login_id).state,'active');
   assert.equal(f.sessions.size,1);assert.equal(f.counters.claims,0);assert.equal(await loadPublicState(f.env),null);
   f.advance(20000);const saved=await f.runner.saveGuestLogin(f.env,started.login_id);assert.equal(saved.saved,true);assert.equal(saved.purpose,'guest');
-  assert.equal(f.counters.guestVerifications,1);assert.deepEqual(f.counters.rooms,[]);assert.equal(f.counters.drivers[0].config.allowWrites,false);
-  assert.equal(f.counters.drivers[0].config.publicContext,f.counters.drivers[0].context);assert.deepEqual(await loadPublicState(f.env),PUBLIC_STATE);
+  assert.equal(f.counters.guestVerifications,2);assert.deepEqual(f.counters.rooms,[]);assert.equal(f.counters.drivers[0].config.allowWrites,false);
+  assert.equal(f.counters.drivers[0].config.publicPage,f.counters.liveViewTargets[0]);assert.equal(f.counters.drivers[0].config.publicContext,f.counters.drivers[0].context);assert.deepEqual(await loadPublicState(f.env),PUBLIC_STATE);
   assert.equal(f.counters.contexts.length,1);assert.deepEqual(f.counters.contexts[0].options,{storageState:PUBLIC_STATE,locale:'ko-KR',timezoneId:'Asia/Seoul',viewport:{width:1600,height:1100}});
-  assert.equal(f.counters.drivers[0].context,f.counters.contexts[0].context);assert.equal(f.counters.acquires,1);assert.equal(f.counters.storageReads.length,2);
+  assert.equal(f.counters.drivers[1].context,f.counters.contexts[0].context);assert.equal(f.counters.acquires,1);assert.equal(f.counters.storageReads.length,2);
   assert.notEqual(f.counters.storageReads[0],f.counters.storageReads[1]);
   assert.equal(f.sqlite.prepare("SELECT cipher FROM cloud_session WHERE id='spacecloud'").get().cipher,host);assert.deepEqual(await loadState(f.env),PRIVATE_STATE);
   assert.equal(f.sqlite.prepare('SELECT state FROM cloud_guest_login WHERE id=?').get(started.login_id).state,'saved');
@@ -270,6 +278,31 @@ test('guest full view reuses the active browser and original budget without rene
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_budget_reservations').get().n,1);
 });
 
+test('Kakao guest start shows the exact OAuth popup while keeping the original Spacecloud callback page alive',async()=>{
+  const f=fixture(),response=await f.runner.fetch(request(f,'/guest-login/start',{body:{provider:'kakao'}}),f.env);
+  assert.equal(response.status,200);const started=await response.json();assert.equal(started.provider,'kakao');assert.equal(started.purpose,'guest');
+  const context=f.sessions.get(started.sessionId).context,pages=context.pages();assert.equal(pages.length,2);
+  assert.equal(pages[0].url(),'https://www.spacecloud.kr/auth/login?source=detail-page');assert.equal(pages[1].url(),'https://accounts.kakao.com/login');
+  assert.equal(f.counters.liveViewTargets[0],pages[1]);assert.equal(f.counters.liveViews[0].mode,'tab');assert.equal(f.counters.popupClicks,1);
+  assert.equal(f.counters.acquires,1);assert.equal(f.counters.closes.length,0);assert.equal(f.counters.storageReads.length,0);assert.equal(await loadPublicState(f.env),null);
+  assert.equal(reservation(f).reserved_ms,360000);await f.runner.saveGuestLogin(f.env,started.login_id);assert.deepEqual(await loadPublicState(f.env),PUBLIC_STATE);
+});
+
+test('only the literal Kakao provider is accepted and it is limited to guest login',async()=>{
+  for(const [path,provider] of [['/guest-login/start','naver'],['/guest-login/start','https://attacker.invalid'],['/guest-login/start','KAKAO'],['/guest-login/start',null],['/login/start','kakao']]){
+    const f=fixture(),response=await f.runner.fetch(request(f,path,{body:{provider}}),f.env);assert.equal(response.status,400);assert.equal((await response.json()).error,'login-provider');
+    assert.equal(f.counters.acquires,0);assert.equal(f.counters.connects,0);
+  }
+});
+
+test('Kakao OAuth popup accepts only the two observed HTTPS provider hosts',async()=>{
+  for(const url of ['https://attacker.invalid/login','http://accounts.kakao.com/login','https://accounts.kakao.com.attacker.invalid/login','https://user@accounts.kakao.com/login','https://accounts.kakao.com:444/login']){
+    const f=fixture();f.setPopupURL(url);await assert.rejects(f.runner.startGuestLogin(f.env,{provider:'kakao'}),/popup destination is not allowed/);
+    assert.equal(f.counters.liveViews.length,0);assert.equal(f.sessions.size,0);assert.equal(reservation(f).state,'closed');assert.equal(await loadPublicState(f.env),null);
+  }
+  const f=fixture();f.setPopupURL('https://kauth.kakao.com/oauth/authorize');const result=await f.runner.startGuestLogin(f.env,{provider:'kakao'});assert.equal(result.provider,'kakao');assert.equal(f.counters.liveViews[0].mode,'tab');
+});
+
 test('guest view rejects host IDs, invalid IDs, expired deadlines and lost leases without closing a browser',async()=>{
   const host=fixture(),startedHost=await host.runner.startLogin(host.env);
   for(const id of [startedHost.login_id,'not-a-uuid'])await assert.rejects(host.runner.viewGuestLogin(host.env,id),{code:'login-session'});
@@ -285,6 +318,7 @@ test('guest save verifies restored desktop state and persists refreshed credenti
   const previous=console.error;console.error=(...args)=>captured.push(args);
   const refreshed=structuredClone(PUBLIC_STATE);refreshed.cookies.push({name:'fresh',value:'REFRESHED-VERIFIED-GUEST',domain:'.spacecloud.kr',path:'/'});
   class DesktopGuest extends f.deps.Driver {async verifyGuestLogin(){
+    if(this.config.publicPage){assert.equal(this.config.publicPage,f.counters.liveViewTargets[0]);return {guest_ready:true};}
     const created=f.counters.contexts[0];assert.equal(this.context,created.context);assert.deepEqual(created.options.storageState,PUBLIC_STATE);
     assert.deepEqual(created.options.viewport,{width:1600,height:1100});
     this.reportReview({phase:'public-progress',step:'month',event:'layout',client_width:1600,inner_height:1100,raw:'PRIVATE-RAW-CONTENT',cookie:'PRIVATE-GUEST-LOGIN-COOKIE',url:'https://example.invalid/?token=PRIVATE-TOKEN'});
@@ -314,14 +348,15 @@ test('host and guest login receipts cannot save or cancel each other',async()=>{
   assert.equal(f.sessions.size,0);assert.equal(f.counters.guestVerifications,0);assert.equal(await loadPublicState(f.env),null);
 });
 
-test('a missing guest calendar proof closes the login and preserves existing host and guest authentication',async()=>{
+test('a missing original guest calendar proof preserves the login and existing host and guest authentication',async()=>{
   const f=await ready(fixture()),started=await f.runner.startGuestLogin(f.env);
   const before=f.sqlite.prepare('SELECT id,cipher FROM cloud_session ORDER BY id').all();
   class NotLoggedIn extends f.deps.Driver {async verifyGuestLogin(){return {guest_ready:false};}}
   const runner=createRunner({...f.deps,Driver:NotLoggedIn});
-  await assert.rejects(runner.saveGuestLogin(f.env,started.login_id),{code:'guest-login-required'});
+  await assert.rejects(runner.saveGuestLogin(f.env,started.login_id),{code:'guest-login-validation',retryable:true,phase:'original-calendar'});
   assert.deepEqual(f.sqlite.prepare('SELECT id,cipher FROM cloud_session ORDER BY id').all(),before);
-  assert.equal(f.sqlite.prepare('SELECT state FROM cloud_guest_login WHERE id=?').get(started.login_id).state,'failed');assert.equal(f.sessions.size,0);assert.equal(lock(f).review,0);
+  assert.equal(f.sqlite.prepare('SELECT state FROM cloud_guest_login WHERE id=?').get(started.login_id).state,'active');assert.equal(f.sessions.size,1);assert.equal(f.counters.closes.length,0);assert.equal(lock(f).review,0);
+  assert.equal(await loadPublicCandidate(f.env,{now:f.now()}),null);
 });
 
 test('guest login expiry uses the same cleanup budget and never touches bookings or host login',async()=>{
@@ -331,12 +366,139 @@ test('guest login expiry uses the same cleanup budget and never touches bookings
   assert.deepEqual(await loadState(f.env),PRIVATE_STATE);assert.equal(await loadPublicState(f.env),null);assert.equal(reservation(f).state,'closed');assert.equal(lock(f).token,null);
 });
 
-test('guest verification deadline covers initialization and closes the browser without saving state',async()=>{
+test('guest verification deadline preserves the source and original expiry without saving unverified state',async()=>{
   const f=fixture(),started=await f.runner.startGuestLogin(f.env);
   class HangingGuest extends f.deps.Driver {async verifyGuestLogin(){return new Promise(()=>{});}}
   const runner=createRunner({...f.deps,Driver:HangingGuest,setDeadline(fn,ms){return setTimeout(()=>{f.advance(ms);fn();},1);}});
-  await assert.rejects(runner.saveGuestLogin(f.env,started.login_id),{code:'login-expired'});
-  assert.equal(await loadPublicState(f.env),null);assert.equal(f.sessions.size,0);assert.equal(reservation(f).state,'closed');assert.equal(lock(f).review,0);
+  const before={login:f.sqlite.prepare('SELECT * FROM cloud_guest_login').get(),budget:reservation(f),lock:lock(f)};
+  await assert.rejects(runner.saveGuestLogin(f.env,started.login_id),{code:'guest-login-validation',retryable:true});
+  assert.equal(await loadPublicState(f.env),null);assert.equal(f.sessions.size,1);assert.equal(f.counters.closes.length,0);assert.equal(reservation(f).state,'reserved');assert.equal(lock(f).review,0);
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_guest_login').get(),before.login);assert.deepEqual(reservation(f),before.budget);assert.deepEqual(lock(f),before.lock);
+  f.advance(300001);await f.runner.maintenance(f.env);assert.equal(f.sessions.size,0);assert.equal(reservation(f).state,'closed');
+});
+
+test('an incomplete OAuth callback preserves the same receipt and exports no authentication',async()=>{
+  const f=fixture(),started=await f.runner.startGuestLogin(f.env);f.setCallbackIncomplete();
+  const before={login:f.sqlite.prepare('SELECT * FROM cloud_guest_login').get(),budget:reservation(f),lock:lock(f)};
+  const response=await f.runner.fetch(request(f,'/guest-login/save',{body:{login_id:started.login_id}}),f.env),data=await response.json();
+  assert.equal(response.status,409);assert.equal(data.error,'guest-login-incomplete');assert.equal(data.retryable,true);assert.equal(data.resumable,true);
+  assert.equal(data.login_id,started.login_id);assert.equal(data.expires_at,started.expires_at);assert.equal(data.phase,'callback');assert(data.recovery_view_url.startsWith('https://live.browser.run/'));
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_guest_login').get(),before.login);assert.deepEqual(reservation(f),before.budget);assert.deepEqual(lock(f),before.lock);
+  assert.equal(f.counters.storageReads.length,0);assert.equal(f.counters.closes.length,0);assert.equal(f.sessions.size,1);assert.equal(await loadPublicCandidate(f.env,{now:f.now()}),null);
+  f.setCallbackIncomplete(false);const saved=await f.runner.saveGuestLogin(f.env,started.login_id);assert.equal(saved.saved,true);assert.equal(f.counters.acquires,1);assert.equal(f.sessions.size,0);
+});
+
+test('source proof precedes candidate capture and an isolated failure preserves both candidate and source for retry',async()=>{
+  const f=fixture(),started=await f.runner.startGuestLogin(f.env);let sourceVerified=false;
+  const before={login:f.sqlite.prepare('SELECT * FROM cloud_guest_login').get(),budget:reservation(f),lock:lock(f)};
+  class CloneFails extends f.deps.Driver {async verifyGuestLogin(){
+    if(this.config.publicPage){assert.equal(f.counters.storageReads.length,0);sourceVerified=true;return {guest_ready:true};}
+    assert.equal(sourceVerified,true);assert(await loadPublicCandidate(f.env,{now:f.now()}));throw new Error('PRIVATE-FAILURE-CONTENT');
+  }}
+  const runner=createRunner({...f.deps,Driver:CloneFails});const response=await runner.fetch(request(f,'/guest-login/save',{body:{login_id:started.login_id}}),f.env),data=await response.json();
+  assert.equal(response.status,409);assert.equal(data.error,'guest-login-validation');assert.equal(data.phase,'isolated-calendar');assert.equal(data.retryable,true);
+  assert(!JSON.stringify(data).includes('PRIVATE-FAILURE-CONTENT'));assert.equal(f.counters.closes.length,0);assert.equal(f.sessions.size,1);
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_guest_login').get(),before.login);assert.deepEqual(reservation(f),before.budget);assert.deepEqual(lock(f),before.lock);
+  const candidate=await loadPublicCandidate(f.env,{now:f.now()});assert.deepEqual(candidate.state,PUBLIC_STATE);assert.equal(candidate.expires_at-candidate.created_at,30*60000);
+  assert.equal(await loadPublicState(f.env),null);const status=await f.runner.status(f.env);assert.equal(status.public_candidate_saved,true);assert.equal(status.public_login_saved,false);
+  assert(!JSON.stringify(status).includes('PRIVATE-GUEST'));assert(!JSON.stringify(status).includes(candidate.version));
+  f.advance(1000);assert.equal((await f.runner.saveGuestLogin(f.env,started.login_id)).saved,true);assert.equal(f.counters.acquires,1);assert.equal(f.sessions.size,0);
+  assert.equal(await loadPublicCandidate(f.env,{now:f.now()}),null);assert.equal((await f.runner.status(f.env)).public_candidate_saved,false);
+});
+
+test('candidate staging is encrypted, versioned and first-party-only and stale versions cannot overwrite a newer candidate',async()=>{
+  const f=fixture();await ensureStore(f.env);const candidateState={...structuredClone(PUBLIC_STATE),sessionStorage:{secret:'DO-NOT-CAPTURE'}};
+  candidateState.cookies.push({name:'kakao',value:'PROVIDER-SECRET',domain:'.kakao.com',path:'/'});
+  candidateState.origins.push({origin:'https://accounts.kakao.com',localStorage:[{name:'provider',value:'PROVIDER-SECRET'}]});
+  const first=await savePublicCandidate(f.env,candidateState,{now:f.now()}),second=await savePublicCandidate(f.env,PUBLIC_STATE,{now:f.now()+1});
+  assert.notEqual(first.version,second.version);const stored=f.sqlite.prepare('SELECT * FROM cloud_auth_candidates').get();
+  assert.equal(stored.id,'spacecloud_public_candidate');assert(!stored.cipher.includes('PRIVATE-GUEST'));assert(!stored.cipher.includes('PROVIDER-SECRET'));
+  assert.deepEqual((await loadPublicCandidate(f.env,{now:f.now()})).state,PUBLIC_STATE);assert.equal(await loadPublicState(f.env),null);
+  await assert.rejects(promotePublicCandidate(f.env,first,PUBLIC_STATE,{now:f.now()+2}),{code:'guest-candidate-unverified'});
+  assert.equal(await loadPublicState(f.env),null);assert.equal((await loadPublicCandidate(f.env,{now:f.now()+2})).version,second.version);
+});
+
+test('candidate TTL cannot be extended by inspection and expiry removes unusable candidate without launching Chrome',async()=>{
+  const f=fixture();await ensureStore(f.env);const candidate=await savePublicCandidate(f.env,PUBLIC_STATE,{now:f.now()});
+  const first=await publicCandidateStatus(f.env,{now:f.now()});assert.equal(first.public_candidate_expires_at,candidate.expires_at);
+  f.advance(30*60000);assert.equal(await loadPublicCandidate(f.env,{now:f.now()}),null);assert.equal((await f.runner.status(f.env)).public_candidate_saved,false);
+  await assert.rejects(f.runner.revalidateGuest(f.env),{code:'guest-candidate-unverified'});assert.equal(f.counters.launches,0);assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_auth_candidates').get().n,0);
+});
+
+test('a fresh browser revalidates a pending candidate before the old public profile and never touches host state or queue',async()=>{
+  const f=await ready(fixture()),state=structuredClone(PUBLIC_STATE);state.cookies[0].value='PENDING-CANDIDATE-COOKIE';
+  await savePublicCandidate(f.env,state,{now:f.now()});const host=f.sqlite.prepare("SELECT cipher FROM cloud_session WHERE id='spacecloud'").get().cipher;
+  const result=await f.runner.revalidateGuest(f.env);assert.equal(result.saved,true);assert.equal(result.purpose,'guest');
+  assert.equal(f.counters.launches,1);assert.deepEqual(f.counters.restored,[state]);assert.equal(f.counters.drivers[0].config.allowWrites,false);
+  assert.equal(f.counters.drivers[0].config.publicContext,f.counters.drivers[0].context);assert.equal(f.counters.claims,0);assert.equal(f.counters.completions.length,0);
+  assert.equal(f.sqlite.prepare("SELECT cipher FROM cloud_session WHERE id='spacecloud'").get().cipher,host);assert.deepEqual(await loadPublicState(f.env),state);
+  assert.equal(await loadPublicCandidate(f.env,{now:f.now()}),null);assert.equal(f.sessions.size,0);assert.equal(reservation(f).reserved_ms,90000);assert.equal(reservation(f).state,'closed');assert.equal(lock(f).token,null);
+});
+
+test('cold verification falls back to a saved public profile when there is no pending candidate',async()=>{
+  const f=await ready(fixture());const response=await f.runner.fetch(request(f,'/guest-login/revalidate'),f.env);assert.equal(response.status,200);assert.equal((await response.json()).saved,true);
+  assert.equal(f.counters.launches,1);assert.deepEqual(f.counters.restored,[PUBLIC_STATE]);assert.equal(f.counters.claims,0);assert.equal(f.sessions.size,0);
+});
+
+test('failed cold verification retains candidate version and both saved profiles and closes only its new browser',async()=>{
+  const f=await ready(fixture());await savePublicCandidate(f.env,PUBLIC_STATE,{now:f.now()});
+  const before={candidate:f.sqlite.prepare('SELECT * FROM cloud_auth_candidates').get(),profiles:f.sqlite.prepare('SELECT id,cipher FROM cloud_session ORDER BY id').all()};
+  class ColdFails extends f.deps.Driver {async verifyGuestLogin(){return {guest_ready:false};}}
+  await assert.rejects(createRunner({...f.deps,Driver:ColdFails}).revalidateGuest(f.env),{code:'guest-candidate-unverified'});
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_auth_candidates').get(),before.candidate);assert.deepEqual(f.sqlite.prepare('SELECT id,cipher FROM cloud_session ORDER BY id').all(),before.profiles);
+  assert.equal(f.sessions.size,0);assert.equal(f.counters.claims,0);assert.equal(lock(f).token,null);assert.equal(lock(f).review,0);
+});
+
+test('cold verification cannot bypass its browser budget or an active preserved source login',async()=>{
+  const f=fixture({DAILY_BROWSER_BUDGET_MS:'0'});await ensureStore(f.env);await savePublicCandidate(f.env,PUBLIC_STATE,{now:f.now()});
+  await assert.rejects(f.runner.revalidateGuest(f.env),{code:'daily-budget'});assert.equal(f.counters.launches,0);assert.equal(lock(f).token,null);
+  const active=fixture(),started=await active.runner.startGuestLogin(active.env);await savePublicCandidate(active.env,PUBLIC_STATE,{now:active.now()});
+  await assert.rejects(active.runner.revalidateGuest(active.env),{code:'runner-busy'});assert.equal(active.counters.launches,0);assert.equal(active.sessions.size,1);
+  await active.runner.saveGuestLogin(active.env,started.login_id,{cancel:true});assert(await loadPublicCandidate(active.env,{now:active.now()}));
+  await active.runner.revalidateGuest(active.env);assert.equal(active.counters.launches,1);assert.equal(active.sessions.size,0);
+});
+
+test('cold verification deadline is bounded and keeps its candidate for a later retry',async()=>{
+  const f=fixture();await ensureStore(f.env);await savePublicCandidate(f.env,PUBLIC_STATE,{now:f.now()});
+  class HangingCold extends f.deps.Driver {async verifyGuestLogin(){return new Promise(()=>{});}}
+  const runner=createRunner({...f.deps,Driver:HangingCold,setDeadline(fn,ms){return setTimeout(()=>{f.advance(ms);fn();},1);}});
+  await assert.rejects(runner.revalidateGuest(f.env),{code:'guest-candidate-unverified'});assert(await loadPublicCandidate(f.env,{now:f.now()}));
+  assert.equal(f.sessions.size,0);assert.equal(reservation(f).state,'closed');assert.equal(f.counters.claims,0);assert.equal(lock(f).token,null);
+});
+
+test('a lock read returning after the verification timeout cannot start a late promotion',async()=>{
+  const f=await ready(fixture());await savePublicCandidate(f.env,PUBLIC_STATE,{now:f.now()});
+  const before={candidate:f.sqlite.prepare('SELECT * FROM cloud_auth_candidates').get(),profiles:f.sqlite.prepare('SELECT id,cipher FROM cloud_session ORDER BY id').all()};
+  let release,signal,fireDeadline,reads=0;const gate=new Promise(resolve=>release=resolve),paused=new Promise(resolve=>signal=resolve);
+  const prepare=f.env.STATE_DB.prepare;
+  f.env.STATE_DB.prepare=function(sql){const statement=prepare.call(this,sql);
+    if(sql==='SELECT token,expires_at,review FROM cloud_runner_lock WHERE id=1'){
+      const first=statement.first;statement.first=async function(){const row=await first.call(this);if(++reads===2){signal();await gate;}return row;};
+    }
+    return statement;
+  };
+  const runner=createRunner({...f.deps,setDeadline(fn,ms){fireDeadline=()=>{f.advance(ms);fn();};return 1;},clearDeadline(){}});
+  const operation=runner.revalidateGuest(f.env);await paused;fireDeadline();await assert.rejects(operation,{code:'guest-candidate-unverified'});
+  assert.equal(f.sessions.size,0);assert.equal(lock(f).token,null);release();await new Promise(resolve=>setTimeout(resolve,0));
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_auth_candidates').get(),before.candidate);
+  assert.deepEqual(f.sqlite.prepare('SELECT id,cipher FROM cloud_session ORDER BY id').all(),before.profiles);assert.equal(f.counters.claims,0);
+});
+
+test('candidate staging, promotion and public-profile fallback recheck their deadline after encryption before sending any write',async()=>{
+  for(const kind of ['candidate','public','staging']){
+    const f=await ready(fixture()),candidate=await savePublicCandidate(f.env,PUBLIC_STATE,{now:f.now()});
+    const before={candidate:f.sqlite.prepare('SELECT * FROM cloud_auth_candidates').get(),profiles:f.sqlite.prepare('SELECT id,cipher FROM cloud_session ORDER BY id').all()};
+    let valid=true,release,signal;const gate=new Promise(resolve=>release=resolve),paused=new Promise(resolve=>signal=resolve);
+    const encrypt=crypto.subtle.encrypt;
+    crypto.subtle.encrypt=async function(...args){const result=await encrypt.apply(this,args);signal();await gate;return result;};
+    const guard=()=>{if(!valid)throw Object.assign(new Error('fixture deadline'),{code:'fixture-deadline'});};
+    try{
+      const operation=kind==='candidate'?promotePublicCandidate(f.env,candidate,PUBLIC_STATE,{now:f.now(),guard}):kind==='public'?savePublicState(f.env,PUBLIC_STATE,{guard}):savePublicCandidate(f.env,PUBLIC_STATE,{now:f.now(),guard});
+      await paused;valid=false;release();await assert.rejects(operation,{code:'fixture-deadline'});
+    }finally{crypto.subtle.encrypt=encrypt;release();}
+    assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_auth_candidates').get(),before.candidate);
+    assert.deepEqual(f.sqlite.prepare('SELECT id,cipher FROM cloud_session ORDER BY id').all(),before.profiles);
+  }
 });
 
 test('successful public checks persist rotated guest cookies only in the guest profile',async()=>{
