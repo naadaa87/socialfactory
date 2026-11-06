@@ -1,6 +1,6 @@
 import {json,safeEqual} from './auth.js';
 import {kstNow} from './admin.js';
-import {ensureParking,parkingSettings,openDate,parkingOrder,parkingAction,PARKING_JOIN,TICKETS,plateOf} from './parking.js';
+import {ensureParking,parkingSettings,arrivalOpen,parkingOrder,parkingAction,PARKING_JOIN,TICKETS,plateOf} from './parking.js';
 export const AUTOMATION_SCHEMA=[
  `CREATE TABLE IF NOT EXISTS parking_automation_settings(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL DEFAULT 0,updated_at TEXT)`,
  `INSERT OR IGNORE INTO parking_automation_settings(id,enabled) VALUES(1,0)`,
@@ -9,7 +9,7 @@ export const AUTOMATION_SCHEMA=[
 export async function ensureAutomation(env){await ensureParking(env);await env.DB.batch(AUTOMATION_SCHEMA.map(q=>env.DB.prepare(q)));}
 export async function automationEnabled(env){await env.DB.batch(AUTOMATION_SCHEMA.map(q=>env.DB.prepare(q)));return !!(await env.DB.prepare('SELECT enabled FROM parking_automation_settings WHERE id=1').first())?.enabled;}
 export async function automationSign(secret,body){const e=new TextEncoder(),key=await crypto.subtle.importKey('raw',e.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,e.encode(body))),v=>v.toString(16).padStart(2,'0')).join('');}
-export function automationOpen(s,now=kstNow()){const m=Number(now.slice(11,13))*60+Number(now.slice(14,16));return s.confirmed&&openDate(now.slice(0,10),s)&&m>=s.start_min&&m<s.end_min;}
+export function automationOpen(s,now=kstNow()){return arrivalOpen(s,now);}
 export async function automationRelay(env,action,data={}){
  const secret=String(env.ALIGO_RELAY_SECRET||'');if(secret.length<32)throw Error('기존 서버 연결 설정을 확인해 주세요.');
  const body=JSON.stringify({action,...data,time:Date.now()});const r=await fetch('https://relay.naranhistory.com/socialfactory/amano',{method:'POST',redirect:'manual',headers:{'Content-Type':'application/json','X-Socialfactory-Signature':await automationSign(secret,body)},body,signal:AbortSignal.timeout(25000)});
@@ -34,7 +34,7 @@ export async function automaticParking({request,env,waitUntil}){
  if(b.action==='issue'){
   const r=await parkingAction(env,p,{action:'issue',expectedVersion:p.version,memo:'서버 자동 등록 확인 필요 · '+String(d.memo||'등록 결과 확인 필요').slice(0,400)},true);return json(r,r.status||200);
  }
- if(!operating||p.payment_status!=='paid'||p.refunded_amount||p.request_at&&!p.reviewed_at||!p.paid_at)return json({ok:false,error:'운영시간 또는 결제·환불 상태가 변경되었습니다.'},409);
+ if(!operating||p.payment_status!=='paid'||p.refunded_amount||p.request_at&&!p.reviewed_at||!p.paid_at)return json({ok:false,error:'운영 조건 또는 결제·환불 상태가 변경되었습니다.'},409);
  if(b.action==='claim'){
   const entry=String(d.entry_id||'').trim().slice(0,80),at=String(d.entry_at||'').replace('T',' ').slice(0,16)+':00',now=kstNow();
   if(p.status!=='requested'||!p.arrival_at||claim||plateOf(d.plate_confirm)!==p.plate||d.confirm_entry!==true||!entry||!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00$/.test(at)||at.slice(0,10)!==today||Number(at.slice(11,13))>23||Number(at.slice(14,16))>59||at>now||d.free_used!==true&&d.confirm_no_free!==true||d.free_used===true&&d.confirm_no_free===true)return json({ok:false,error:'당일 입차·무료 할인 이력을 확인해 주세요.'},409);

@@ -1,5 +1,5 @@
 import {automationEnabled} from '../../_lib/parking-automation.js';
-import {parkingItems,publicParking,ensureParking} from '../../_lib/parking.js';
+import {parkingItems,publicParking,ensureParking,parkingSettings} from '../../_lib/parking.js';
 // GET /api/orders/status?oid=…&t=… — 주문 결과 조회 (주문 완료 화면)
 import { orderToken, ORDER_STATUS, PAY_METHOD } from "../../_lib/shop.js";
 import { PRODUCT_MAP } from "../../_lib/products.js";
@@ -20,7 +20,7 @@ export async function onRequestGet({ request, env }) {
   await ensurePayapp(env);
   const payment=await env.DB.prepare("SELECT refunded_amount,payurl FROM payapp_payments WHERE oid=?").bind(oid).first();
   const linked=await env.DB.prepare("SELECT p.code,p.status,p.starts_at,p.ends_at FROM website_order_passes w JOIN pass_payments pp ON pp.payment_key=w.payment_key JOIN passes p ON p.payment_id=pp.id WHERE w.oid=? ORDER BY w.unit").bind(oid).all().catch(()=>({results:[]}));
-  let parking=null,parkingVehicles=[];if(o.product_id.startsWith("parking-")){await ensureParking(env);parkingVehicles=(await parkingItems(env,oid)).map(publicParking);parking=parkingVehicles[0]||null;}
+  let parking=null,parkingVehicles=[];if(o.product_id.startsWith("parking-")){await ensureParking(env);const settings=await parkingSettings(env);parkingVehicles=(await parkingItems(env,oid)).map(p=>publicParking(p,settings));parking=parkingVehicles[0]||null;}
   const p = PRODUCT_MAP[o.product_id] || {};
   const scheduledStart=/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00$/.test(o.start_date||"");
   const legacyReady=linked.results.some(p=>p.status==="ready");
