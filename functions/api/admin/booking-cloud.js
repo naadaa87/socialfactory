@@ -20,7 +20,7 @@ function statusFields(data,env){
   return {ok:true,configured:true,booking_enabled:env.SPACECLOUD_SYNC_ENABLED==='true' && env.SPACECLOUD_BOOKING_OPEN!=='false',enabled:data.enabled,allow_writes:data.allow_writes,
     login_saved:data.login_saved,session_updated_at:timestamp(data.session_updated_at),
     runner:{busy:data.runner.busy,review:data.runner.review},budget:{utc_day:b.utc_day,utc_month:b.utc_month,
-      daily_limit_ms:finite(b.daily_limit_ms,1800000),monthly_limit_ms:finite(b.monthly_limit_ms,7200000),rolling_32d_limit_ms:finite(b.rolling_32d_limit_ms,7200000),
+      daily_limit_ms:finite(b.daily_limit_ms,2700000),monthly_limit_ms:finite(b.monthly_limit_ms,7200000),rolling_32d_limit_ms:finite(b.rolling_32d_limit_ms,7200000),
       daily_reserved_ms:finite(b.daily_reserved_ms,32*86400000),monthly_reserved_ms:finite(b.monthly_reserved_ms,32*86400000),rolling_32d_reserved_ms:finite(b.rolling_32d_reserved_ms,32*86400000)}};
 }
 function liveView(value){

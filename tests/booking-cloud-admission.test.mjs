@@ -11,7 +11,7 @@ const admin='test-only-admission-private-admin-token-more-than-thirty-two';
 const config=()=>({SPACECLOUD_SYNC_ENABLED:'true',SPACECLOUD_RUNNER_URL:RUNNER,CLOUD_ADMIN_TOKEN:admin});
 const status=()=>({ok:true,enabled:true,allow_writes:true,login_saved:true,runner:{busy:false,review:false},budget:{
   utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),
-  daily_limit_ms:1800000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
+  daily_limit_ms:2700000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
 const denied={code:'cloud-admission-unavailable',status:503};
 
 test('admission checks only a configured private Worker status and permits a healthy busy runner',async()=>{
@@ -34,6 +34,16 @@ test('each usage cap requires three worst-case browser reservations without rese
     const data=status();data.budget[used]=data.budget[limit]-MINIMUM_BOOKING_BROWSER_MS+1;
     await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)}),denied);
     data.budget[used]--;await assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)});
+  }
+});
+
+test('the paid daily ceiling accepts 45 minutes while monthly and rolling limits remain two hours',async()=>{
+  const data=status();assert.equal(data.budget.daily_limit_ms,45*60000);
+  assert.equal(data.budget.monthly_limit_ms,2*3600000);assert.equal(data.budget.rolling_32d_limit_ms,2*3600000);
+  await assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)});
+  for(const [field,limit] of [['daily_limit_ms',2700000],['monthly_limit_ms',7200000],['rolling_32d_limit_ms',7200000]]){
+    const invalid=status();invalid.budget[field]=limit+1;
+    await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(invalid)}),denied);
   }
 });
 

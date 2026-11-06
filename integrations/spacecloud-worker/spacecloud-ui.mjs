@@ -1,6 +1,7 @@
 import { ReviewRequired, memoFor } from './safety.mjs';
 import { calendarGridDates, parseCalendarEntry, publicSlotExpectations } from './calendar.mjs';
 
+export const TIME_RADIO_NAME=/^시간\s*단위\s*예약하기\s*\(\s*최소\s*2\s*시간\s*부터\s*\)$/;
 export const ROOMS = Object.freeze({r1:{product:140236,max:36},r2:{product:140235,max:40},r3:{product:140486,max:16},r4:{product:140487,max:48},r5:{product:140492,max:30}});
 const previousDate=date=>new Date(Date.parse(date+'T00:00:00Z')-86400000).toISOString().slice(0,10);
 const monthOf=date=>date.slice(0,7).replace('-','.');
@@ -8,19 +9,28 @@ const numberOfMonth=month=>Number(month.slice(0,4))*12+Number(month.slice(5,7));
 const normalize=text=>text.replace(/\s+/g,' ').trim();
 
 const diagnosticPathWords=new Set(['api','v1','v2','v3','partner','reservation','reservations','calendar','user','users','auth','login','logout','profile','space','spaces','product','products','availability','holidays','status','me','host','hosts','qna','notification','notifications','chat','logs','log','track','event','events','booking','bookings','schedule','schedules','external','session','sessions','config','configuration','settings','assets','static','token','refresh','info','information','account','accounts','check','detail','list','search','common','service','services','categories','category','policy','policies','coupon','coupons','payment','payments','banner','banners']);
+const diagnosticQueryKeys=new Set(['_rsc','space','product','date','from','to','year','month','page','limit','offset','q','query','filter','sort','search','space_id','product_id','access_token']);
+export function readinessHints(request) {
+  let headers={},queryKeys=[];try{headers=request.headers();}catch{}
+  try{queryKeys=[...new Set([...new URL(request.url()).searchParams.keys()].map(key=>diagnosticQueryKeys.has(key)?key:'[key]'))].sort();}catch{}
+  const purpose=String(headers.purpose || headers['sec-purpose'] || '').toLowerCase();
+  let navigation=false;try{navigation=request.isNavigationRequest();}catch{}
+  return {query_keys:queryKeys,prefetch:/\bprefetch\b/.test(purpose),next_router_prefetch:headers['next-router-prefetch']==='1',rsc:headers.rsc==='1' || String(headers.accept || '').includes('text/x-component'),navigation:!!navigation};
+}
 export function readinessDiagnostic(request,{status=null,failure='network-error'}={}) {
   let host='unknown',path='[unavailable]';
   try{const url=new URL(request.url());host=url.hostname;path=url.pathname.split('/').map(part=>part===''?'':diagnosticPathWords.has(part)?part:'[segment]').join('/');}catch{}
   let type='unknown';try{type=request.resourceType();}catch{}
-  return {phase:'request-readiness',host,path,type,status:Number.isInteger(status)?status:null,failure};
+  return {phase:'request-readiness',host,path,type,status:Number.isInteger(status)?status:null,failure,...readinessHints(request)};
 }
 
 /** Observe only application request metadata; never read private response bodies. */
 export class SpacecloudReadiness {
   constructor(page,{now=()=>Date.now(),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),quietMs=750,timeoutMs=15000,report=()=>{}}={}) {
-    this.now=now;this.pause=pause;this.quietMs=quietMs;this.timeoutMs=timeoutMs;this.epoch=0;this.version=0;this.pending=new Set();this.tracked=new WeakMap();this.failed=false;this.lastActivity=now();this.report=report;this.reported=0;
+    this.now=now;this.pause=pause;this.quietMs=quietMs;this.timeoutMs=timeoutMs;this.epoch=0;this.version=0;this.pending=new Set();this.tracked=new WeakMap();this.failed=false;this.lastActivity=now();this.report=report;this.reported=0;this.navigating=false;
     const relevant=request=>{try{const url=new URL(request.url());return url.protocol==='https:' && (url.hostname==='spacecloud.kr' || url.hostname.endsWith('.spacecloud.kr')) && ['document','xhr','fetch'].includes(request.resourceType());}catch{return false;}};
-    page.on('request',request=>{if(!relevant(request))return;this.tracked.set(request,this.epoch);this.pending.add(request);this.version++;this.lastActivity=this.now();});
+    page.on('framenavigated',frame=>{if(this.navigating && frame===page.mainFrame()){this.epoch++;this.pending.clear();this.failed=false;this.version++;this.lastActivity=this.now();this.navigating=false;}});
+    page.on('request',request=>{if(this.navigating || !relevant(request))return;const hints=readinessHints(request);if(hints.prefetch || hints.next_router_prefetch)return;this.tracked.set(request,this.epoch);this.pending.add(request);this.version++;this.lastActivity=this.now();});
     const finish=async(request,failed)=>{
       if(this.tracked.get(request)!==this.epoch || !this.pending.has(request))return;
       let status=null,failure=failed?'network-error':'missing-response';
@@ -33,13 +43,13 @@ export class SpacecloudReadiness {
     page.on('requestfinished',request=>{void finish(request,false);});
     page.on('requestfailed',request=>{void finish(request,true);});
   }
-  navigate(){this.epoch++;this.pending.clear();this.failed=false;this.reported=0;this.version++;this.lastActivity=this.now();}
+  navigate(){this.epoch++;this.pending.clear();this.failed=false;this.reported=0;this.version++;this.lastActivity=this.now();this.navigating=true;}
   changed(){this.lastActivity=this.now();}
   async settle(){
     const deadline=this.now()+this.timeoutMs;
     while(this.now()<deadline){
       if(this.failed)throw new ReviewRequired('스페이스클라우드 일정 조회에 실패하여 최신 상태를 확인하지 못했습니다.');
-      if(!this.pending.size && this.now()-this.lastActivity>=this.quietMs)return this.version;
+      if(!this.navigating && !this.pending.size && this.now()-this.lastActivity>=this.quietMs)return this.version;
       await this.pause(100);
     }
     throw new ReviewRequired('스페이스클라우드 일정 조회가 끝나지 않아 최신 상태 확인을 중단했습니다.');
@@ -175,7 +185,7 @@ export class SpacecloudUI {
     const memo=normalize(await popup.locator('.list_memo > div').innerText());
     const result={...record,date,start_min,end_min,name:nameLine.replace(/^예약자명\s*:\s*/,''),memo,manual:true};
     if(!leaveOpen) {
-      const close=popup.locator('a').filter({hasText:/^\s*(닫기|확인)\s*$/});
+      const close=popup.locator('a').filter({hasText:/^\s*(닫기|확인|레이어팝업닫기)\s*$/}).filter({visible:true});
       if(await close.count()===1) await this.click(close);
       else {
         // Leaving the detail via a fresh calendar navigation is read-only and deterministic.
@@ -239,42 +249,65 @@ export class SpacecloudUI {
     await this.click(confirm.getByText('확인',{exact:true}),'자체 외부예약 삭제 확인');
     await confirm.waitFor({state:'hidden'});
   }
+  publicProgress(step,event,extra={}) {
+    try{this.reportReview?.({phase:'public-progress',step,event,elapsed_ms:Math.max(0,Date.now()-(this.publicStartedAt || Date.now())),attempt:this.publicAttempt || 1,...extra});}catch{}
+  }
+  async publicStep(step,event,action) {
+    this.publicProgress(step,event+'-before');const result=await action();this.publicProgress(step,event+'-after');return result;
+  }
+  async selectPublicRadio(radio,label,step='room') {
+    await this.publicStep(step,'attached',()=>radio.waitFor({state:'attached'}));
+    if(!await this.publicStep(step,'checked',()=>radio.isChecked())) {
+      const id=await this.publicStep(step,'identity',()=>radio.getAttribute('id'));
+      const associated=id && /^[A-Za-z0-9_:.-]+$/.test(id)
+        ? this.guest.locator('label[for="'+id+'"],label:has(input[id="'+id+'"])')
+        : radio.locator('xpath=ancestor::label[1]');
+      await this.publicStep(step,'label',()=>this.click(associated,label));
+      if(!await this.publicStep(step,'checked',()=>radio.isChecked()))throw new ReviewRequired(label+': 선택 상태를 확인하지 못했습니다.');
+    }
+    await this.publicStep(step,'settle',()=>this.settle(this.guest));
+  }
   async openPublicDate(date) {
     this.observe(this.guest).navigate();
-    await this.guest.goto('https://www.spacecloud.kr/space/82026',{waitUntil:'domcontentloaded'});
-    await this.settle(this.guest);
+    await this.publicStep('goto','navigate',()=>this.guest.goto('https://www.spacecloud.kr/space/82026',{waitUntil:'domcontentloaded'}));
+    await this.publicStep('ready','settle',()=>this.settle(this.guest));
     const room=this.guest.getByRole('radio',{name:`${Number(this.room.slice(1))}번룸 (최대 ${ROOMS[this.room].max}명)`,exact:true});
-    await room.waitFor({state:'visible'});this.observe(this.guest).changed();await room.press('Space');await this.settle(this.guest);
-    const time=this.guest.getByRole('radio',{name:'시간 단위 예약하기(최소 2시간 부터)',exact:true});
-    await time.waitFor({state:'visible'});this.observe(this.guest).changed();await time.press('Space');await this.settle(this.guest);
-    const next=this.guest.locator('a.btn_month_next');await next.waitFor({state:'visible'});
+    await this.selectPublicRadio(room,'고객 예약 방 선택','room');
+    const time=this.guest.getByRole('radio',{name:TIME_RADIO_NAME});
+    await this.selectPublicRadio(time,'고객 시간 단위 예약 선택','time');
+    const next=this.guest.locator('a.btn_month_next');await this.publicStep('month','attached',()=>next.waitFor({state:'visible'}));
     for(let tries=0;tries<15;tries++) {
-      const month=await next.evaluate(el=>el.parentElement.textContent.match(/\d{4}\s*\.\s*\d{1,2}/)?.[0]?.replace(/\s/g,'')||'');
+      const month=await this.publicStep('month','read',()=>next.evaluate(el=>el.parentElement.textContent.match(/\d{4}\s*\.\s*\d{1,2}/)?.[0]?.replace(/\s/g,'')||''));
       const parts=month.split('.');const current=parts.length===2?parts[0]+'.'+parts[1].padStart(2,'0'):'';
       if(!current)throw new ReviewRequired('고객 예약 화면의 기준 월을 확인하지 못했습니다.');
       if(current===monthOf(date))break;
-      await this.click(this.guest.locator(numberOfMonth(monthOf(date))>numberOfMonth(current)?'a.btn_month_next':'a.btn_month_prev'),'고객 달력 월 이동');
-      await this.guest.waitForFunction(({current})=>[...document.querySelectorAll('a.btn_month_next')].some(el=>{const p=el.parentElement.textContent.match(/(\d{4})\s*\.\s*(\d{1,2})/);return p && p[1]+'.'+p[2].padStart(2,'0')!==current;}),{current});
-      await this.settle(this.guest);
+      await this.publicStep('month','click',()=>this.click(this.guest.locator(numberOfMonth(monthOf(date))>numberOfMonth(current)?'a.btn_month_next':'a.btn_month_prev'),'고객 달력 월 이동'));
+      await this.publicStep('month','changed',()=>this.guest.waitForFunction(({current})=>[...document.querySelectorAll('a.btn_month_next')].some(el=>{const p=el.parentElement.textContent.match(/(\d{4})\s*\.\s*(\d{1,2})/);return p && p[1]+'.'+p[2].padStart(2,'0')!==current;}),{current}));
+      await this.publicStep('month','settle',()=>this.settle(this.guest));
       if(tries===14)throw new ReviewRequired('고객 예약 화면의 날짜 이동을 완료하지 못했습니다.');
     }
     const day=this.guest.locator('a').filter({hasText:new RegExp('^\\s*'+Number(date.slice(8))+'\\s*$')});
-    const visible=[];for(const a of await day.all())if(await a.isVisible())visible.push(a);
+    const visible=[];for(const a of await this.publicStep('date','candidates',()=>day.all()))if(await a.isVisible())visible.push(a);
     if(visible.length!==1)throw new ReviewRequired('고객 예약 화면의 이용일이 모호합니다.');
-    await this.click(visible[0],'고객 예약 날짜 선택');
-    await this.guest.locator('.ts-row[data-row-idx="0"]').waitFor({state:'visible'});
-    await this.settle(this.guest);
+    await this.publicStep('date','click',()=>this.click(visible[0],'고객 예약 날짜 선택'));
+    await this.publicStep('slots','visible',()=>this.guest.locator('.ts-row[data-row-idx="0"]').waitFor({state:'visible'}));
+    await this.publicStep('slots','settle',()=>this.settle(this.guest));
   }
   async verifyPublic(segment,remaining) {
-    const expected=publicSlotExpectations(segment,remaining);
+    const expected=publicSlotExpectations(segment,remaining);this.publicStartedAt=Date.now();
     for(let attempt=0;attempt<3;attempt++) {
+      this.publicAttempt=attempt+1;
       await this.openPublicDate(segment.date);
-      let matches=true;
+      let matches=true;this.publicProgress('slots','compare-before');
       for(const slot of expected) {
         const row=this.guest.locator(`.ts-row[data-row-idx="${slot.index}"]`);
-        const classes=(await row.getAttribute('class'))||'';
-        if(slot.disabled ? !classes.includes('is-disabled') : !classes.includes('is-selectable')||classes.includes('is-disabled'))matches=false;
+        const classes=new Set(((await row.getAttribute('class'))||'').split(/\s+/));
+        const disabled=classes.has('is-disabled'),selectable=classes.has('is-selectable');
+        if(slot.disabled ? !disabled : !selectable||disabled) {
+          matches=false;this.publicProgress('slots','mismatch',{index:slot.index,expected_disabled:slot.disabled,actual_disabled:disabled,actual_selectable:selectable});
+        }
       }
+      this.publicProgress('slots','compare-after',{matches});
       if(matches)return;
       await this.guest.waitForTimeout(1000);
     }

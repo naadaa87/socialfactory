@@ -5,7 +5,7 @@ const origin='https://socialfactory.test',runner='https://spacecloud.socialfacto
 const env={ADMIN_KEY:'local-test-admin',SPACECLOUD_RUNNER_URL:runner,CLOUD_ADMIN_TOKEN:secret,SPACECLOUD_SYNC_ENABLED:'false'};
 const id='a4a0fd92-0722-49c5-a995-64db762ac3aa';
 const request=(body,headers={})=>new Request(origin+'/api/admin/booking-cloud',{method:body===undefined?'GET':'POST',headers:{authorization:'Bearer '+env.ADMIN_KEY,origin,'content-type':'application/json',...headers},...(body===undefined?{}:{body:JSON.stringify(body)})});
-const payload=()=>({ok:true,enabled:true,allow_writes:true,login_saved:true,session_updated_at:Date.now(),runner:{busy:false,review:false,private_token:secret},budget:{utc_day:'2026-11-06',utc_month:'2026-11',daily_limit_ms:1800000,monthly_limit_ms:7200000,rolling_32d_limit_ms:7200000,daily_reserved_ms:60000,monthly_reserved_ms:120000,rolling_32d_reserved_ms:120000,secret},sessionId:'PRIVATE-BROWSER-SESSION',cipher:secret});
+const payload=()=>({ok:true,enabled:true,allow_writes:true,login_saved:true,session_updated_at:Date.now(),runner:{busy:false,review:false,private_token:secret},budget:{utc_day:'2026-11-06',utc_month:'2026-11',daily_limit_ms:2700000,monthly_limit_ms:7200000,rolling_32d_limit_ms:7200000,daily_reserved_ms:60000,monthly_reserved_ms:120000,rolling_32d_reserved_ms:120000,secret},sessionId:'PRIVATE-BROWSER-SESSION',cipher:secret});
 function mock(t,fn){return t.mock.method(globalThis,'fetch',fn);}
 
 test('cloud controls require administrator authentication and exact same-origin writes before any cloud call',async t=>{
@@ -22,8 +22,17 @@ test('status forwards only bounded public control fields and keeps all cloud aut
  assert.equal(r.headers.get('cache-control'),'no-store');assert.equal(r.headers.get('referrer-policy'),'no-referrer');
 });
 test('cloud status rejects malformed or out-of-policy usage values rather than understating them',async t=>{
- for(const changeValue of [j=>j.budget.daily_reserved_ms=-1,j=>j.budget.rolling_32d_limit_ms=7200001,j=>j.budget.monthly_reserved_ms=Infinity,j=>j.budget.daily_limit_ms='1800000',j=>j.runner.review='false']){
+ for(const changeValue of [j=>j.budget.daily_reserved_ms=-1,j=>j.budget.rolling_32d_limit_ms=7200001,j=>j.budget.monthly_reserved_ms=Infinity,j=>j.budget.daily_limit_ms='2700000',j=>j.runner.review='false']){
   const j=payload();changeValue(j);mock(t,async()=>Response.json(j));const r=await status({env,request:request()});assert.equal(r.status,503);assert(!(await r.text()).includes(secret));
+ }
+});
+test('cloud status accepts the paid 45-minute daily ceiling without expanding monthly or rolling ceilings',async t=>{
+ mock(t,async()=>Response.json(payload()));
+ let r=await status({env,request:request()}),j=await r.json();assert.equal(r.status,200);assert.equal(j.budget.daily_limit_ms,2700000);
+ assert.equal(j.budget.monthly_limit_ms,7200000);assert.equal(j.budget.rolling_32d_limit_ms,7200000);
+ for(const [field,limit] of [['daily_limit_ms',2700000],['monthly_limit_ms',7200000],['rolling_32d_limit_ms',7200000]]){
+  const invalid=payload();invalid.budget[field]=limit+1;mock(t,async()=>Response.json(invalid));
+  r=await status({env,request:request()});assert.equal(r.status,503,field);assert(!(await r.text()).includes(secret));
  }
 });
 test('only configured workers.dev origin and sufficiently strong admin secret can receive requests',async t=>{

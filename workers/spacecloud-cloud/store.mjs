@@ -32,7 +32,7 @@ export function onlySpacecloudState(state){return {cookies:(state?.cookies || []
 export async function saveState(env,state){const cipher=await encryptState(onlySpacecloudState(state),env.SESSION_ENCRYPTION_KEY);await env.STATE_DB.prepare(`INSERT INTO cloud_session(id,cipher,updated_at) VALUES('spacecloud',?1,?2) ON CONFLICT(id) DO UPDATE SET cipher=excluded.cipher,updated_at=excluded.updated_at`).bind(cipher,Date.now()).run();}
 export const paidIncluded=env=>env.CLOUD_PLAN_MODE==='paid-included' && env.INCLUDED_BUDGET_CONFIRMED==='true';
 const configuredNumber=(value,fallback)=>value!==undefined && value!=='' && Number.isFinite(Number(value))?Number(value):fallback;
-export const dailyLimit=env=>Math.max(0,Math.min(paidIncluded(env)?1800000:540000,configuredNumber(env.DAILY_BROWSER_BUDGET_MS,paidIncluded(env)?1800000:540000)));
+export const dailyLimit=env=>Math.max(0,Math.min(paidIncluded(env)?2700000:540000,configuredNumber(env.DAILY_BROWSER_BUDGET_MS,paidIncluded(env)?2700000:540000)));
 export const monthlyLimit=env=>Math.max(0,Math.min(7200000,configuredNumber(env.MONTHLY_BROWSER_BUDGET_MS,7200000)));
 export const rollingLimit=env=>Math.max(0,Math.min(7200000,configuredNumber(env.ROLLING_32D_BROWSER_BUDGET_MS,7200000)));
 export async function lockRunner(env,{duration=120000,now=Date.now()}={}){

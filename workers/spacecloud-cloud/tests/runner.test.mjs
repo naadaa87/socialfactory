@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { ensureStore,encryptState,decryptState,saveState,loadState,reserveBudget,settleBudget,lockRunner,dailyLimit,monthlyLimit } from '../store.mjs';
+import { ensureStore,encryptState,decryptState,saveState,loadState,reserveBudget,settleBudget,lockRunner,dailyLimit,monthlyLimit,rollingLimit } from '../store.mjs';
 import { createRunner } from '../runner.mjs';
 import { persistentConnector } from '../connection.mjs';
 import { QueueClient } from '../../../integrations/spacecloud-worker/queue.mjs';
@@ -85,8 +85,20 @@ test('zero configured caps stop use and paid inclusion does not raise caps beyon
   const f=fixture({DAILY_BROWSER_BUDGET_MS:'0'});await ensureStore(f.env);
   assert.equal(dailyLimit(f.env),0);await assert.rejects(reserveBudget(f.env,1),{code:'daily-budget'});
   assert.equal(dailyLimit({DAILY_BROWSER_BUDGET_MS:'99999999'}),540000);
-  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999'}),1800000);
+  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999'}),2700000);
   assert.equal(monthlyLimit({MONTHLY_BROWSER_BUDGET_MS:'999999999'}),7200000);
+  assert.equal(rollingLimit({ROLLING_32D_BROWSER_BUDGET_MS:'999999999'}),7200000);
+});
+
+test('the paid 45-minute day cannot increase either two-hour total cap or the free nine-minute ceiling',async()=>{
+  const f=fixture({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999',MONTHLY_BROWSER_BUDGET_MS:'99999999',ROLLING_32D_BROWSER_BUDGET_MS:'99999999'});
+  await ensureStore(f.env);
+  for(const [offset,amount] of [[0,2700000],[1,2700000],[2,1800000]])await reserveBudget(f.env,amount,{now:CLOCK+offset*86400000});
+  assert.equal(budget(f).month_ms,7200000);assert.equal(budget(f).day_ms,1800000);
+  await assert.rejects(reserveBudget(f.env,1,{now:CLOCK+3*86400000}),{code:'daily-budget'});
+  assert.equal(f.sqlite.prepare('SELECT SUM(reserved_ms) total FROM cloud_budget_reservations').get().total,7200000);
+  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'free',DAILY_BROWSER_BUDGET_MS:'2700000'}),540000);
+  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'false',DAILY_BROWSER_BUDGET_MS:'2700000'}),540000);
 });
 
 test('confirmed closure refunds unused allowance once while uncertain closure retains the complete reservation',async()=>{
