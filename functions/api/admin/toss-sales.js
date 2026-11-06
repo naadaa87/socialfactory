@@ -8,7 +8,7 @@ export async function onRequestGet({request,env}) {
   const cfg = tossConfig(env);
   const params=new URL(request.url).searchParams;
   const page=Number(params.get('page')||1),filter=params.get('filter')||'all';
-  if(!Number.isInteger(page)||page<1||page>20000||!['all','included','exclude','review','duplicate'].includes(filter))
+  if(!Number.isInteger(page)||page<1||page>20000||!['all','included','exclude','review','duplicate','amount-input'].includes(filter))
     return json({ok:false,message:'결제 목록 조회 조건을 확인해 주세요.'},400);
   const summary = await env.DB.prepare(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS total,MAX(received_at) AS latest FROM ${TOSS_SOURCE}`).first();
   const webhook = await env.DB.prepare("SELECT received_at FROM toss_webhook_events WHERE event_type IN ('payment.payment.approved.v1','payment.payment.cancelled.v1') ORDER BY received_at DESC LIMIT 1").first();
@@ -19,8 +19,13 @@ export async function onRequestGet({request,env}) {
       WHEN t.review_state='review' OR t.source_type='EXTERNAL' THEN 'review'
       WHEN t.review_state<>'include' AND ${MANUAL_CANDIDATE} THEN 'review'
       ELSE 'included' END AS disposition, t.review_note
-    FROM toss_payments t WHERE t.merchant_id=?`;
-  const where=filter==='all'?'':' WHERE disposition=?',args=[cfg.merchantId,...(filter==='all'?[]:[filter])];
+    FROM toss_payments t WHERE t.merchant_id=?`+(filter==='amount-input'?` AND EXISTS (
+      SELECT 1 FROM toss_order_products op,json_each(op.items_json) item
+      WHERE op.merchant_id=t.merchant_id AND op.order_id=t.order_id
+        AND json_extract(item.value,'$.title')='금액 입력'
+    )`:'');
+  const dispositionFilter=!['all','amount-input'].includes(filter);
+  const where=dispositionFilter?' WHERE disposition=?':'',args=[cfg.merchantId,...(dispositionFilter?[filter]:[])];
   const total=await env.DB.prepare('SELECT COUNT(*) n FROM ('+ledger+')'+where).bind(...args).first();
   const rows=(await env.DB.prepare('SELECT * FROM ('+ledger+')'+where+' ORDER BY paid_at DESC,payment_id DESC LIMIT 50 OFFSET ?')
     .bind(...args,(page-1)*50).all()).results||[];
