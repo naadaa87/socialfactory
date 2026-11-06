@@ -163,15 +163,9 @@
     var q = Math.max(1, Math.min(30, parseInt(el.passQty.value, 10) || 1));
     var rows = [[p.name + " " + won(p.price) + " × " + q, won(p.price * q)]];
     var total = p.price * q;
-    var locker = passes.filter(function (x) { return x.name.indexOf("사물함") >= 0; })[0];
-    if (el.locker.checked && locker) {
-      var m = Math.max(1, Math.min(12, parseInt(el.lockerMonths.value, 10) || 1));
-      rows.push([locker.name + " " + won(locker.price) + " × " + m + "개월", won(locker.price * m)]);
-      total += locker.price * m;
-    }
     return {
       kind: "cowork", space: "coworking", title: "24시 코워킹 이용권", info: [["공간", "24시 코워킹 · 스터디 공간 (" + ((CFG.rooms || {}).coworking || {}).seats + ")"], ["이용권", p.name + " × " + q]],
-      lines: rows, total: total, totalText: won(total), sub: "부가세 포함 · 24시간 이용", refund: null, vat: "부가세 포함"
+      lines: rows, total: total, totalText: won(total), sub: "부가세 포함 · 현장 무인 키오스크 결제", refund: null, vat: "부가세 포함"
     };
   };
 

@@ -4,5 +4,5 @@ import { payConfig } from "../../_lib/shop.js";
 import { json } from "../../_lib/auth.js";
 export async function onRequestGet({ env }) {
   const cfg = payConfig(env);
-  return json({ ok: true, products: PRODUCTS, policy: POLICY, pay: { ready: cfg.ready && !!env.DB, test: cfg.test, provider:cfg.provider, mobile:cfg.provider === "payapp" || !!cfg.mobileKey } });
+  return json({ ok: true, products: PRODUCTS.filter(p=>!["cowork-2h","cowork-day","cowork-month","locker-month","laptop-day"].includes(p.id)),channels:{coworking:"onsite-kiosk",rooms:"/booking",office:"consultation-payapp"}, policy: POLICY, pay: { ready: false, test: cfg.test, provider:cfg.provider, mobile:cfg.provider === "payapp" || !!cfg.mobileKey } });
 }

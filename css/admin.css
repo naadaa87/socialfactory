@@ -540,3 +540,5 @@ details.help ol { padding-left: 20px; margin-bottom: 0; }
 #ts-recent .ts-ledger td:nth-child(5),#ts-recent .ts-ledger td:nth-child(6){white-space:nowrap}
 .ts-sort{display:inline-flex;align-items:center;gap:6px;padding:0;border:0;background:none;color:inherit;font:inherit;font-weight:inherit;white-space:nowrap;cursor:pointer}.ts-sort span{width:1em}.ts-sort:hover{color:var(--blue)}.ts-sort:focus-visible{outline:2px solid var(--blue);outline-offset:4px;border-radius:2px}
 :root{--m-payapp_direct:#7652cf}#payapp-sales-panel .f,#pa-import-form{display:grid;gap:8px;max-width:680px}#pa-import-form{gap:12px;margin:16px 0}#pa-import-form button{justify-self:start}#pa-json{width:100%;resize:vertical}#pa-rows{max-height:480px;overflow:auto}#pa-rows table{table-layout:fixed;min-width:1100px}#pa-rows th:first-child{width:22%}#pa-rows th:nth-child(2){width:23%}#pa-rows td{white-space:normal;overflow-wrap:anywhere;vertical-align:top}#pa-rows .acts{margin-top:8px;flex-wrap:wrap}#payapp-sales-panel code{overflow-wrap:anywhere}
+
+:root { --m-office_payapp: #7b61a8; }

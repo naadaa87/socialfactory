@@ -9,6 +9,7 @@ import { ensureSpacecloudSales, SALES_SOURCE, attachCalendarPayments } from "../
 import { json } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, kstToday, addDaysIso } from "../../_lib/admin.js";
 import { ensureTossSales, TOSS_SOURCE, PASS_SALES_SOURCE } from "../../_lib/toss-sales.js";
+import { OFFICE_SALES_FROM } from '../../_lib/booking-payapp.js';
 
 import { loadSpacecloud, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
 
@@ -43,12 +44,15 @@ export async function onRequestGet({ request, env }) {
     if (r.k in byMethod) { byMethod[r.k] = Number(r.s) || 0; resTotal += byMethod[r.k]; resN += Number(r.n) || 0; }
   }
   const ord = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${netOrderAmount}), 0) AS s FROM orders WHERE status IN ('paid', 'used', 'refund_requested') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1`, ym);
+  const office=await one(`SELECT COUNT(*) n,COALESCE(SUM(MAX(amount-refund_amount,0)),0) s,COALESCE(SUM(amount),0) gross,COALESCE(SUM(refund_amount),0) refunds ${OFFICE_SALES_FROM} AND substr(paid_kst,1,7)=?1`,ym);
   const byChannel = {};
   for (const r of await all(`SELECT COALESCE(NULLIF(channel,''),'none') AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM ${SALES_SOURCE} WHERE pay_status IN ('paid','refunded') AND substr(COALESCE(paid_at,date),1,7) = ?1 GROUP BY k`, ym)) {
     byChannel[r.k] = { amount: Number(r.s) || 0, n: Number(r.n) || 0 };
   }
   if (!byChannel.web) byChannel.web = { amount: 0, n: 0 };
   byChannel.web.amount += Number(ord.s) || 0; byChannel.web.n += Number(ord.n) || 0;
+  byChannel.web.amount+=Number(office.s)||0;byChannel.web.n+=Number(office.n)||0;
+  byMethod.office_payapp=Number(office.s)||0;
   // 토스프론트 이용권 매출은 '토스프론트' 채널로 따로 보여 줍니다 (kio 는 아래에서 계산)
   const resMonth = await one("SELECT COUNT(*) AS n, COALESCE(SUM(end_min - start_min), 0) AS mins FROM reservations WHERE status = 'confirmed' AND substr(date, 1, 7) = ?1", ym);
   const kio = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(MAX(amount - sales_refund, 0)), 0) AS s FROM ${PASS_SALES_SOURCE} WHERE channel <> 'website' AND status IN ('paid', 'refunded') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1`, ym);
@@ -70,6 +74,6 @@ export async function onRequestGet({ request, env }) {
     counts: { today: todayList.length, tomorrow: tomorrowList.length, upcoming: upcoming.length, unpaid: Number(unpaidSum.n) || 0, unpaidAmount: Number(unpaidSum.s) || 0, newInquiries: Number(newInqN.n) || 0, refundRequests: Number(refundReq.n) || 0,
       passInUse: Number(passNow.n) || 0, passEndsToday: Number(passToday.n) || 0, notifyFailed: Number(jobFail.n) || 0 },
     todayList, tomorrowList, upcoming, unpaid, newInquiries: newInq, ordersRecent,
-    month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, kiosk: Number(kio.s) || 0, kioskN: Number(kio.n) || 0, terminal:Number(terminal.s)||0,terminalN:Number(terminal.n)||0,payapp:Number(payapp.s)||0, total: resTotal + (Number(ord.s) || 0) + (Number(kio.s) || 0)+(Number(terminal.s)||0)+(Number(payapp.s)||0), byMethod, byChannel, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }
+    month: { ym, reservations: resTotal, reservationsN: resN, orders: Number(ord.s) || 0, ordersN: Number(ord.n) || 0, kiosk: Number(kio.s) || 0, kioskN: Number(kio.n) || 0, terminal:Number(terminal.s)||0,terminalN:Number(terminal.n)||0,payapp:Number(payapp.s)||0,office:Number(office.s)||0,officeN:Number(office.n)||0,officeGross:Number(office.gross)||0,officeRefunds:Number(office.refunds)||0, total: resTotal + (Number(ord.s) || 0) + (Number(kio.s) || 0)+(Number(terminal.s)||0)+(Number(payapp.s)||0)+(Number(office.s)||0), byMethod, byChannel, booked: Number(resMonth.n) || 0, bookedMinutes: Number(resMonth.mins) || 0 }
   });
 }

@@ -1,0 +1,13 @@
+{
+  "name": "socialfactory-spacecloud-worker",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.9" },
+  "scripts": {
+    "login": "node --env-file-if-exists=.env worker.mjs --login",
+    "check": "node --env-file-if-exists=.env worker.mjs --check",
+    "start": "node --env-file-if-exists=.env worker.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": { "playwright": "1.64.1" }
+}

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+  <title>예약 · 결제 확인 | 소셜팩토리 건대</title>
+  <link rel="stylesheet" href="/css/style.css?v=booking261106">
+  <style>.payment-result{max-width:680px;margin:70px auto;padding:32px 24px}.payment-result h1{font-size:clamp(26px,5vw,38px);margin:20px 0}.payment-result p{line-height:1.8}.payment-result dl{background:#f4f6f8;padding:24px;border-radius:16px;margin:24px 0}.payment-result dt{font-size:13px;color:#637083;margin-top:14px}.payment-result dt:first-child{margin-top:0}.payment-result dd{margin:4px 0 0;font-weight:600}.payment-result .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}</style>
+</head>
+<body>
+<main class="payment-result">
+  <a href="/" aria-label="소셜팩토리 홈">SOCIAL FACTORY</a>
+  <h1 id="payment-title">예약·결제 상태를 확인하고 있습니다</h1>
+  <p id="payment-message" role="status" aria-live="polite">예약 일정과 페이앱 결제 확인 결과를 불러옵니다.</p>
+  <dl id="payment-detail" hidden></dl>
+  <form id="payment-consent" hidden>
+    <p>공간대관은 준비·정리 시간을 포함해 이용하며, 변경·취소는 담당자에게 요청해 주세요. 독립사무실은 상담에서 확정한 호실·이용기간·납부 조건이 적용됩니다.</p>
+    <p><a href="/pricing#refund" target="_blank" rel="noopener">대관 취소·환불 기준</a> · <a href="/terms" target="_blank" rel="noopener">이용약관</a> · <a href="/privacy" target="_blank" rel="noopener">개인정보 처리방침</a></p>
+    <label><input type="checkbox" id="payment-agree" required> 예약·청구 내용과 이용·취소 조건, 페이앱 결제를 위한 정보 처리 안내를 확인했습니다.</label>
+    <p><button type="submit" class="btn btn-primary" id="payment-open">페이앱으로 결제하기</button></p>
+  </form>
+  <div class="actions"><button type="button" class="btn btn-primary" id="payment-reload">다시 확인</button><button type="button" class="btn btn-outline" id="booking-cancel" hidden>미결제 예약 신청 취소</button><a href="/contact" class="btn btn-outline">예약·결제 문의</a><a href="/shop" class="btn btn-outline">예약·구매 안내</a></div>
+</main>
+<script src="/js/booking-status.js?v=20261106-sync"></script>
+</body></html>

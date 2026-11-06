@@ -148,9 +148,8 @@ window.SF_CONFIG = {
     coworking: "2시간권 4,000원 · 데이패스 6,000원 · 월간 정기권 99,000원",
     coworkingPasses: [
       { name: "2시간권",           price: 4000,  unit: "2시간" },
-      { name: "데이패스 (1일권)",   price: 6000,  unit: "1일" },
-      { name: "월간 정기권",        price: 99000, unit: "1개월" },
-      { name: "개인 사물함 · 짐 보관", price: 10000, unit: "1개월" }
+      { name: "1일권 (24시간)",      price: 6000,  unit: "24시간" },
+      { name: "월간 정기권",        price: 99000, unit: "1개월" }
     ],
     office: "B·C·D호 월 250,000원 · A호 월 400,000원 (부가세 별도)",
     officeRooms: [
@@ -201,3 +200,9 @@ window.SF_CONFIG = {
     address: "독립사무실은 임대차가 아닌 공간 이용권이며, 사업자등록 주소와 우편 수령은 제공하지 않습니다."
   }
 };
+
+/* 예약 화면과 서버에서 같은 룸 요금·공휴일을 사용합니다. */
+if (globalThis.SF_BOOKING_RATES) {
+  window.SF_CONFIG.pricing.rooms = globalThis.SF_BOOKING_RATES.rooms;
+  window.SF_CONFIG.pricing.holidays = globalThis.SF_BOOKING_RATES.holidays;
+}

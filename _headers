@@ -81,3 +81,13 @@ https://:version.:project.pages.dev/*
 
 /parking-purchase
   Cache-Control: no-store
+
+/booking-status
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+
+/booking-status.html
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer

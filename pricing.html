@@ -41,7 +41,7 @@
       <span class="wordmark"><span class="en">SOCIAL FACTORY</span><span class="kr">소셜팩토리</span></span>
     </a>
     <nav class="nav-links" id="nav-links" aria-label="주요 메뉴">
-      <a href="/space#rooms">공간 대관</a><a href="/space#coworking">코워킹</a><a href="/space#office">독립사무실</a><a href="/pricing">이용 요금</a><a href="/shop">이용권 구매</a><a class="nav-guest" href="/guest-orders">비회원 주문 조회</a><a href="/guide">이용 안내</a><a href="/parking">주차 안내</a><a href="/about">소개</a>
+      <a href="/space#rooms">공간 대관</a><a href="/space#coworking">코워킹</a><a href="/space#office">독립사무실</a><a href="/pricing">이용 요금</a><a href="/shop">예약·구매</a><a class="nav-guest" href="/guest-orders">비회원 주문 조회</a><a href="/guide">이용 안내</a><a href="/parking">주차 안내</a><a href="/about">소개</a>
       <a class="nav-member" href="/login" data-member-link hidden>로그인</a>
       <span class="nav-cta"><a class="btn btn-outline btn-sm" href="/contact">대관 문의</a><a class="btn btn-sm nav-kk btn-kakao" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg>카카오톡 문의</a></span>
     </nav>
@@ -118,11 +118,10 @@
             <fieldset class="est-step">
               <legend><span class="nb">1</span>이용권</legend>
               <div class="est-row two">
-                <label class="est-field"><span>이용권 종류</span><select name="pass"><option value="0">2시간권 · 4,000원</option><option value="1">데이패스 (1일권) · 6,000원</option><option value="2">월간 정기권 · 99,000원</option></select></label>
+                <label class="est-field"><span>이용권 종류</span><select name="pass"><option value="0">2시간권 · 4,000원</option><option value="1">1일권 (24시간) · 6,000원</option><option value="2">월간 정기권 · 99,000원</option></select></label>
                 <label class="est-field"><span>수량</span><input type="number" name="passQty" value="1" min="1" max="30" inputmode="numeric"></label>
               </div>
-              <label class="est-inline"><input type="checkbox" name="locker"><span>개인 사물함 · 짐 보관 추가 <small>(월 10,000원)</small></span></label>
-              <label class="est-field narrow"><span>사물함 이용 개월</span><input type="number" name="lockerMonths" value="1" min="1" max="12" inputmode="numeric"></label>
+
             </fieldset>
           </div>
           <div class="est-panel" id="est-p-office" role="tabpanel" aria-labelledby="est-t-office" data-panel="office" hidden>
@@ -326,13 +325,13 @@
         <p class="lead"><span data-sf="rooms.coworking.seats">50석</span> 규모의 자유석입니다. 2시간만 들르는 날부터 한 달 내내 쓰는 정기권까지, 필요한 만큼 골라 쓰세요.</p>
         <ul class="checks mt-24">
           <li>24시간 이용할 수 있고, 좌석은 먼저 온 순서대로 앉습니다.</li>
-          <li>개인 사물함(짐 보관)은 월 단위로 따로 이용할 수 있습니다.</li>
+
           <li>여러 장을 한꺼번에 구매하거나 단체로 이용하실 때는 문의해 주세요.</li>
         </ul>
-        <div class="actions"><a class="btn btn-primary" href="/shop">이용권 온라인 구매</a><a class="btn btn-outline" href="/pricing?mode=cowork#estimate">이용권 금액 계산</a><a class="btn btn-ghost" href="/space#coworking">코워킹 공간 보기 →</a></div>
+        <p class="note mt-16">현장 무인 키오스크에서 결제하고 화면의 이용 시작·종료 시각을 확인해 주세요. 새 이용권은 결제 시각부터 시작하고, 남은 이용권이 있으면 이어서 연장됩니다.</p><div class="actions"><a class="btn btn-primary" href="/space#cowork-kiosk">현장 키오스크 이용 안내</a><a class="btn btn-outline" href="/pricing?mode=cowork#estimate">이용권 금액 계산</a><a class="btn btn-ghost" href="/space#coworking">코워킹 공간 보기 →</a></div>
       </div>
       <div class="reveal">
-        <div class="passes"><div class="pass"><span class="ps-name">2시간권</span><strong><span data-sf="pricing.coworkingPasses.0.price">4,000</span>원</strong><small>2시간 기준</small></div><div class="pass"><span class="ps-name">데이패스 (1일권)</span><strong><span data-sf="pricing.coworkingPasses.1.price">6,000</span>원</strong><small>1일 기준</small></div><div class="pass is-main"><span class="ps-name">월간 정기권</span><strong><span data-sf="pricing.coworkingPasses.2.price">99,000</span>원</strong><small>1개월 기준</small></div><div class="pass"><span class="ps-name">개인 사물함 · 짐 보관</span><strong><span data-sf="pricing.coworkingPasses.3.price">10,000</span>원</strong><small>1개월 기준</small></div></div>
+        <div class="passes"><div class="pass"><span class="ps-name">2시간권</span><strong><span data-sf="pricing.coworkingPasses.0.price">4,000</span>원</strong><small>2시간 기준</small></div><div class="pass"><span class="ps-name">1일권 (24시간)</span><strong><span data-sf="pricing.coworkingPasses.1.price">6,000</span>원</strong><small>현장 결제부터 24시간</small></div><div class="pass is-main"><span class="ps-name">월간 정기권</span><strong><span data-sf="pricing.coworkingPasses.2.price">99,000</span>원</strong><small>1개월 기준</small></div></div>
         <p class="note mt-16">부가세 포함 · 단위 원.</p>
       </div>
     </div>
@@ -476,7 +475,7 @@
           <li><a href="/space#office">독립사무실</a></li>
           <li><a href="/pricing">이용 요금</a></li>
           <li><a href="/pricing#estimate">예상 금액 계산</a></li>
-          <li><a href="/shop">이용권 구매</a></li>
+          <li><a href="/shop">예약·구매</a></li>
           <li><a href="/guide">이용 안내 · FAQ</a></li>
           <li><a href="/tour">3D로 공간 살펴보기</a></li>
           <li><a href="/about">소셜팩토리 소개</a></li>
@@ -528,14 +527,15 @@
     </div>
     <div class="footer-bottom">
       <span>© <span data-year>2026</span> SOCIAL FACTORY. All rights reserved.</span>
-      <span class="legal-links"><a href="/terms">이용약관</a><a href="/privacy"><strong>개인정보 처리방침</strong></a><a href="/shop#policy">이용권 환불 규정</a><a href="/guest-orders">비회원 주문 조회</a></span>
+      <span class="legal-links"><a href="/terms">이용약관</a><a href="/privacy"><strong>개인정보 처리방침</strong></a><a href="/shop#policy">예약·결제 안내</a><a href="/guest-orders">비회원 주문 조회</a></span>
       <span class="en">EST. 2015 · TALK. PLAY. BOOK. STUDY.</span>
     </div>
   </div>
 </footer>
 <a class="kakao-fab" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener" aria-label="카카오톡으로 문의하기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span class="kf-t">카카오톡 문의</span></a>
-<script src="js/site-config.js?v=3361ee9a-room3-16"></script>
-<script src="js/main.js?v=980aaa85"></script>
-<script src="js/estimate.js?v=d18048ac"></script>
+<script src="/js/booking-rates.js?v=20261106-sync"></script>
+<script src="js/site-config.js?v=20261106-sync"></script>
+<script src="js/main.js?v=20261106-sync"></script>
+<script src="js/estimate.js?v=20261106-sync"></script>
 </body>
 </html>

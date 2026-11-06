@@ -1,0 +1,12 @@
+# Linux + SSH X11 forwarding only. This one-off command never claims jobs.
+services:
+  spacecloud-worker:
+    network_mode: host
+    environment:
+      SPACECLOUD_HEADLESS: "false"
+      SPACECLOUD_ALLOW_WRITES: "false"
+      DISPLAY: ${DISPLAY:?Use SSH X11 forwarding or a private GUI session}
+      XAUTHORITY: /tmp/spacecloud-Xauthority
+    volumes:
+      - ${XAUTHORITY:?Set the dedicated server account Xauthority file}:/tmp/spacecloud-Xauthority:ro
+    command: ["node", "worker.mjs", "--login"]

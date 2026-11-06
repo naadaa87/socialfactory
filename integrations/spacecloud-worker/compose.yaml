@@ -1,0 +1,22 @@
+services:
+  spacecloud-worker:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      SPACECLOUD_PROFILE_DIR: /var/lib/spacecloud-profile
+      SPACECLOUD_HEADLESS: "true"
+      SPACECLOUD_ALLOW_WRITES: ${SPACECLOUD_ALLOW_WRITES:-false}
+    volumes:
+      - spacecloud-profile:/var/lib/spacecloud-profile
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=512m
+    shm_size: 1gb
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 3m
+
+volumes:
+  spacecloud-profile:

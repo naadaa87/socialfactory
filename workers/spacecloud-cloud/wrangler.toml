@@ -1,0 +1,32 @@
+name = "socialfactory-spacecloud-cloud"
+account_id = "ac3d1b695a1c4e305f17b6caf34f6b4f"
+main = "index.mjs"
+compatibility_date = "2026-11-06"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[browser]
+binding = "BROWSER"
+
+[[d1_databases]]
+binding = "STATE_DB"
+database_name = "socialfactory-spacecloud-cloud-state"
+database_id = "0ea011b7-7834-40eb-bf4d-827af7d68cb2"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+ENABLED = "false"
+ALLOW_WRITES = "false"
+CLOUD_PLAN_CONFIRMED_FREE = "false"
+CLOUD_PLAN_MODE = "paid-included"
+INCLUDED_BUDGET_CONFIRMED = "true"
+LOGIN_CLEANUP_SCHEDULED = "true"
+DAILY_BROWSER_BUDGET_MS = "1800000"
+RUN_BUDGET_MS = "120000"
+MONTHLY_BROWSER_BUDGET_MS = "7200000"
+ROLLING_32D_BROWSER_BUDGET_MS = "7200000"
+API_ORIGIN = "https://socialfactory.co.kr"
+SPACECLOUD_ACCOUNT_LABEL = "소셜팩토리 건대 (초특가)"
+# Set CLOUD_ADMIN_TOKEN, SPACECLOUD_WORKER_TOKEN, SESSION_ENCRYPTION_KEY with Wrangler secrets.

@@ -1,0 +1,28 @@
+[Unit]
+Description=SocialFactory Spacecloud reservation worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=spacecloud
+Group=spacecloud
+WorkingDirectory=/opt/socialfactory/spacecloud-worker
+EnvironmentFile=/etc/socialfactory/spacecloud-worker.env
+Environment=SPACECLOUD_PROFILE_DIR=/var/lib/spacecloud-worker/profile
+Environment=SPACECLOUD_HEADLESS=true
+ExecStart=/usr/bin/node /opt/socialfactory/spacecloud-worker/worker.mjs
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=180
+UMask=0077
+StateDirectory=spacecloud-worker
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/spacecloud-worker
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

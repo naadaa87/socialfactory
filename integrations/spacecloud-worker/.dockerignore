@@ -1,0 +1,8 @@
+node_modules
+.profile
+.env
+artifacts
+tests
+README.md
+*.lock
+!package-lock.json

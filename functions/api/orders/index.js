@@ -14,10 +14,13 @@ export async function onRequestPost({ request, env }) {
   if (!sameOrigin(request)) return json({ ok: false, error: "origin" }, 403);
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   const cfg = payConfig(env);
-  if (!cfg.ready) return json({ ok: false, error: "pay-off" }, 503);
   let b;
   try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
   if (!b || typeof b !== "object") return json({ ok: false, error: "bad-json" }, 400);
+  // Retired fixed website products: historical orders and the shared parking issuer remain supported.
+  if (['cowork-2h','cowork-day','cowork-month','locker-month','laptop-day'].includes(clean(b.productId,40)))
+    return json({ok:false,error:'sales-channel-changed',message:'온라인 이용권 판매가 종료되었습니다. 코워킹은 현장 키오스크에서, 공간대관은 예약 페이지에서 진행해 주세요.'},410);
+  if (!cfg.ready) return json({ ok: false, error: "pay-off" }, 503);
   if (clean(b.website)) return json({ ok: false, error: "invalid" }, 400);
 
   const product = PRODUCT_MAP[clean(b.productId, 40)];

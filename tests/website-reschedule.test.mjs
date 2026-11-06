@@ -14,7 +14,9 @@ const origin='https://socialfactory.test';
 async function fixture(t,{product='cowork-2h',qty=1,start='2026-11-05 14:30:00'}={}){
  let now=Date.parse('2026-11-03T09:00:00Z');t.mock.method(Date,'now',()=>now);
  const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));t.after(()=>db.close());
- const DB={prepare(q){let a=[];return {q,bind(...v){a=v;return this},async first(){return db.prepare(q).get(...a)||null},async all(){return {results:db.prepare(q).all(...a)}},async run(){return this.exec()},exec(){return {meta:{changes:Number(db.prepare(q).run(...a).changes)}}}}},async batch(ss){db.exec('BEGIN');try{const r=ss.map(s=>s.exec());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
+ // Keep SQLite's transaction-time guard on the same controlled clock as Date.now.
+ const clockSql=q=>q.replace(/\bdatetime\(\s*'now'/gi,()=>"datetime('"+new Date(now).toISOString()+"'");
+ const DB={prepare(q){let a=[];return {q,bind(...v){a=v;return this},async first(){return db.prepare(clockSql(q)).get(...a)||null},async all(){return {results:db.prepare(clockSql(q)).all(...a)}},async run(){return this.exec()},exec(){return {meta:{changes:Number(db.prepare(clockSql(q)).run(...a).changes)}}}}},async batch(ss){db.exec('BEGIN');try{const r=ss.map(s=>s.exec());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
  const env={DB,SESSION_SECRET:'session-only-test'},oid='SF261103180000ABCD';
  db.prepare(`INSERT INTO orders(oid,status,product_id,product_name,qty,amount,buyer_name,buyer_phone,tid,paid_at,created_at,start_date) VALUES (?,'paid',?,?,?,?,'구매자','010-1234-5678','12000','2026-11-03 17:30:00','2026-11-03 17:29:00',?)`).run(oid,product,'2시간권',qty,4000*qty,start);
  db.prepare("INSERT INTO payapp_payments(oid,mul_no,nonce,request_id,request_hash) VALUES (?,'12000','nonce','payment-request','original-payment-hash')").run(oid);

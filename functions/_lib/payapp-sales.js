@@ -1,8 +1,10 @@
 import {ensurePayapp,payappConfig} from './payapp.js';
 import {stamp} from './toss-sales.js';
+import {ensureBookingPayappSchema,OFFICE_SALES_FROM} from './booking-payapp.js';
 
 export async function ensurePayappSales(env){
   await ensurePayapp(env);
+  await ensureBookingPayappSchema(env);
   await env.DB.batch([
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS payapp_sales (
       seller_id TEXT NOT NULL,mul_no TEXT NOT NULL,product_name TEXT NOT NULL,state TEXT NOT NULL,
@@ -57,18 +59,25 @@ export async function savePayappSales(env,raw,origin='import',partial=null){
   await env.DB.batch(statements);return rows.length;
 }
 // Website orders already contribute revenue. Collecting the common notification must not count them twice.
-export const PAYAPP_WEBSITE_MATCH=`EXISTS(SELECT 1 FROM payapp_payments p WHERE p.mul_no=s.mul_no)`;
+export const PAYAPP_WEBSITE_MATCH=`(EXISTS(SELECT 1 FROM payapp_payments p WHERE p.mul_no=s.mul_no)
+  OR EXISTS(SELECT 1 FROM booking_payapp_requests b WHERE b.mul_no=s.mul_no))`;
 export function payappSource(env,withReservationDuplicates=false){
   const seller=payappConfig(env).userid.replace(/'/g,"''");
   return `(SELECT s.* FROM payapp_sales s WHERE s.seller_id='${seller}' AND s.review_state IN (${withReservationDuplicates?"'include','duplicate'":"'include'"}) AND s.state IN ('paid','refunded') AND s.paid_at IS NOT NULL AND NOT ${PAYAPP_WEBSITE_MATCH})`;
 }
 
 export async function payappOnlySummary(env,year,today){
+  await ensurePayappSales(env);
   const direct=payappSource(env,true),web=`SELECT o.paid_at,o.amount-p.refunded_amount AS net,'orders' AS method FROM orders o JOIN payapp_payments p ON p.oid=o.oid WHERE o.status IN ('paid','used','refund_requested') AND o.test_mode=0 AND o.paid_at IS NOT NULL`;
-  const source=`(${web} UNION ALL SELECT paid_at,amount-refund_amount AS net,'payapp_direct' AS method FROM ${direct})`;
+  const room=`FROM reservations r JOIN booking_payapp_requests b ON b.code=r.code AND b.kind='room'
+    WHERE b.status IN ('paid','partial_refund','refunded') AND r.pay_status IN ('paid','refunded') AND r.paid_at IS NOT NULL`;
+  const source=`(${web} UNION ALL SELECT paid_at,amount-refund_amount AS net,'payapp_direct' AS method FROM ${direct}
+    UNION ALL SELECT r.paid_at,MAX(r.amount-r.refund_amount,0) AS net,'booking_room' AS method ${room}
+    UNION ALL SELECT paid_kst AS paid_at,MAX(amount-refund_amount,0) AS net,'office_payapp' AS method ${OFFICE_SALES_FROM})`;
   const all=async(sql,...args)=>(await env.DB.prepare(sql).bind(...args).all()).results||[];
-  const methods=[{key:'orders',label:'페이앱 · 홈페이지'},{key:'payapp_direct',label:'페이앱 · 직접 결제'}];
-  const blank=()=>({orders:0,payapp_direct:0}),months=Array.from({length:12},(_,i)=>({ym:year+'-'+String(i+1).padStart(2,'0'),byMethod:blank(),count:blank(),total:0,n:0,refunds:0,unpaid:0}));
+  const methods=[{key:'orders',label:'페이앱 · 홈페이지'},{key:'payapp_direct',label:'페이앱 · 직접 결제'},
+    {key:'booking_room',label:'페이앱 · 공간대관'},{key:'office_payapp',label:'독립사무실 페이앱'}];
+  const blank=()=>Object.fromEntries(methods.map(m=>[m.key,0])),months=Array.from({length:12},(_,i)=>({ym:year+'-'+String(i+1).padStart(2,'0'),byMethod:blank(),count:blank(),total:0,n:0,refunds:0,unpaid:0}));
   const grouped=await all(`SELECT substr(paid_at,1,7) ym,method,COUNT(*) n,SUM(net) amount FROM ${source} GROUP BY ym,method`);
   const byMethod=blank(),countBy=blank();let allTotal=0,allN=0;
   for(const r of grouped){allTotal+=r.amount;allN+=r.n;const m=months.find(m=>m.ym===r.ym);if(!m)continue;m.byMethod[r.method]=r.amount;m.count[r.method]=r.n;m.total+=r.amount;m.n+=r.n;byMethod[r.method]+=r.amount;countBy[r.method]+=r.n;}
@@ -76,7 +85,10 @@ export async function payappOnlySummary(env,year,today){
   const total=months.reduce((n,m)=>n+m.total,0),n=months.reduce((n,m)=>n+m.n,0),byChannel={};
   methods.forEach(m=>byChannel[m.key]={label:m.label,amount:byMethod[m.key],n:countBy[m.key],share:total?byMethod[m.key]/total*100:0});
   const thisYm=today.slice(0,7),lastYm=new Date(Date.parse(thisYm+'-01T00:00:00Z')-864e5).toISOString().slice(0,7);
-  const refundRows=await all(`SELECT substr(o.paid_at,1,7) ym,SUM(p.refunded_amount) amount FROM orders o JOIN payapp_payments p ON p.oid=o.oid WHERE o.test_mode=0 AND o.paid_at IS NOT NULL AND o.status IN ('paid','used','refund_requested','refunded') GROUP BY ym UNION ALL SELECT substr(paid_at,1,7) ym,SUM(refund_amount) amount FROM ${direct} GROUP BY ym`);
+  const refundRows=await all(`SELECT substr(o.paid_at,1,7) ym,SUM(p.refunded_amount) amount FROM orders o JOIN payapp_payments p ON p.oid=o.oid WHERE o.test_mode=0 AND o.paid_at IS NOT NULL AND o.status IN ('paid','used','refund_requested','refunded') GROUP BY ym
+    UNION ALL SELECT substr(paid_at,1,7) ym,SUM(refund_amount) amount FROM ${direct} GROUP BY ym
+    UNION ALL SELECT substr(r.paid_at,1,7) ym,SUM(r.refund_amount) amount ${room} GROUP BY ym
+    UNION ALL SELECT substr(paid_kst,1,7) ym,SUM(refund_amount) amount ${OFFICE_SALES_FROM} GROUP BY ym`);
   refundRows.forEach(r=>{const m=months.find(m=>m.ym===r.ym);if(m)m.refunds+=r.amount||0;});
   return {ok:true,today,year,basis:'paid',withOrders:true,provider:'payapp',years:[...new Set([year,today.slice(0,4),...grouped.map(r=>r.ym.slice(0,4))])].sort().reverse(),methods,months,byMethod,countBy,total,n,refunds:months.reduce((n,m)=>n+m.refunds,0),bySpace:{},byChannel,channelTotal:total,unrecordedSpacecloud:0,allTime:{total:allTotal,n:allN},unpaid:{n:0,amount:0},thisMonth:month(thisYm),lastMonth:month(lastYm)};
 }

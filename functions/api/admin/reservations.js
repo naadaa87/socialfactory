@@ -21,6 +21,11 @@ import { isCalendarLinked } from "../../_lib/spacecloud-links.js";
 const COLS = "id, code, created_at, updated_at, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, list_amount, amount_note, pay_method, pay_status, paid_at, refund_amount, refunded_at, cancel_reason, cancelled_at, inquiry_ref, memo";
 const int = (v) => { const n = typeof v === "number" ? v : parseInt(String(v == null ? "" : v).replace(/[^0-9-]/g, ""), 10); return Number.isFinite(n) ? Math.round(n) : null; };
 const bad = (field, msg) => json({ ok: false, error: "invalid", field, message: msg }, 400);
+async function bookingLinked(env,code) {
+  const exists=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='booking_requests'").first();
+  return exists && await env.DB.prepare('SELECT code FROM booking_requests WHERE code=?1').bind(code).first();
+}
+const bookingProtection=()=>json({ok:false,error:'booking-payment-linked',message:'홈페이지 결제 예약입니다. 예약 신청·페이앱 화면에서 결제·시간 해제를 함께 처리해 주세요.'},409);
 
 /** 등록 · 수정 입력값 검사 — 문제가 있으면 { error } */
 function readFields(b, prev) {
@@ -150,6 +155,7 @@ export async function onRequestPost({ request, env }) {
         const row = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(sourceCode).first();
         if (row) return json({ ok: true, code: row.code, item: row, already: true });
       }
+      if (/booking-conflict/.test(String(e && e.message))) return json({ok:false,error:"conflict",message:"홈페이지 예약이 확보한 시간과 겹칩니다."},409);
       if (!/UNIQUE/i.test(String(e && e.message))) { console.error("res-post", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
     }
   }
@@ -162,6 +168,7 @@ export async function onRequestPatch({ request, env }) {
   const code = clean(b && b.code, 20);
   const prev = code && await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(code).first();
   if (!prev) return json({ ok: false, error: "not-found" }, 404);
+  if (await bookingLinked(env,code)) return bookingProtection();
   await ensureSpacecloudSales(env);
   if (await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE linked_code = ?1").bind(code).first())
     return bad('amount', '정산 엑셀과 연결된 예약입니다. 결제/환불 변경은 가져오기 기록과 함께 확인해야 합니다.');
@@ -225,7 +232,7 @@ export async function onRequestPatch({ request, env }) {
     await stmt.run();
     const row = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(code).first();
     return json({ ok: true, item: row });
-  } catch (e) { console.error("res-patch", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
+  } catch (e) { if (/booking-conflict/.test(String(e && e.message))) return json({ok:false,error:"conflict",message:"홈페이지 예약이 확보한 시간과 겹칩니다."},409); console.error("res-patch", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
 }
 
 export async function onRequestDelete({ request, env }) {
@@ -234,6 +241,7 @@ export async function onRequestDelete({ request, env }) {
   const code = clean(b && b.code, 20);
   if (!code) return json({ ok: false, error: "invalid" }, 400);
   try {
+    if (await bookingLinked(env,code)) return bookingProtection();
     const r = await env.DB.prepare("DELETE FROM reservations WHERE code = ?1").bind(code).run();
     return json({ ok: true, deleted: (r && r.meta && r.meta.changes) || 0 });
   } catch (e) { console.error("res-del", e && e.message); return json({ ok: false, error: "db-error" }, 500); }

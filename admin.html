@@ -42,6 +42,7 @@
       <span class="nav-cap">운영</span>
       <button type="button" data-view="dash">대시보드</button>
       <button type="button" data-view="board">예약 현황</button>
+      <button type="button" data-view="booking">예약 신청 · 페이앱</button>
       <button type="button" data-view="list">일자별 예약<em data-count="unpaid" title="결제 전 예약" hidden></em></button>
       <button type="button" data-view="sales">매출</button>
       <span class="nav-cap">고객</span>
@@ -469,6 +470,24 @@
     </section>
 
     <!-- 상품 -->
+<section class="view" id="view-booking" hidden>
+      <header class="vh"><div><h1>예약 신청 · 페이앱</h1><p class="muted small">공간대관은 외부 일정을 확인하고 시간을 확보한 뒤 결제를 안내합니다. 독립사무실은 상담한 조건으로 청구합니다.</p></div><button class="btn btn-light" type="button" id="booking-admin-reload">새로고침</button></header>
+      <p class="note" id="payapp-ready" role="status"></p>
+      <div class="card"><h2 class="ch"><span>공간대관 신청</span></h2><p class="small muted">스페이스클라우드 시간 확보와 결제 상태를 함께 확인합니다. 취소·환불이 확인된 예약만 해당 예약이 확보한 시간을 해제합니다. 처리 결과가 불확실한 건은 결제를 보류하고 확인할 때까지 시간을 유지합니다.</p><div id="booking-request-list" aria-live="polite"></div></div>
+      <div class="card mt"><h2 class="ch"><span>독립사무실 상담 후 청구</span></h2>
+        <form id="office-invoice-form" class="form">
+          <div class="f"><label for="office-inquiry">상담 접수 내역</label><select class="input" id="office-inquiry" name="inquiry_id" required><option value="">불러오는 중</option></select></div>
+          <div class="f"><label for="office-invoice-label">청구 항목 · 이용기간</label><input class="input" id="office-invoice-label" name="label" maxlength="80" placeholder="예: B호 12월 월 이용료" required></div>
+          <div class="f"><label for="office-invoice-amount">이번 청구금액 (부가세 포함, 원)</label><input class="input" id="office-invoice-amount" name="amount" type="number" min="1000" max="100000000" step="1" required></div>
+          <label><input type="checkbox" name="contract_confirmed" required> 공실·입주일·이용기간·납부 방식과 이번 청구금액을 고객과 확인했습니다.</label>
+          <div class="acts"><button class="btn btn-primary" type="submit" id="office-invoice-submit">페이앱 결제 링크 만들기</button></div>
+          <p class="small muted">문자는 자동 발송하지 않습니다. 생성된 링크를 상담 고객에게 전달해 주세요. 한 상담 건에서 같은 청구를 반복 발급하지 않습니다.</p>
+          <p id="office-invoice-message" role="status"></p>
+        </form>
+        <div id="office-invoice-list" class="mt"></div>
+      </div>
+    </section>
+
     <section class="view" id="view-prod" hidden>
       <header class="vh"><div><h1>상품</h1><p class="muted small">홈페이지에서 판매 중인 이용권과 누적 판매량입니다. (테스트 결제 제외)</p></div></header>
       <div class="prod" id="prod"></div>
@@ -628,8 +647,10 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </div>
-<script src="/js/site-config.js?v=3361ee9a-room3-16"></script>
+<script src="/js/booking-rates.js?v=20261106-sync"></script>
+<script src="/js/site-config.js?v=20261106-sync"></script>
 <script src="/js/admin.js?v=payapp-sales20261106"></script>
+<script src="/js/admin-bookings.js?v=20261106-sync"></script>
 <script src="/js/admin-toss-sales.js?v=20261106-sort"></script>
 <script src="/js/admin-payapp-sales.js?v=20261106"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>

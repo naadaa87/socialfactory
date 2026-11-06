@@ -212,20 +212,11 @@
   });
 
   // 대표 예약 채널 버튼: <a data-booking data-space="r1">
-  var booking = CFG.booking || {};
-  var bookingUrl = booking.primary ? text(get("contact." + booking.primary)) : "";
-  if (booking.primary === "kakao") bookingUrl = kakaoChat(bookingUrl);
   $$("[data-booking]").forEach(function (a) {
     var space = a.getAttribute("data-space") || "";
-    if (bookingUrl) {
-      a.href = bookingUrl; a.target = "_blank"; a.rel = "noopener";
-      a.textContent = text(booking.label) || "예약 채널에서 일정 확인";
-    } else if (a.hasAttribute("data-fallback-label")) {
-      a.href = "/contact?purpose=rental" + (space ? "&space=" + space : "");
-      a.textContent = a.getAttribute("data-fallback-label");
-    } else {
-      a.hidden = true;
-    }
+    a.href = "/booking" + (/^r[1-5]$/.test(space) ? "?room=" + space : "");
+    a.removeAttribute('target'); a.removeAttribute('rel'); a.hidden = false;
+    a.textContent = '날짜·시간 선택하고 예약 신청';
   });
 
   // 지도 링크

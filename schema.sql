@@ -438,3 +438,139 @@ CREATE INDEX IF NOT EXISTS idx_parking_queue ON parking_orders(status,visit_date
 CREATE TABLE IF NOT EXISTS parking_events(id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT NOT NULL UNIQUE,oid TEXT NOT NULL REFERENCES parking_orders(oid),kind TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 0,refund_amount INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'queued',attempts INTEGER NOT NULL DEFAULT 0,message_id TEXT,last_error TEXT,created_at TEXT NOT NULL DEFAULT(datetime('now','+9 hours')),updated_at TEXT,sent_at TEXT);
 CREATE INDEX IF NOT EXISTS idx_parking_events_due ON parking_events(status,id);
 CREATE TABLE IF NOT EXISTS parking_history(id INTEGER PRIMARY KEY AUTOINCREMENT,oid TEXT NOT NULL,action TEXT NOT NULL,version INTEGER NOT NULL,note TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT(datetime('now','+9 hours')),UNIQUE(oid,version));
+
+
+-- Booking cloud integration: schema-upgrade-bookings.sql
+-- 방별 온라인 예약 신청 및 원자적 중복 방지. API 첫 이용 때도 자동 준비됩니다.
+
+CREATE TABLE IF NOT EXISTS booking_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, submission_id TEXT NOT NULL UNIQUE,
+    fingerprint TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours')), updated_at TEXT,
+    status TEXT NOT NULL DEFAULT 'requested' CHECK(status IN ('requested','awaiting_payment','confirmed','cancelled','expired','payment_review')),
+    room TEXT NOT NULL CHECK(room IN ('r1','r2','r3','r4','r5')), date TEXT NOT NULL,
+    start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, people INTEGER NOT NULL,
+    customer_name TEXT NOT NULL, phone TEXT NOT NULL, email TEXT, company TEXT,
+    purpose TEXT NOT NULL, purpose_detail TEXT, requests TEXT, amount INTEGER NOT NULL,
+    consent INTEGER NOT NULL, notice_version TEXT NOT NULL, ip_hash TEXT,
+    expires_at TEXT, approved_at TEXT, external_checked_at TEXT,
+    payment_status TEXT NOT NULL DEFAULT 'unpaid', payment_id TEXT, payment_url TEXT,
+    paid_at TEXT, refund_amount INTEGER NOT NULL DEFAULT 0, memo TEXT,
+    CHECK(start_min >= 0 AND start_min < 1440 AND start_min % 30 = 0),
+    CHECK(end_min > start_min AND end_min - start_min BETWEEN 120 AND 1440 AND end_min % 30 = 0),
+    CHECK(people > 0 AND amount >= 0)
+  );
+
+CREATE INDEX IF NOT EXISTS idx_booking_date ON booking_requests (date, room, status);
+
+CREATE INDEX IF NOT EXISTS idx_booking_created ON booking_requests (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_booking_ip ON booking_requests (ip_hash, created_at);
+
+CREATE TRIGGER IF NOT EXISTS booking_guard_insert
+    BEFORE INSERT ON booking_requests WHEN (NEW.status IN ('awaiting_payment', 'confirmed') OR (NEW.status = 'requested' AND NEW.expires_at > datetime('now', '+9 hours')))
+    BEGIN
+      SELECT CASE WHEN EXISTS (SELECT 1 FROM booking_requests b WHERE b.code <> NEW.code
+        AND b.room = NEW.room AND (b.status IN ('awaiting_payment', 'confirmed') OR (b.status = 'requested' AND b.expires_at > datetime('now', '+9 hours'))) AND (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.start_min) < (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.end_min) AND (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.start_min) < (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.end_min))
+        THEN RAISE(ABORT, 'booking-conflict') END;
+      SELECT CASE WHEN EXISTS (SELECT 1 FROM reservations r WHERE r.status = 'confirmed'
+        AND r.code <> NEW.code AND r.space = NEW.room AND (CAST(strftime('%s', r.date) AS INTEGER) / 60 + r.start_min) < (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.end_min) AND (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.start_min) < (CAST(strftime('%s', r.date) AS INTEGER) / 60 + r.end_min))
+        THEN RAISE(ABORT, 'booking-conflict') END;
+    END;
+
+CREATE TRIGGER IF NOT EXISTS booking_guard_update
+    BEFORE UPDATE ON booking_requests WHEN (NEW.status IN ('awaiting_payment', 'confirmed') OR (NEW.status = 'requested' AND NEW.expires_at > datetime('now', '+9 hours')))
+    BEGIN
+      SELECT CASE WHEN EXISTS (SELECT 1 FROM booking_requests b WHERE b.code <> NEW.code
+        AND b.room = NEW.room AND (b.status IN ('awaiting_payment', 'confirmed') OR (b.status = 'requested' AND b.expires_at > datetime('now', '+9 hours'))) AND (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.start_min) < (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.end_min) AND (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.start_min) < (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.end_min))
+        THEN RAISE(ABORT, 'booking-conflict') END;
+      SELECT CASE WHEN EXISTS (SELECT 1 FROM reservations r WHERE r.status = 'confirmed'
+        AND r.code <> NEW.code AND r.space = NEW.room AND (CAST(strftime('%s', r.date) AS INTEGER) / 60 + r.start_min) < (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.end_min) AND (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.start_min) < (CAST(strftime('%s', r.date) AS INTEGER) / 60 + r.end_min))
+        THEN RAISE(ABORT, 'booking-conflict') END;
+    END;
+
+CREATE TRIGGER IF NOT EXISTS reservation_booking_guard_insert
+    BEFORE INSERT ON reservations WHEN NEW.status = 'confirmed' AND NEW.space IN ('r1','r2','r3','r4','r5')
+    BEGIN
+      SELECT CASE WHEN EXISTS (SELECT 1 FROM booking_requests b WHERE b.code <> NEW.code
+        AND b.room = NEW.space AND (b.status IN ('awaiting_payment', 'confirmed') OR (b.status = 'requested' AND b.expires_at > datetime('now', '+9 hours'))) AND (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.start_min) < (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.end_min) AND (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.start_min) < (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.end_min))
+        THEN RAISE(ABORT, 'booking-conflict') END;
+    END;
+
+CREATE TRIGGER IF NOT EXISTS reservation_booking_guard_update
+    BEFORE UPDATE ON reservations WHEN NEW.status = 'confirmed' AND NEW.space IN ('r1','r2','r3','r4','r5')
+    BEGIN
+      SELECT CASE WHEN EXISTS (SELECT 1 FROM booking_requests b WHERE b.code <> NEW.code
+        AND b.room = NEW.space AND (b.status IN ('awaiting_payment', 'confirmed') OR (b.status = 'requested' AND b.expires_at > datetime('now', '+9 hours'))) AND (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.start_min) < (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.end_min) AND (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.start_min) < (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.end_min))
+        THEN RAISE(ABORT, 'booking-conflict') END;
+    END;
+
+
+-- Booking cloud integration: schema-upgrade-booking-payapp.sql
+-- 페이앱 승인 후 청구 및 부분취소 원장 (기존 주문 보존)
+CREATE TABLE IF NOT EXISTS booking_payapp_requests (
+    code TEXT PRIMARY KEY, kind TEXT NOT NULL, inquiry_id INTEGER, label TEXT NOT NULL,
+    amount INTEGER NOT NULL, token TEXT NOT NULL, mul_no TEXT UNIQUE, pay_url TEXT,
+    status TEXT NOT NULL DEFAULT 'creating', provider_state TEXT, provider_stamp TEXT,
+    paid_at TEXT, accepted_at TEXT, consent_version TEXT, refund_amount INTEGER NOT NULL DEFAULT 0, failure TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours')), updated_at TEXT);
+
+CREATE INDEX IF NOT EXISTS idx_booking_payapp_status ON booking_payapp_requests(status, created_at);
+
+CREATE TABLE IF NOT EXISTS booking_payapp_refunds (mul_no TEXT PRIMARY KEY, code TEXT NOT NULL, amount INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours')));
+
+
+-- Booking cloud integration: schema-upgrade-booking-spacecloud-sync.sql
+-- Own Spacecloud worker: durable jobs, receipts and occupancy guards.
+CREATE TABLE IF NOT EXISTS spacecloud_blocks (
+    code TEXT PRIMARY KEY, room TEXT NOT NULL, date TEXT NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL,
+    marker TEXT NOT NULL UNIQUE, access_token TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending'
+      CHECK(state IN ('pending','blocking','blocked','releasing','released','review','conflict')),
+    cancel_requested INTEGER NOT NULL DEFAULT 0, receipt_json TEXT, verified_at INTEGER,
+    error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  );
+
+CREATE TABLE IF NOT EXISTS spacecloud_sync_jobs (
+    id TEXT PRIMARY KEY, booking_code TEXT NOT NULL, room TEXT NOT NULL,
+    action TEXT NOT NULL CHECK(action IN ('block','verify','release')),
+    state TEXT NOT NULL DEFAULT 'queued' CHECK(state IN ('queued','leased','succeeded','conflict','review','cancelled')),
+    lease_token TEXT, lease_until INTEGER, attempts INTEGER NOT NULL DEFAULT 0,
+    result_json TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sc_active_job ON spacecloud_sync_jobs (booking_code,action) WHERE state IN ('queued','leased');
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sc_room_lease ON spacecloud_sync_jobs (room) WHERE state='leased';
+
+CREATE INDEX IF NOT EXISTS idx_sc_jobs_state ON spacecloud_sync_jobs (state,created_at);
+
+CREATE TABLE IF NOT EXISTS spacecloud_worker_calendar (
+    room TEXT NOT NULL, date TEXT NOT NULL, events_json TEXT NOT NULL, checked_at INTEGER NOT NULL,
+    PRIMARY KEY(room,date)
+  );
+
+CREATE TRIGGER IF NOT EXISTS sc_booking_hold_insert
+    BEFORE INSERT ON booking_requests WHEN NEW.status IN ('requested','awaiting_payment','confirmed','payment_review')
+    BEGIN SELECT CASE WHEN EXISTS (SELECT 1 FROM spacecloud_blocks b WHERE b.code <> NEW.code
+      AND b.room=NEW.room AND b.state IN ('pending','blocking','blocked','releasing','review') AND (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.start_min) < (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.end_min) AND (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.start_min) < (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.end_min))
+      THEN RAISE(ABORT,'booking-conflict') END; END;
+
+CREATE TRIGGER IF NOT EXISTS sc_booking_hold_update
+    BEFORE UPDATE ON booking_requests WHEN NEW.status IN ('requested','awaiting_payment','confirmed','payment_review')
+    BEGIN SELECT CASE WHEN EXISTS (SELECT 1 FROM spacecloud_blocks b WHERE b.code <> NEW.code
+      AND b.room=NEW.room AND b.state IN ('pending','blocking','blocked','releasing','review') AND (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.start_min) < (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.end_min) AND (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.start_min) < (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.end_min))
+      THEN RAISE(ABORT,'booking-conflict') END; END;
+
+CREATE TRIGGER IF NOT EXISTS sc_reservation_hold_insert
+    BEFORE INSERT ON reservations WHEN NEW.status='confirmed' AND NEW.space IN ('r1','r2','r3','r4','r5')
+    BEGIN SELECT CASE WHEN EXISTS (SELECT 1 FROM spacecloud_blocks b WHERE b.code <> NEW.code
+      AND b.room=NEW.space AND b.state IN ('pending','blocking','blocked','releasing','review') AND (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.start_min) < (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.end_min) AND (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.start_min) < (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.end_min))
+      THEN RAISE(ABORT,'booking-conflict') END; END;
+
+CREATE TRIGGER IF NOT EXISTS sc_reservation_hold_update
+    BEFORE UPDATE ON reservations WHEN NEW.status='confirmed' AND NEW.space IN ('r1','r2','r3','r4','r5')
+    BEGIN SELECT CASE WHEN EXISTS (SELECT 1 FROM spacecloud_blocks b WHERE b.code <> NEW.code
+      AND b.room=NEW.space AND b.state IN ('pending','blocking','blocked','releasing','review') AND (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.start_min) < (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.end_min) AND (CAST(strftime('%s', NEW.date) AS INTEGER) / 60 + NEW.start_min) < (CAST(strftime('%s', b.date) AS INTEGER) / 60 + b.end_min))
+      THEN RAISE(ABORT,'booking-conflict') END; END;
+
+CREATE TABLE IF NOT EXISTS spacecloud_payment_checks (code TEXT PRIMARY KEY, after_ms INTEGER NOT NULL);
