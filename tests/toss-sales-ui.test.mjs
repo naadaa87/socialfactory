@@ -136,6 +136,22 @@ test('amount-input filter requests a fresh first page, clears selection and reta
   assert(!f.calls.some(c=>c.body));
 });
 
+test('unwritten amount-input filter clears selection, and saving either field removes the completed row',async()=>{
+  const html=readFileSync(new URL('../admin.html',import.meta.url),'utf8');assert.match(html,/<option value="amount-input-empty">금액 입력 · 미작성만 보기<\/option>/);
+  let saved=false;
+  const f=harness((b,path)=>{
+    if(b){assert.equal(b.action,'label');assert.equal(b.productName,'');assert.equal(b.memo,'주차 결제');saved=true;return {ok:true};}
+    const rows=saved&&path.includes('filter=amount-input-empty')?[]:[ledgerRow('1','included',{product_items:[{title:'금액 입력',quantity:1}]})];
+    return {...empty(),rows,total:rows.length};
+  });
+  f.A.LOAD.sales();await tick();f.$('#ts-select-all').checked=true;f.$('#ts-select-all').events.change.call(f.$('#ts-select-all'));
+  f.$('#ts-filter').value='amount-input-empty';f.$('#ts-filter').events.change();await tick();
+  assert.equal(f.calls.at(-1).path,'/api/admin/toss-sales?page=1&filter=amount-input-empty');assert.match(f.$('#ts-selection').textContent,/0건/);
+  editLabel(f,'1');f.$('#ts-label-memo').value='주차 결제';await f.$('#ts-label-form').events.submit({preventDefault(){}});
+  assert.match(f.$('#ts-page').textContent,/0건/);assert(f.$('#ts-recent').innerHTML.includes('조건에 맞는 가져온 결제가 없습니다.'));assert.equal(f.$('#ts-label-form').hidden,true);
+  assert(!f.calls.some(c=>['commit','review'].includes(c.body?.action)));
+});
+
 test('product labels, variants and quantities are escaped and missing product names stay explicit',async()=>{
   const f=harness(()=>({...empty(),rows:[ledgerRow('1','included',{product_items:[{title:'메가스팟 <img onerror=x>',variant:'<script>1호</script>',quantity:2,options:['주차권'],category:'대관'}]}),ledgerRow('2','included',{product_items:[]}),ledgerRow('3')]}));
   f.A.LOAD.sales();await tick();const html=f.$('#ts-recent').innerHTML;
