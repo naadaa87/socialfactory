@@ -45,7 +45,12 @@ export async function onRequestPost({request,env}) {
       if (payments.length > 200) throw Error('결제가 많은 주문이 있습니다. 토스 결제 JSON 파일로 나누어 가져와 주세요.');
       const rows = payments.length ? await preparePayments(env,payments) : [];
       return json({ok:true,rows,payments,nextPage:orders.length === 25 ? b.page+1 : null});
-    } catch (e) { return json({ok:false,message:e.message},502); }
+    } catch (e) {
+      console.warn('toss-history-failed', {message:e.message || 'unknown'});
+      // Keep actionable connection/validation errors in the admin response. Edge
+      // gateways may replace 502 responses with a generic non-JSON error page.
+      return json({ok:false,code:'TOSS_HISTORY_FAILED',message:e.message || '토스 과거 거래를 조회하지 못했습니다.'},422);
+    }
   }
   if (b.action === 'review') {
     if (!/^\d{1,24}$/.test(b.paymentId || '') || !['include','exclude'].includes(b.decision) || typeof b.note !== 'string' || b.note.trim().length < 3 || b.note.length > 300)
