@@ -601,6 +601,7 @@ Preview에는 운영 키를 복사하지 않습니다. 키가 누락되거나 �
 - 플러그인과 거래 ID 또는 승인번호·원금액·승인일이 같은 건은 일반 단말기 합산에서 제외합니다. 플러그인 결과가 늦게 도착해도 조회 시 중복을 제외하며, 토스에서 확인된 취소는 이용권 매출 집계에도 차감합니다. 이용권 이용상태나 알림 발송은 이 매출 연동이 변경하지 않습니다.
 - 같은 날짜·금액의 수기 카드 예약이나 관리자 직접 발급 이용권은 보류합니다. 어드민 최근 결제에서 메모와 함께 **중복으로 제외 / 별도 결제로 합산**을 선택합니다. 외부 결제수단(`EXTERNAL`)과 승인 식별정보가 없는 카드는 자동 합산하지 않습니다.
 - 일반 단말기 매출은 월·연간·누적·채널·대시보드·CSV에 포함되며 홈페이지·프론트 이용권 포함 체크와 무관합니다. 결제만으로 룸이나 이용일은 추정하지 않습니다.
+- 최초 연결에서는 `app.installation.created.v1`·`app.installation.deleted.v1`도 웹훅 수신 범위에 포함합니다. 먼저 웹훅 서명 Secret을 서버에 저장하면 매장 ID가 아직 없어도 서명된 설치 이벤트를 받을 수 있습니다. 어드민에 설치된 매장 이름·Open API 매장 ID를 표시하며 운영자가 실제 소셜팩토리 매장임을 확인한 뒤 `TOSS_PLACE_MERCHANT_ID`를 설정합니다. 설치만으로 매장 설정이나 매출 수집을 자동 승인하지 않습니다. 소유자명·사업자번호·연락처·주소는 저장하지 않으며 설치 이벤트를 결제 수신 시각으로 표시하지 않습니다. 개발자센터의 서명된 `_test.v1` 시험 요청은 설정 전에도 2xx로 응답하지만 권한이나 매출을 생성하지 않습니다.
 - 파일 보충은 Open API Payment 배열 또는 `payments` 배열이 있는 JSON만 지원합니다. POS 엑셀이나 임의 CSV는 이 형식과 다르므로 그대로 선택할 수 없습니다.
 
 공식 규약: [공통 인증](https://docs.tossplace.com/reference/open-api/common.html), [결제·이벤트](https://docs.tossplace.com/reference/open-api/payment.html), [주문 목록·기간 조회](https://docs.tossplace.com/reference/open-api/order/order-methods.html), [웹훅 서명](https://docs.tossplace.com/reference/open-api/webhook.html). 테스트: `node --test tests/toss-sales*.test.mjs`.

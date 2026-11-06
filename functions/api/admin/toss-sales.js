@@ -7,7 +7,8 @@ export async function onRequestGet({request,env}) {
   await ensureTossSales(env);
   const cfg = tossConfig(env);
   const summary = await env.DB.prepare(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS total,MAX(received_at) AS latest FROM ${TOSS_SOURCE}`).first();
-  const webhook = await env.DB.prepare('SELECT received_at FROM toss_webhook_events ORDER BY received_at DESC LIMIT 1').first();
+  const webhook = await env.DB.prepare("SELECT received_at FROM toss_webhook_events WHERE event_type IN ('payment.payment.approved.v1','payment.payment.cancelled.v1') ORDER BY received_at DESC LIMIT 1").first();
+  const installations=(await env.DB.prepare('SELECT merchant_id,merchant_name,installed,received_at FROM toss_installations ORDER BY received_at DESC LIMIT 20').all()).results||[];
   const rows = (await env.DB.prepare(`SELECT t.merchant_id,t.payment_id,t.paid_at,t.source_type,t.amount,t.refund_amount,t.approval_no,t.state,t.origin,
     CASE WHEN EXISTS(SELECT 1 FROM pass_payments p WHERE ${PASS_MATCH}) THEN 'duplicate'
       WHEN t.review_state='exclude' THEN 'exclude'
@@ -15,7 +16,7 @@ export async function onRequestGet({request,env}) {
       WHEN t.review_state<>'include' AND ${MANUAL_CANDIDATE} THEN 'review'
       ELSE 'included' END AS disposition, t.review_note
     FROM toss_payments t ORDER BY t.paid_at DESC,t.payment_id DESC LIMIT 100`).all()).results || [];
-  return json({ok:true,...cfg,summary,lastWebhook:webhook?.received_at || null,rows,
+  return json({ok:true,...cfg,summary,lastWebhook:webhook?.received_at || null,rows,installations,
     webhookUrl:new URL('/api/toss-place/webhook',request.url).href});
 }
 

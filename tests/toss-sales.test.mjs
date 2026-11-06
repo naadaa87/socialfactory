@@ -165,3 +165,30 @@ test('connection status never exposes keys; missing setup, foreign payments, rat
   const r=await f.post({action:'fetch',from:'2020-01-01',to:currentDay,page:1});assert.equal(r.status,502);assert(!(await r.text()).includes('private-upstream-error'));
   f.env.TOSS_PLACE_MERCHANT_ID='';assert.equal((await f.post({action:'commit',payments:[payment()]})).status,400);assert.equal((await f.send()).status,503);
 });
+
+test('signed installation discovers merchant before configuration without enabling payments or saving owner contacts',async t=>{
+  const f=fixture(t);f.env.TOSS_PLACE_MERCHANT_ID='';
+  const event={type:'app.installation.created.v1',merchantId:42,data:{merchant:{id:42,name:'소셜팩토리 건대',ownerName:'private-owner',businessNumber:'private-number',phone:'private-phone'}}};
+  assert.equal((await f.send(payment(),'install',{event})).status,200);
+  assert.equal((await f.send()).status,503);
+  assert.equal(f.env.TOSS_PLACE_MERCHANT_ID,'');
+  const stored=f.db.prepare('SELECT * FROM toss_installations').get();assert.equal(stored.merchant_id,'42');assert.equal(stored.installed,1);
+  const d=await(await status({env:f.env,request:f.get('/api/admin/toss-sales')})).json();assert.equal(d.installations[0].merchant_name,'소셜팩토리 건대');assert.equal(d.lastWebhook,null);assert.equal(d.apiReady,false);assert.equal(d.signingReady,true);
+  for(const secret of ['private-owner','private-number','private-phone']){assert(!JSON.stringify(stored).includes(secret));assert(!JSON.stringify(d).includes(secret));}
+});
+
+test('installation requires signature and matching merchant metadata; stale install does not restore removal',async t=>{
+  const f=fixture(t);const event={type:'app.installation.created.v1',merchantId:42,data:{merchant:{id:42,name:'소셜팩토리 건대'}}};
+  assert.equal((await f.send(payment(),'bad-install',{event,secret:'wrong'})).status,401);
+  assert.equal((await f.send(payment(),'bad-id',{event:{...event,data:{merchant:{id:43}}}})).status,400);
+  await f.send(payment(),'install',{event});
+  await f.send(payment(),'uninstall',{event:{type:'app.installation.deleted.v1',merchantId:42,createdAt:currentDay+'T10:00:00+09:00',data:{merchantId:42}}});
+  await f.send(payment(),'old-install',{event});
+  const row=f.db.prepare('SELECT * FROM toss_installations').get();assert.equal(row.installed,0);assert.equal(row.merchant_name,'소셜팩토리 건대');
+});
+
+test('signed developer webhook test works before merchant setup but never grants access or writes payments',async t=>{
+  const f=fixture(t);f.env.TOSS_PLACE_MERCHANT_ID='';
+  const r=await f.send(payment(),'test-event',{event:{type:'_test.v1'}});assert.equal(r.status,200);assert.equal((await r.json()).test,true);
+  assert.equal(f.env.TOSS_PLACE_MERCHANT_ID,'');
+});
