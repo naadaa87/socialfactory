@@ -31,10 +31,13 @@ export async function onRequestPost({request,env}) {
   if (b.action === 'fetch') {
     if (!isIsoDate(b.from) || !isIsoDate(b.to) || b.from > b.to || !Number.isInteger(b.page) || b.page < 1 || b.page > 10000)
       return json({ok:false,message:'조회 시작일·종료일을 확인해 주세요.'},400);
+    if(b.to<'2022-01-01')return json({ok:false,message:'토스 Open API는 2022년 1월 1일 이후 거래부터 조회할 수 있습니다.'},400);
     try {
       // Fixed range and pages make an interrupted backfill resumable. All order states
       // are requested, including partly paid/open orders that the API otherwise excludes.
-      const params = new URLSearchParams({from:b.from+'T00:00:00+09:00',to:b.to+'T23:59:59.999+09:00',page:String(b.page),size:'25',sortOrder:'ASC',orderStates:'REQUESTED,OPENED,COMPLETED,CANCELLED'});
+      // The provider's earliest instant is UTC 2022-01-01, i.e. 09:00 KST.
+      const from=b.from<='2022-01-01'?'2022-01-01T00:00:00Z':b.from+'T00:00:00+09:00';
+      const params = new URLSearchParams({from,to:b.to+'T23:59:59.999+09:00',page:String(b.page),size:'25',sortOrder:'ASC',orderStates:'REQUESTED,OPENED,COMPLETED,CANCELLED'});
       const orders = await tossGet(env,'/order/orders?'+params);
       if (!Array.isArray(orders)) throw Error('토스 주문 응답 형식이 다릅니다.');
       const payments = [];

@@ -170,7 +170,7 @@
         </details>
         <h3 class="mt">과거 거래내역 가져오기</h3>
         <form id="ts-history-form">
-          <div class="frow"><div class="f"><label for="ts-from">조회 시작일</label><input class="input" type="date" id="ts-from" required></div><div class="f"><label for="ts-to">조회 종료일</label><input class="input" type="date" id="ts-to" required></div></div>
+          <div class="frow"><div class="f"><label for="ts-from">조회 시작일</label><input class="input" type="date" id="ts-from" min="2022-01-01" required></div><div class="f"><label for="ts-to">조회 종료일</label><input class="input" type="date" id="ts-to" min="2022-01-01" required></div></div>
           <button class="btn btn-primary btn-sm" id="ts-fetch" type="submit">토스에서 조회 · 미리보기</button>
         </form>
         <p class="tiny muted">앱에 조회 권한이 있는 거래만 가져옵니다. 조회 기간은 토스에서 결제내역이 변경된 날짜 기준이며, 매출은 실제 승인일에 합산됩니다.</p>
@@ -591,7 +591,7 @@
 </div>
 <script src="/js/site-config.js?v=3361ee9a-room3-16"></script>
 <script src="/js/admin.js?v=toss20261105"></script>
-<script src="/js/admin-toss-sales.js?v=20261106-install"></script>
+<script src="/js/admin-toss-sales.js?v=20261106-history-range"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
