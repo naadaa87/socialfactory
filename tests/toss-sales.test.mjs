@@ -179,7 +179,7 @@ test('connection status never exposes keys; missing setup, foreign payments, rat
   const f=fixture(t);const d=await(await status({env:f.env,request:f.get('/api/admin/toss-sales')})).json();assert(d.apiReady);assert(d.webhookReady);
   for(const key of ['secret-private','access-private','webhook-private'])assert(!JSON.stringify(d).includes(key));
   t.mock.method(globalThis,'fetch',async()=>new Response('private-upstream-error',{status:429}));
-  const r=await f.post({action:'fetch',from:'2020-01-01',to:currentDay,page:1});assert.equal(r.status,502);assert(!(await r.text()).includes('private-upstream-error'));
+  const r=await f.post({action:'fetch',from:'2020-01-01',to:currentDay,page:1});assert.equal(r.status,422);assert(!(await r.text()).includes('private-upstream-error'));
   f.env.TOSS_PLACE_MERCHANT_ID='';assert.equal((await f.post({action:'commit',payments:[payment()]})).status,400);assert.equal((await f.send()).status,503);
 });
 

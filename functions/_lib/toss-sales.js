@@ -158,7 +158,15 @@ export async function tossGet(env, path) {
     headers: { 'x-access-key':env.TOSS_PLACE_ACCESS_KEY, 'x-secret-key':env.TOSS_PLACE_SECRET_KEY, 'Content-Type':'application/json' },
     redirect:'error', signal:AbortSignal.timeout(12000)
   });
-  if (!response.ok) throw Error(response.status === 429 ? '토스 조회 한도에 도달했습니다. 잠시 후 다시 조회해 주세요.' : '토스 조회 실패: API 키·앱 설치·매장 권한을 확인해 주세요.');
+  if (!response.ok) {
+    const failure = await response.json().catch(()=>null);
+    const code = /^\d{1,10}$/.test(String(failure?.error?.errorCode)) ? String(failure.error.errorCode) : '';
+    let reason = text(failure?.error?.reason,300);
+    for(const secret of [env.TOSS_PLACE_ACCESS_KEY,env.TOSS_PLACE_SECRET_KEY,env.TOSS_PLACE_WEBHOOK_SECRET])if(secret)reason=reason.replaceAll(secret,'[redacted]');
+    reason=reason.replace(/[A-Za-z0-9_=-]{24,}/g,'[redacted]');
+    console.warn('toss-api-failed',{status:response.status,code,reason});
+    throw Error(response.status === 429 ? '토스 조회 한도에 도달했습니다. 잠시 후 다시 조회해 주세요.' : '토스 조회 실패 (HTTP '+response.status+(code?', 코드 '+code:'')+'): API 키·앱 설치·매장 권한을 확인해 주세요.');
+  }
   const body = await response.json();
   if (body.resultType !== 'SUCCESS') throw Error('토스에서 조회를 처리하지 못했습니다. 연결 권한을 확인해 주세요.');
   return body.success;
