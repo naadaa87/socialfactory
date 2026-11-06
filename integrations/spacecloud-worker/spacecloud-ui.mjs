@@ -3,6 +3,18 @@ import { calendarGridDates, parseCalendarEntry, publicSlotExpectations } from '.
 
 export const TIME_RADIO_NAME=/^시간\s*단위\s*예약하기\s*\(\s*최소\s*2\s*시간\s*부터\s*\)$/;
 export const ROOMS = Object.freeze({r1:{product:140236,max:36},r2:{product:140235,max:40},r3:{product:140486,max:16},r4:{product:140487,max:48},r5:{product:140492,max:30}});
+export function publicCalendarLayout() {
+  const count=selector=>{
+    const elements=[...document.querySelectorAll(selector)];
+    return {total:elements.length,visible:elements.filter(element=>{const box=element.getBoundingClientRect(),style=window.getComputedStyle(element);return box.width>0 && box.height>0 && style.display!=='none' && style.visibility!=='hidden' && style.visibility!=='collapse';}).length};
+  };
+  const text=document.body?.innerText || '';
+  const headingTexts=[...document.querySelectorAll('h1,h2,h3,[role="heading"]')].map(element=>(element.textContent || '').replace(/\s+/g,' ').trim());
+  const headingLabels=['공간 소개','시설 안내','가격 안내','예약 정보','유의사항','환불규정 안내'];
+  const noticeMatchers={login:/로그인/,login_required:/로그인이\s*필요|로그인\s*후|로그인해\s*주세요/,verification:/인증/,reservation_unavailable:/예약\s*불가|예약하실\s*수\s*없|예약할\s*수\s*없|예약이\s*불가/,date_prompt:/날짜\s*선택|날짜를\s*선택|이용\s*날짜/,time_prompt:/시간\s*선택|시간을\s*선택/,instant_reservation:/바로\s*예약/,approval_reservation:/승인\s*예약/};
+  // Only fixed markers leave the page; raw body/heading text, URLs and attributes stay private.
+  return {client_width:document.documentElement.clientWidth,client_height:document.documentElement.clientHeight,inner_width:window.innerWidth,inner_height:window.innerHeight,next:count('a.btn_month_next'),previous:count('a.btn_month_prev'),calendar_title:count('.calendar_tit'),calendar_wrap:count('.calendar_wrap'),slots:count('.ts-row'),heading_count:headingTexts.length,heading_markers:headingLabels.filter(label=>headingTexts.includes(label)),notice_markers:Object.entries(noticeMatchers).filter(([,pattern])=>pattern.test(text)).map(([label])=>label)};
+}
 const previousDate=date=>new Date(Date.parse(date+'T00:00:00Z')-86400000).toISOString().slice(0,10);
 const monthOf=date=>date.slice(0,7).replace('-','.');
 const numberOfMonth=month=>Number(month.slice(0,4))*12+Number(month.slice(5,7));
@@ -58,7 +70,7 @@ export class SpacecloudReadiness {
 
 export class SpacecloudUI {
   constructor(context,config) { this.context=context;this.config=config;this.room=null;this.job=null;this.readiness=new WeakMap(); }
-  async initialize() {this.host=await this.context.newPage();this.guest=await this.context.newPage();this.host.setDefaultTimeout(15000);this.guest.setDefaultTimeout(15000);this.observe(this.host);this.observe(this.guest);}
+  async initialize() {this.host=await this.context.newPage();this.guest=await (this.config.publicContext || this.context).newPage();this.host.setDefaultTimeout(15000);this.guest.setDefaultTimeout(15000);this.observe(this.host);this.observe(this.guest);}
   observe(page){let state=this.readiness.get(page);if(!state){state=new SpacecloudReadiness(page,{report:diagnostic=>this.reportReview?.(diagnostic)});this.readiness.set(page,state);}return state;}
   async click(locator,label='화면 조작') {
     // Responsive layouts can retain hidden copies. Only one visible target may receive input.
@@ -255,6 +267,10 @@ export class SpacecloudUI {
   async publicStep(step,event,action) {
     this.publicProgress(step,event+'-before');const result=await action();this.publicProgress(step,event+'-after');return result;
   }
+  async assertNoGuestLoginPrompt() {
+    const prompt=this.guest.getByText(/^\s*로그인\s*\/\s*회원가입\s*해\s*주세요\.?\s*$/).filter({visible:true});
+    if(await prompt.count())throw new ReviewRequired('스페이스클라우드 고객용 로그인이 필요합니다. 관리자에서 고객 로그인을 연결해 주세요.');
+  }
   async selectPublicRadio(radio,label,step='room') {
     await this.publicStep(step,'attached',()=>radio.waitFor({state:'attached'}));
     if(!await this.publicStep(step,'checked',()=>radio.isChecked())) {
@@ -263,7 +279,10 @@ export class SpacecloudUI {
         ? this.guest.locator('label[for="'+id+'"],label:has(input[id="'+id+'"])')
         : radio.locator('xpath=ancestor::label[1]');
       await this.publicStep(step,'label',()=>this.click(associated,label));
-      if(!await this.publicStep(step,'checked',()=>radio.isChecked()))throw new ReviewRequired(label+': 선택 상태를 확인하지 못했습니다.');
+      if(!await this.publicStep(step,'checked',()=>radio.isChecked())) {
+        if(step==='time')await this.assertNoGuestLoginPrompt();
+        throw new ReviewRequired(label+': 선택 상태를 확인하지 못했습니다.');
+      }
     }
     await this.publicStep(step,'settle',()=>this.settle(this.guest));
   }
@@ -275,6 +294,9 @@ export class SpacecloudUI {
     await this.selectPublicRadio(room,'고객 예약 방 선택','room');
     const time=this.guest.getByRole('radio',{name:TIME_RADIO_NAME});
     await this.selectPublicRadio(time,'고객 시간 단위 예약 선택','time');
+    await this.assertNoGuestLoginPrompt();
+    const layout=await this.publicStep('month','layout',()=>this.guest.evaluate(publicCalendarLayout));
+    this.publicProgress('month','layout',layout);
     const next=this.guest.locator('a.btn_month_next');await this.publicStep('month','attached',()=>next.waitFor({state:'visible'}));
     for(let tries=0;tries<15;tries++) {
       const month=await this.publicStep('month','read',()=>next.evaluate(el=>el.parentElement.textContent.match(/\d{4}\s*\.\s*\d{1,2}/)?.[0]?.replace(/\s/g,'')||''));
@@ -292,6 +314,13 @@ export class SpacecloudUI {
     await this.publicStep('date','click',()=>this.click(visible[0],'고객 예약 날짜 선택'));
     await this.publicStep('slots','visible',()=>this.guest.locator('.ts-row[data-row-idx="0"]').waitFor({state:'visible'}));
     await this.publicStep('slots','settle',()=>this.settle(this.guest));
+  }
+  async verifyGuestLogin() {
+    // Reading the real customer calendar verifies guest authentication without submitting a booking.
+    this.room='r5';this.publicStartedAt=Date.now();this.publicAttempt=1;
+    const today=new Date(Date.now()+9*60*60*1000).toISOString().slice(0,10);
+    await this.openPublicDate(today);
+    return {guest_ready:true};
   }
   async verifyPublic(segment,remaining) {
     const expected=publicSlotExpectations(segment,remaining);this.publicStartedAt=Date.now();

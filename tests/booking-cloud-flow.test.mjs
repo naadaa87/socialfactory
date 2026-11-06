@@ -54,7 +54,7 @@ async function withProvider(run,{mode='success'}={}) {
   globalThis.fetch=async(url,options)=>{
     if(String(url)==='https://runner.example.workers.dev/status'){
       assert.equal(options?.method || 'GET','GET');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-cloud-admission-admin-token-more-than-thirty-two');
-      return Response.json({ok:true,enabled:true,allow_writes:true,login_saved:true,runner:{busy:false,review:false},budget:{utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),daily_limit_ms:1800000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
+      return Response.json({ok:true,enabled:true,allow_writes:true,login_saved:true,public_login_saved:true,runner:{busy:false,review:false},budget:{utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),daily_limit_ms:2700000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
     }
     if(String(url)==='https://runner.example.workers.dev/run'){
       assert.equal(options?.method,'POST');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-worker-token-more-than-thirty-two-characters');

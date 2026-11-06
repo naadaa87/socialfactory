@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SpacecloudUI,SpacecloudReadiness,TIME_RADIO_NAME } from '../spacecloud-ui.mjs';
+import vm from 'node:vm';
+import { SpacecloudUI,SpacecloudReadiness,TIME_RADIO_NAME,publicCalendarLayout } from '../spacecloud-ui.mjs';
 
 function targetSet(visibleCount,{hiddenCount=0}={}) {
   const calls=[];
@@ -114,4 +115,37 @@ test('public comparison progress reports only fixed phases, timing and slot bool
   const mismatch=events.filter(event=>event.event==='mismatch');assert.equal(mismatch.length,6);
   for(const event of mismatch){assert.equal(event.phase,'public-progress');assert.equal(event.step,'slots');assert([4,5].includes(event.index));assert.equal(event.expected_disabled,true);assert.equal(event.actual_disabled,false);assert.equal(event.actual_selectable,true);assert(Number.isFinite(event.elapsed_ms));}
   const serialized=JSON.stringify(events);assert(!serialized.includes(publicSegment.date));assert(!serialized.includes('spacecloud.kr'));assert(!serialized.includes('SFWEB'));
+});
+
+test('responsive calendar diagnostics contain only dimensions and fixed selector counts',()=>{
+  const visible={getBoundingClientRect(){return {width:39,height:39};},style:{display:'block',visibility:'visible'}},hidden={getBoundingClientRect(){return {width:39,height:39};},style:{display:'none',visibility:'visible'}},collapsed={getBoundingClientRect(){return {width:0,height:0};},style:{display:'block',visibility:'visible'}};
+  const nodes=new Map([['a.btn_month_next',[visible,hidden]],['a.btn_month_prev',[visible]],['.calendar_tit',[visible,hidden]],['.calendar_wrap',[collapsed]],['.ts-row',Array(24).fill(visible)],['h1,h2,h3,[role="heading"]',[{textContent:'PRIVATE_GUEST_NAME'},{textContent:'공간 소개'}]]]);
+  const result=vm.runInNewContext('('+publicCalendarLayout.toString()+')()',{
+    document:{body:{innerText:'PRIVATE_GUEST_NAME PRIVATE_PHONE 로그인 후 예약할 수 있습니다. 날짜를 선택해 주세요.'},documentElement:{clientWidth:1280,clientHeight:1100},querySelectorAll(selector){assert(nodes.has(selector));return nodes.get(selector);}},
+    window:{innerWidth:1280,innerHeight:1100,getComputedStyle(element){return element.style;}}
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(result)),{client_width:1280,client_height:1100,inner_width:1280,inner_height:1100,next:{total:2,visible:1},previous:{total:1,visible:1},calendar_title:{total:2,visible:1},calendar_wrap:{total:1,visible:0},slots:{total:24,visible:24},heading_count:2,heading_markers:['공간 소개'],notice_markers:['login','login_required','date_prompt']});
+  assert(!JSON.stringify(result).includes('PRIVATE_'));
+});
+
+test('public reservation verification uses the supplied anonymous context',async()=>{
+  const host={setDefaultTimeout(){}},guest={setDefaultTimeout(){}};
+  const ui=new SpacecloudUI({async newPage(){return host;}},{publicContext:{async newPage(){return guest;}}});
+  const observed=[];ui.observe=page=>observed.push(page);
+  await ui.initialize();assert.equal(ui.host,host);assert.equal(ui.guest,guest);assert.deepEqual(observed,[host,guest]);
+});
+
+test('the observed customer login modal produces a clear guest authentication failure',async()=>{
+  const ui=new SpacecloudUI(null,{});ui.guest={getByText(pattern){assert(pattern.test('로그인/회원가입해주세요.'));return {filter(options){assert.deepEqual(options,{visible:true});return {async count(){return 1;}};}};}};
+  await assert.rejects(ui.assertNoGuestLoginPrompt(),{name:'ReviewRequired',message:'스페이스클라우드 고객용 로그인이 필요합니다. 관리자에서 고객 로그인을 연결해 주세요.'});
+});
+test('guest login verification reads the actual r5 customer calendar on the Korean date',async()=>{
+  const ui=new SpacecloudUI(null,{allowWrites:false}),dates=[];
+  ui.openPublicDate=async date=>{assert.equal(ui.room,'r5');dates.push(date);};
+  const expectedBefore=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+  assert.deepEqual(await ui.verifyGuestLogin(),{guest_ready:true});
+  const expectedAfter=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+  assert.equal(dates.length,1);assert([expectedBefore,expectedAfter].includes(dates[0]));
+  ui.openPublicDate=async()=>{throw Object.assign(new Error('calendar unavailable'),{name:'ReviewRequired'});};
+  await assert.rejects(ui.verifyGuestLogin(),{name:'ReviewRequired'});
 });

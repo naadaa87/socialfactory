@@ -41,6 +41,10 @@ npm test
 
 로그인이 만료되거나 Cloudflare 브라우저가 스페이스클라우드에서 차단되면 새 결제를 열지 않고 재로그인을 안내합니다. Cloudflare Browser Run 트래픽은 봇으로 식별되므로, 로그인과 저장 후 복원이 실제로 되는지 검증해야 합니다. [공식 Live View](https://developers.cloudflare.com/browser-run/features/live-view/), [Playwright 저장 상태](https://developers.cloudflare.com/browser-run/playwright/).
 
+호스트 서비스와 일반 회원 서비스의 로그인이 별개이므로 **고객 달력 로그인도 한 번 필요합니다**. 관리자의 고객 달력 로그인 연결은 스페이스클라우드의 게스트 로그인 화면을 열고, 저장 시 실제 방·날짜 선택 달력이 표시되는지 확인합니다. 이 계정은 공개 예약 가능 시간 조회에만 사용하며 고객 측 예약·결제를 제출하지 않습니다.
+
+호스트 상태는 `spacecloud`, 고객 달력 상태는 `spacecloud_public` 키로 각각 암호화하여 저장합니다. 예약 실행 시에도 별도 브라우저 컨텍스트로 복원하며 서로의 저장 상태를 덮어쓰지 않습니다. 두 상태가 모두 준비되기 전에는 새 예약 작업을 임대하지 않습니다. `/guest-login/start`, `/guest-login/save`, `/guest-login/cancel`은 관리자 인증이 필요하고 같은 5분 유효시간·자동 종료·사용량 제한을 적용합니다.
+
 ## 제어 API
 
 공개 `GET /health`에는 서비스 이름과 활성 여부만 나옵니다. 다음 제어 요청은 `Authorization: Bearer CLOUD_ADMIN_TOKEN`이 필요합니다. 브라우저에서 직접 요청한다면 같은 원점만 허용합니다.

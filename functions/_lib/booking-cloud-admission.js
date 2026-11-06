@@ -8,7 +8,7 @@ const unavailable=()=>Object.assign(new Error('온라인 예약 연동을 점검
 const integer=value=>Number.isSafeInteger(value) && value>=0;
 
 function ready(data,now) {
-  if(data?.ok!==true || data.enabled!==true || data.allow_writes!==true || data.login_saved!==true
+  if(data?.ok!==true || data.enabled!==true || data.allow_writes!==true || data.login_saved!==true || data.public_login_saved!==true
     || !data.runner || data.runner.review!==false || typeof data.runner.busy!=='boolean' || !data.budget)return false;
   const budget=data.budget,day=new Date(now).toISOString().slice(0,10);
   if(budget.utc_day!==day || budget.utc_month!==day.slice(0,7))return false;

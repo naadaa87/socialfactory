@@ -11,6 +11,8 @@ export const schema=[
   `INSERT OR IGNORE INTO cloud_runner_lock(id) VALUES(1)`,
   `CREATE TABLE IF NOT EXISTS cloud_login (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, lock_token TEXT NOT NULL,
     budget_id TEXT NOT NULL, started_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active')`,
+  `CREATE TABLE IF NOT EXISTS cloud_guest_login (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, lock_token TEXT NOT NULL,
+    budget_id TEXT NOT NULL, started_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active')`,
   `CREATE TABLE IF NOT EXISTS cloud_browser_runs (id TEXT PRIMARY KEY,session_id TEXT NOT NULL,lock_token TEXT NOT NULL,
     budget_id TEXT NOT NULL,started_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,state TEXT NOT NULL DEFAULT 'active')`
 ];
@@ -26,10 +28,14 @@ const unb64=text=>Uint8Array.from(atob(text),x=>x.charCodeAt(0));
 async function keyFor(secret){if(typeof secret!=='string' || secret.length<32)throw problem('encryption-key','로그인 암호화 키를 설정해야 합니다.',503);return crypto.subtle.importKey('raw',await crypto.subtle.digest('SHA-256',encoder.encode(secret)),{name:'AES-GCM'},false,['encrypt','decrypt']);}
 export async function encryptState(value,secret){const iv=crypto.getRandomValues(new Uint8Array(12)),key=await keyFor(secret),plain=encoder.encode(JSON.stringify(value));if(plain.length>1500000)throw problem('state-size','로그인 상태 크기를 확인해야 합니다.',503);const data=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:encoder.encode('SF-SC-CLOUD-v1')},key,plain);return JSON.stringify({v:1,iv:b64(iv),data:b64(new Uint8Array(data))});}
 export async function decryptState(cipher,secret){try{const value=JSON.parse(cipher);if(value.v!==1)throw Error();const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(value.iv),additionalData:encoder.encode('SF-SC-CLOUD-v1')},await keyFor(secret),unb64(value.data));return JSON.parse(decoder.decode(plain));}catch{throw problem('session-unreadable','저장된 클라우드 로그인 상태를 확인해야 합니다.',503);}}
-export async function loadState(env){const row=await env.STATE_DB.prepare("SELECT cipher FROM cloud_session WHERE id='spacecloud'").first();return row?decryptState(row.cipher,env.SESSION_ENCRYPTION_KEY):null;}
+async function loadStoredState(env,id){const row=await env.STATE_DB.prepare('SELECT cipher FROM cloud_session WHERE id=?1').bind(id).first();return row?decryptState(row.cipher,env.SESSION_ENCRYPTION_KEY):null;}
+export const loadState=env=>loadStoredState(env,'spacecloud');
+export const loadPublicState=env=>loadStoredState(env,'spacecloud_public');
 const spacecloudHost=host=>{const clean=String(host || '').replace(/^\./,'').toLowerCase();return clean==='spacecloud.kr' || clean.endsWith('.spacecloud.kr');};
 export function onlySpacecloudState(state){return {cookies:(state?.cookies || []).filter(cookie=>spacecloudHost(cookie.domain)),origins:(state?.origins || []).filter(origin=>{try{const url=new URL(origin.origin);return url.protocol==='https:' && spacecloudHost(url.hostname);}catch{return false;}})};}
-export async function saveState(env,state){const cipher=await encryptState(onlySpacecloudState(state),env.SESSION_ENCRYPTION_KEY);await env.STATE_DB.prepare(`INSERT INTO cloud_session(id,cipher,updated_at) VALUES('spacecloud',?1,?2) ON CONFLICT(id) DO UPDATE SET cipher=excluded.cipher,updated_at=excluded.updated_at`).bind(cipher,Date.now()).run();}
+async function saveStoredState(env,id,state){const cipher=await encryptState(onlySpacecloudState(state),env.SESSION_ENCRYPTION_KEY);await env.STATE_DB.prepare(`INSERT INTO cloud_session(id,cipher,updated_at) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET cipher=excluded.cipher,updated_at=excluded.updated_at`).bind(id,cipher,Date.now()).run();}
+export const saveState=(env,state)=>saveStoredState(env,'spacecloud',state);
+export const savePublicState=(env,state)=>saveStoredState(env,'spacecloud_public',state);
 export const paidIncluded=env=>env.CLOUD_PLAN_MODE==='paid-included' && env.INCLUDED_BUDGET_CONFIRMED==='true';
 const configuredNumber=(value,fallback)=>value!==undefined && value!=='' && Number.isFinite(Number(value))?Number(value):fallback;
 export const dailyLimit=env=>Math.max(0,Math.min(paidIncluded(env)?2700000:540000,configuredNumber(env.DAILY_BROWSER_BUDGET_MS,paidIncluded(env)?2700000:540000)));

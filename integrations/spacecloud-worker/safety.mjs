@@ -51,14 +51,39 @@ export async function executeJob(rawJob, driver, heartbeat) {
     driver.beforeWrite=heartbeat;
     await driver.openRoom(job.room);
     // Read every affected date before the first change, including the next day for overnight bookings.
-    const initial = [];
+    const initial = [],initialReadTimes=[];
     phase='read-initial';
-    for (const segment of job.segments) initial.push(inspectRecords(await driver.recordsFor(segment.date),segment));
+    for (const segment of job.segments) {
+      const readStartedAt=Date.now();
+      initial.push(inspectRecords(await driver.recordsFor(segment.date),segment));
+      initialReadTimes.push(readStartedAt);
+    }
+    if(job.action==='verify' && initial.some(x=>!x.own)) {
+      phase='verify-owned';
+      throw new ReviewRequired('홈페이지 예약의 외부 차단을 찾지 못했습니다.');
+    }
     if (job.action !== 'release' && initial.some(x => x.conflicts.length)) {
       const owned=initial.some(x => x.own);
       if(!owned)receipt.verified_released=true;
       receipt.observed_at=Date.now();
       return {status:owned ? 'review' : 'conflict',receipt,message:'스페이스클라우드의 다른 예약과 겹칩니다. 기존 예약은 변경하지 않았습니다.'};
+    }
+    // A read-only verification needs one fresh host observation and the public
+    // check. Never reuse this branch for a creation, removal or partial block.
+    if(job.action==='verify' || (job.action==='block' && initial.every(x=>x.own))) {
+      phase='verify-owned';
+      if(initial.some(x=>!x.own))throw new ReviewRequired('홈페이지 예약의 외부 차단을 찾지 못했습니다.');
+      for(let i=0;i<job.segments.length;i++) {
+        await heartbeat();
+        phase='verify-public-block';
+        await driver.verifyPublic(job.segments[i],[initial[i].own]);
+      }
+      // Public rendering and a slow heartbeat cannot refresh the host snapshot.
+      // The API retains its 30-second freshness limit for every segment.
+      receipt.observed_at=Math.min(...initialReadTimes);
+      await heartbeat();
+      receipt.no_conflicts=true;receipt.verified_blocked=true;
+      return {status:'succeeded',receipt};
     }
     for (let i=0;i<job.segments.length;i++) {
       const segment=job.segments[i];

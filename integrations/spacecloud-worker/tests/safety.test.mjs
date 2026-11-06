@@ -7,8 +7,8 @@ import { readConfig, QueueClient } from '../queue.mjs';
 const makeJob=overrides=>({id:1,lease_token:'lease-for-test',action:'block',code:'B261208-TESTING',marker:'SFWEB:B261208-TESTING',room:'r5',date:'2026-12-08',start_min:240,end_min:360,...overrides});
 const own=segment=>({...segment,name:segment.marker,memo:memoFor(segment),manual:true});
 function fakeDriver(records=[]) {
-  return {records:[...records],created:[],removed:[],publicChecks:[],
-    async openRoom(){},async recordsFor(){return this.records;},
+  return {records:[...records],created:[],removed:[],publicChecks:[],hostReads:[],
+    async openRoom(){},async recordsFor(date){this.hostReads.push(date);return this.records;},
     async createSegment(s){this.created.push(s);this.records.push(own(s));},
     async removeSegment(s,r){this.removed.push(r);this.records=this.records.filter(x=>x!==r);},
     async verifyPublic(s,r){this.publicChecks.push({segment:s,remaining:r});}};
@@ -48,6 +48,75 @@ test('block is idempotent only for exact manual marker, memo and period',async()
   assert.throws(()=>inspectRecords([own(segment),own(segment)],segment),ReviewRequired);
 });
 
+test('verify and an already-owned block use one host read and no external writes',async()=>{
+  for(const action of ['verify','block']){
+    const job=makeJob({action}),segment=planJob(job).segments[0],driver=fakeDriver([own(segment)]);let heartbeats=0;
+    const result=await executeJob(job,driver,async()=>{heartbeats++;});
+    assert.equal(result.status,'succeeded');assert.equal(result.receipt.verified_blocked,true);assert.equal(result.receipt.no_conflicts,true);
+    assert.deepEqual(driver.hostReads,[job.date]);assert.equal(driver.created.length,0);assert.equal(driver.removed.length,0);
+    assert.equal(driver.publicChecks.length,1);assert.deepEqual(driver.publicChecks[0].remaining,[own(segment)]);assert.equal(heartbeats,2);
+  }
+});
+
+test('verification fast path rejects an invalid manual marker, memo or exact time scope before public checks',async()=>{
+  const job=makeJob({action:'verify'}),segment=planJob(job).segments[0];
+  for(const record of [{...own(segment),manual:false},{...own(segment),memo:'different memo'},
+    {...own(segment),name:'SFWEB:B261208-OTHER'}, {...own(segment),start_min:segment.start_min+60}]){
+    const driver=fakeDriver([record]),result=await executeJob(job,driver,async()=>{});
+    assert.notEqual(result.status,'succeeded');assert.notEqual(result.receipt.verified_blocked,true);assert.notEqual(result.receipt.no_conflicts,true);
+    assert.equal(driver.hostReads.length,1);assert.equal(driver.publicChecks.length,0);assert.equal(driver.created.length,0);assert.equal(driver.removed.length,0);
+  }
+});
+
+test('overnight verification requires every owned segment before checking any public availability',async()=>{
+  const job=makeJob({action:'verify',start_min:1380,end_min:1560}),segments=planJob(job).segments,driver=fakeDriver([own(segments[0])]);
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'review');assert.deepEqual(driver.hostReads,segments.map(segment=>segment.date));
+  assert.equal(driver.publicChecks.length,0);assert.equal(driver.created.length,0);assert.equal(driver.removed.length,0);
+});
+
+test('verification missing its owned record reviews even when another guest overlaps',async()=>{
+  const job=makeJob({action:'verify'}),driver=fakeDriver([{date:job.date,start_min:job.start_min,end_min:job.end_min,name:'existing guest',manual:false}]);
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'review');assert.notEqual(result.receipt.verified_released,true);assert.notEqual(result.receipt.verified_blocked,true);
+  assert.equal(driver.hostReads.length,1);assert.equal(driver.publicChecks.length,0);assert.equal(driver.created.length,0);assert.equal(driver.removed.length,0);
+});
+
+test('public verification failure never turns a read-only fast path into confirmed proof',async()=>{
+  const job=makeJob({action:'verify'}),driver=fakeDriver(planJob(job).segments.map(own));
+  driver.verifyPublic=async function(){this.publicChecks.push({});throw new Error('public snapshot unavailable');};
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'review');assert.notEqual(result.receipt.verified_blocked,true);assert.notEqual(result.receipt.no_conflicts,true);
+  assert.equal(driver.hostReads.length,1);assert.equal(driver.publicChecks.length,1);assert.equal(driver.created.length,0);assert.equal(driver.removed.length,0);
+});
+
+test('a lost lease stops fast verification before public checks and cannot return success',async()=>{
+  const job=makeJob({action:'verify'}),driver=fakeDriver(planJob(job).segments.map(own));
+  const result=await executeJob(job,driver,async()=>{throw new Error('lease expired');});
+  assert.equal(result.status,'review');assert.equal(driver.hostReads.length,1);assert.equal(driver.publicChecks.length,0);
+  assert.notEqual(result.receipt.verified_blocked,true);assert.equal(driver.created.length,0);assert.equal(driver.removed.length,0);
+});
+
+test('a failed final lease check cannot turn completed public checks into successful proof',async()=>{
+  const job=makeJob({action:'verify'}),driver=fakeDriver(planJob(job).segments.map(own));let beats=0;
+  const result=await executeJob(job,driver,async()=>{if(++beats===2)throw new Error('final lease check failed');});
+  assert.equal(result.status,'review');assert.equal(driver.publicChecks.length,1);assert.equal(driver.hostReads.length,1);
+  assert.notEqual(result.receipt.no_conflicts,true);assert.notEqual(result.receipt.verified_blocked,true);assert.equal(driver.created.length,0);assert.equal(driver.removed.length,0);
+});
+
+test('the write path retains its before-change and after-change host checks',async()=>{
+  const job=makeJob(),driver=fakeDriver();const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'succeeded');assert.deepEqual(driver.hostReads,[job.date,job.date,job.date]);
+  assert.equal(driver.created.length,1);assert.equal(driver.removed.length,0);assert.equal(driver.publicChecks.length,1);
+});
+
+test('a partially owned overnight block still uses the full write checks for the missing segment',async()=>{
+  const job=makeJob({start_min:1380,end_min:1560}),segments=planJob(job).segments,driver=fakeDriver([own(segments[0])]);
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'succeeded');assert.equal(driver.hostReads.length,6);assert.deepEqual(driver.created,[segments[1]]);
+  assert.equal(driver.removed.length,0);assert.equal(driver.publicChecks.length,2);
+});
+
 test('second-day conflict prevents first-day creation',async()=>{
   const job=makeJob({start_min:1380,end_min:1560});
   const driver=fakeDriver([{date:'2026-12-09',start_min:60,end_min:180,name:'existing',manual:false}]);
@@ -64,7 +133,7 @@ test('own block plus another conflict is review, never auto-deleted',async()=>{
 
 test('verify cannot create a missing block',async()=>{
   const driver=fakeDriver();const result=await executeJob(makeJob({action:'verify'}),driver,async()=>{});
-  assert.equal(result.status,'review');assert.equal(driver.created.length,0);
+  assert.equal(result.status,'review');assert.equal(driver.created.length,0);assert.equal(driver.hostReads.length,1);assert.equal(driver.publicChecks.length,0);
 });
 
 test('release deletes only exact owned entry and expects remaining guest slots blocked',async()=>{
@@ -73,6 +142,7 @@ test('release deletes only exact owned entry and expects remaining guest slots b
   const result=await executeJob(job,driver,async()=>{});
   assert.equal(result.status,'succeeded');assert.equal(result.receipt.verified_released,true);
   assert.equal(driver.removed.length,1);assert.deepEqual(driver.records,[guest]);
+  assert.deepEqual(driver.hostReads,[job.date,job.date,job.date]);assert.equal(driver.created.length,0);
   assert.deepEqual(publicSlotExpectations(segment,driver.publicChecks[0].remaining),[{index:4,disabled:false},{index:5,disabled:true}]);
 });
 
@@ -93,15 +163,31 @@ test('adjacent owned overnight segments do not count as duplicate',()=>{
   assert.equal(result.own.date,second.date);assert.equal(result.conflicts.length,0);
 });
 
-test('receipt uses earliest segment observation before a slow final heartbeat',async()=>{
+test('fast receipt preserves the host-read start before slow host, public and final lease checks',async()=>{
+  const actualNow=Date.now;let clock=1000;
+  Date.now=()=>clock;
+  try{
+    const job=makeJob({action:'verify'}),driver=fakeDriver(planJob(job).segments.map(own));let beats=0;
+    driver.recordsFor=async function(date){this.hostReads.push(date);clock=5000;return this.records;};
+    driver.verifyPublic=async function(){clock=17000;this.publicChecks.push({});};
+    const result=await executeJob(job,driver,async()=>{clock=++beats===1?9000:25000;});
+    assert.equal(result.status,'succeeded');assert.equal(result.receipt.observed_at,1000);assert.equal(driver.hostReads.length,1);
+    assert.equal(clock,25000);assert.equal(driver.created.length,0);assert.equal(driver.removed.length,0);
+  }finally{Date.now=actualNow;}
+});
+
+test('overnight fast receipt keeps the earliest host-read start across all segments',async()=>{
   const actualNow=Date.now;let clock=1000;
   Date.now=()=>clock;
   try {
-    const job=makeJob({start_min:1380,end_min:1560}),segments=planJob(job).segments;
+    const job=makeJob({action:'verify',start_min:1380,end_min:1560}),segments=planJob(job).segments;
     const driver=fakeDriver(segments.map(own));
-    driver.verifyPublic=async function(){clock=this.publicChecks.length?5000:1000;this.publicChecks.push({});};
-    const result=await executeJob(job,driver,async()=>{clock=9000;});
+    driver.recordsFor=async function(date){this.hostReads.push(date);clock=this.hostReads.length===1?3000:7000;return this.records;};
+    driver.verifyPublic=async function(){clock=this.publicChecks.length?27000:15000;this.publicChecks.push({});};
+    let beats=0;const result=await executeJob(job,driver,async()=>{clock=[9000,18000,33000][beats++];});
     assert.equal(result.status,'succeeded');assert.equal(result.receipt.observed_at,1000);
+    assert.deepEqual(driver.hostReads,segments.map(segment=>segment.date));assert.equal(driver.publicChecks.length,2);
+    assert.equal(driver.created.length,0);assert.equal(driver.removed.length,0);assert.equal(clock,33000);
   } finally {Date.now=actualNow;}
 });
 

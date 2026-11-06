@@ -17,5 +17,8 @@ INSERT OR IGNORE INTO cloud_runner_lock(id) VALUES(1);
 CREATE TABLE IF NOT EXISTS cloud_login (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, lock_token TEXT NOT NULL,
     budget_id TEXT NOT NULL, started_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active');
 
+CREATE TABLE IF NOT EXISTS cloud_guest_login (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, lock_token TEXT NOT NULL,
+    budget_id TEXT NOT NULL, started_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active');
+
 CREATE TABLE IF NOT EXISTS cloud_browser_runs (id TEXT PRIMARY KEY,session_id TEXT NOT NULL,lock_token TEXT NOT NULL,
     budget_id TEXT NOT NULL,started_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,state TEXT NOT NULL DEFAULT 'active');

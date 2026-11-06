@@ -9,7 +9,7 @@ import { kstToday,addDaysIso } from '../functions/_lib/admin.js';
 const RUNNER='https://runner.example.workers.dev',ORIGIN='https://admission.example';
 const admin='test-only-admission-private-admin-token-more-than-thirty-two';
 const config=()=>({SPACECLOUD_SYNC_ENABLED:'true',SPACECLOUD_RUNNER_URL:RUNNER,CLOUD_ADMIN_TOKEN:admin});
-const status=()=>({ok:true,enabled:true,allow_writes:true,login_saved:true,runner:{busy:false,review:false},budget:{
+const status=()=>({ok:true,enabled:true,allow_writes:true,login_saved:true,public_login_saved:true,runner:{busy:false,review:false},budget:{
   utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),
   daily_limit_ms:2700000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
 const denied={code:'cloud-admission-unavailable',status:503};
@@ -22,8 +22,8 @@ test('admission checks only a configured private Worker status and permits a hea
   assert.equal(calls[0].options.headers['Cache-Control'],'no-store');
 });
 
-test('missing login, stopped writes and a quarantined runner reject new admissions',async()=>{
-  for(const change of [data=>data.enabled=false,data=>data.allow_writes=false,data=>data.login_saved=false,data=>data.runner.review=true,data=>delete data.runner]){
+test('missing host or guest login, stopped writes and a quarantined runner reject new admissions',async()=>{
+  for(const change of [data=>data.enabled=false,data=>data.allow_writes=false,data=>data.login_saved=false,data=>data.public_login_saved=false,data=>delete data.public_login_saved,data=>data.public_login_saved='true',data=>data.runner.review=true,data=>delete data.runner]){
     const data=status();change(data);await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)}),denied);
   }
 });
@@ -104,4 +104,12 @@ test('healthy admission creates only a local hold and duplicate receipts remain 
     assert.equal(calls.filter(call=>call.url===RUNNER+'/status').length,1);assert.equal(env.sqlite.prepare('SELECT COUNT(*) n FROM booking_requests').get().n,1);
     assert(calls.every(call=>call.url.startsWith(RUNNER+'/')));
   });
+});
+
+test('host-only login creates no new booking, queue job or provider request while the customer calendar is inaccessible',async()=>{
+ const env=fixture();try{
+  for(const guest of [false,undefined]){const data=status();if(guest===undefined)delete data.public_login_saved;else data.public_login_saved=guest;
+   await withCloud(data,async calls=>{const response=await submit({request:request(input()),env});assert.equal(response.status,503);assert.equal((await response.json()).error,denied.code);assert.equal(env.sqlite.prepare('SELECT COUNT(*) n FROM booking_requests').get().n,0);assert.equal(env.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sync_jobs').get().n,0);assert.equal(calls.length,1);assert.equal(calls[0].url,RUNNER+'/status');});
+  }
+ }finally{env.sqlite.close();}
 });
