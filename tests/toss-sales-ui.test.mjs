@@ -125,6 +125,17 @@ test('changing ledger filter clears selection and late responses cannot replace 
   assert(!f.$('#ts-recent').innerHTML.includes('data-ts-id="1"'));assert(f.$('#ts-page').textContent.includes('1 / 1'));
 });
 
+test('amount-input filter requests a fresh first page, clears selection and retains product editing controls',async()=>{
+  const html=readFileSync(new URL('../admin.html',import.meta.url),'utf8');assert.match(html,/<option value="amount-input">금액 입력만 보기<\/option>/);
+  const f=harness((b,path)=>({...empty(),total:path.includes('amount-input')?1:51,rows:[ledgerRow('1','included',{manual_product_name:'주차 결제',product_items:[{title:'금액 입력',quantity:1}]})]}));
+  f.A.LOAD.sales();await tick();f.$('#ts-next').events.click.call(f.$('#ts-next'));await tick();
+  f.$('#ts-select-all').checked=true;f.$('#ts-select-all').events.change.call(f.$('#ts-select-all'));
+  f.$('#ts-filter').value='amount-input';f.$('#ts-filter').events.change();await tick();
+  assert.equal(f.calls.at(-1).path,'/api/admin/toss-sales?page=1&filter=amount-input');assert.match(f.$('#ts-page').textContent,/1건 · 1 \/ 1/);
+  assert.match(f.$('#ts-selection').textContent,/0건/);assert(f.$('#ts-recent').innerHTML.includes('상품명·메모 편집'));assert(f.$('#ts-recent').innerHTML.includes('주차 결제'));
+  assert(!f.calls.some(c=>c.body));
+});
+
 test('product labels, variants and quantities are escaped and missing product names stay explicit',async()=>{
   const f=harness(()=>({...empty(),rows:[ledgerRow('1','included',{product_items:[{title:'메가스팟 <img onerror=x>',variant:'<script>1호</script>',quantity:2,options:['주차권'],category:'대관'}]}),ledgerRow('2','included',{product_items:[]}),ledgerRow('3')]}));
   f.A.LOAD.sales();await tick();const html=f.$('#ts-recent').innerHTML;

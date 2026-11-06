@@ -150,6 +150,25 @@ test('ledger pagination reaches older imports and exclusion filters cover the fu
   assert.equal((await status({env:f.env,request:f.get('/api/admin/toss-sales?page=-1')})).status,400);
 });
 
+test('amount-input filter uses original product titles across the full ledger, preserving labels and revenue decisions',async t=>{
+  const f=fixture(t),payments=Array.from({length:51},(_,i)=>payment({id:String(640000000000000001n+BigInt(i))}));
+  const other=payment({id:'640000000000000099',orderId:'620000000000000099'});
+  await f.post({action:'commit',payments:[...payments,other]});
+  await saveOrderProducts(f.env,[productOrder({lineItems:[{item:{title:'데이패스'},quantity:1},{item:{title:'금액 입력'},quantity:1},{item:{title:'금액 입력'},quantity:1}]}),productOrder({id:other.orderId,lineItems:[{item:{title:'데이패스',category:{title:'금액 입력'}},quantity:1}]})]);
+  await f.post({action:'label',paymentId:payments[0].id,productName:'주차 결제',memo:'직접 구분'});
+  await f.post({action:'label',paymentId:other.id,productName:'금액 입력',memo:''});
+  await f.post({action:'review',paymentIds:[payments[0].id],decision:'exclude',note:'주차 결제'});
+  const before=f.db.prepare('SELECT * FROM toss_payments ORDER BY payment_id').all();
+  const list=async q=>(await(await status({env:f.env,request:f.get('/api/admin/toss-sales'+q)})).json());
+  const first=await list('?filter=amount-input'),second=await list('?filter=amount-input&page=2');
+  assert.equal(first.total,51);assert.equal(first.rows.length,50);assert.equal(second.rows.length,1);
+  const rows=[...first.rows,...second.rows];assert.equal(new Set(rows.map(r=>r.payment_id)).size,51);assert(!rows.some(r=>r.payment_id===other.id));
+  const renamed=rows.find(r=>r.payment_id===payments[0].id);assert.equal(renamed.manual_product_name,'주차 결제');assert.equal(renamed.disposition,'exclude');
+  assert.deepEqual(f.db.prepare('SELECT * FROM toss_payments ORDER BY payment_id').all(),before);
+  assert.equal(first.summary.total,(await list('')).summary.total);
+  f.env.TOSS_PLACE_MERCHANT_ID='43';assert.equal((await list('?filter=amount-input')).total,0);
+});
+
 test('existing and split payments receive only their order product labels without changing exclusion or amounts',async t=>{
   const f=fixture(t),p=payment(),q=payment({id:'640000000000000002',amount:8000});
   await f.post({action:'commit',payments:[p,q]});await f.post({action:'review',paymentIds:[p.id],decision:'exclude',note:'메가스팟 결제'});
