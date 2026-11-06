@@ -23,7 +23,7 @@
  }
  try{
   const r=await fetch('/api/parking/config',{cache:'no-store'});config=await r.json();if(!r.ok||!config.ok)throw Error();
-  $('#pk-operation').textContent=config.operation;$('#pk-daily').textContent='일일권: '+(config.dailyEnabled?config.dailyDetails:'이용 조건을 확인 중입니다. 카카오톡으로 문의해 주세요.');
+  $('#pk-operation').textContent=config.operation;if(config.automationEnabled)$('#pk-registration-description').textContent='이용일에 입차한 뒤 구매 내역에서 차량별로 등록을 요청해 주세요. 서버가 실제 입차를 확인하고 자동 등록합니다. 입차 기록이 아직 없으면 대기하며, 할인 적용 완료를 확인하고 출차해 주세요.';$('#pk-daily').textContent='일일권: '+(config.dailyEnabled?config.dailyDetails:'이용 조건을 확인 중입니다. 카카오톡으로 문의해 주세요.');
   form.elements.date.min=new Date(Date.now()+9*3600e3).toISOString().slice(0,10);form.elements.date.max=new Date(Date.now()+9*3600e3+90*864e5).toISOString().slice(0,10);
   addVehicle();$('#pk-pay').disabled=!config.ready;if(!config.ready)message('주차권 온라인 구매를 준비하고 있습니다. 카카오톡으로 문의해 주세요.');
  }catch{message('구매 가능 여부를 확인하지 못했습니다. 잠시 후 다시 접속해 주세요.');return;}

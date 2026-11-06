@@ -166,9 +166,10 @@
     var renderOrders = function (list) {
       var ul = $("[data-my-orders]"); if (!ul) return;
       ul.innerHTML = list.map(function (o) {
-        var meta = [Number(o.amount).toLocaleString("ko-KR") + "원", o.payLabel, o.start_date ? "시작일 " + o.start_date : ""].filter(Boolean).join(" · ");
+        var parking = String(o.product_id || "").startsWith("parking-");
+        var meta = [Number(o.amount).toLocaleString("ko-KR") + "원", o.payLabel, o.start_date ? (parking ? "이용일 " : "시작일 ") + o.start_date : ""].filter(Boolean).join(" · ");
         return "<li><div class=\"mi-top\"><span class=\"mi-st " + (OSTATUS[o.status] || "") + "\">" + esc(o.statusLabel) + "</span><strong>" + esc(o.product_name) + "</strong><span class=\"mi-date\">" + esc((o.paid_at || o.created_at || "").slice(0, 16)) + "</span></div>" +
-          "<p class=\"mi-meta\">" + esc(meta) + "</p><p class=\"mi-receipt\">주문번호 " + esc(o.oid) + "</p><a class=\"btn btn-outline btn-sm mt-16\" href=\"/order-complete?oid=" + encodeURIComponent(o.oid) + "\">" + (/^\d{4}-\d{2}-\d{2} /.test(o.start_date || "") ? "주문 상세 · 이용 시간 변경" : "주문 상세 보기") + "</a></li>";
+          "<p class=\"mi-meta\">" + esc(meta) + "</p><p class=\"mi-receipt\">주문번호 " + esc(o.oid) + "</p><a class=\"btn btn-outline btn-sm mt-16\" href=\"" + (parking ? "/parking-order" : "/order-complete") + "?oid=" + encodeURIComponent(o.oid) + "\">" + (parking ? "주차권 내역 · 등록 요청" : /^\d{4}-\d{2}-\d{2} /.test(o.start_date || "") ? "주문 상세 · 이용 시간 변경" : "주문 상세 보기") + "</a></li>";
       }).join("");
       var empty = $("[data-my-orders-empty]"); if (empty) empty.hidden = list.length > 0;
     };

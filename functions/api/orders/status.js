@@ -1,3 +1,4 @@
+import {automationEnabled} from '../../_lib/parking-automation.js';
 import {parkingItems,publicParking,ensureParking} from '../../_lib/parking.js';
 // GET /api/orders/status?oid=…&t=… — 주문 결과 조회 (주문 완료 화면)
 import { orderToken, ORDER_STATUS, PAY_METHOD } from "../../_lib/shop.js";
@@ -24,7 +25,7 @@ export async function onRequestGet({ request, env }) {
   const scheduledStart=/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00$/.test(o.start_date||"");
   const legacyReady=linked.results.some(p=>p.status==="ready");
   return json({ ok: true, order: {
-    parking, parkingVehicles, passes:linked.results, schedule:publicSchedule(await websiteSchedule(env,o)), scheduledStart, oid: o.oid, provider:payment ? "payapp" : "inicis", refundedAmount:payment ? payment.refunded_amount : 0, payurl:payment && o.status === "pending" ? payment.payurl : null, status: o.status, statusLabel: ORDER_STATUS[o.status] || o.status, productId: o.product_id, productName: o.product_name, qty: o.qty, amount: o.amount,
+    parking, parkingVehicles, parkingAutomation:parking?await automationEnabled(env):false, passes:linked.results, schedule:publicSchedule(await websiteSchedule(env,o)), scheduledStart, oid: o.oid, provider:payment ? "payapp" : "inicis", refundedAmount:payment ? payment.refunded_amount : 0, payurl:payment && o.status === "pending" ? payment.payurl : null, status: o.status, statusLabel: ORDER_STATUS[o.status] || o.status, productId: o.product_id, productName: o.product_name, qty: o.qty, amount: o.amount,
     buyerName: o.buyer_name, buyerPhone: o.buyer_phone, buyerEmail: o.buyer_email || "", startDate: o.start_date || "", startLabel: scheduledStart ? "이용 시작 일시 (한국 시간)" : p.startLabel || "",
     payMethod: PAY_METHOD[o.pg_method] || (payment ? "페이앱" : o.pg_method) || (o.pay_method === "bank" ? "실시간 계좌이체" : "신용 · 체크카드"), paidAt: o.paid_at || "", tid: o.tid || "",
     cardName: o.card_name || "", failMsg: o.fail_msg || "", createdAt: o.created_at, test: !!o.test_mode, validity: legacyReady ? "구매일로부터 90일 안에 입실 시작" : p.validity || ""

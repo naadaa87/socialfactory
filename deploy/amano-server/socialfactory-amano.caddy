@@ -1,0 +1,19 @@
+@socialfactory_amano {
+    path /socialfactory/amano
+    method POST
+}
+handle @socialfactory_amano {
+    request_body {
+        max_size 8KB
+    }
+    rewrite * /v1/socialfactory-amano
+    reverse_proxy 127.0.0.1:8790 {
+        header_up -Cookie
+        header_down -Server
+        lb_retries 0
+        transport http {
+            dial_timeout 2s
+            response_header_timeout 30s
+        }
+    }
+}
