@@ -32,12 +32,27 @@ export async function ensureTossSales(env) {
     event_id TEXT PRIMARY KEY, merchant_id TEXT NOT NULL, payment_id TEXT NOT NULL,
     event_type TEXT NOT NULL, received_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
   )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS toss_installations (
+    merchant_id TEXT PRIMARY KEY, merchant_name TEXT NOT NULL DEFAULT '', installed INTEGER NOT NULL,
+    provider_updated INTEGER NOT NULL, received_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
+  )`).run();
 }
 
 export function tossConfig(env) {
   const merchantId = id(env.TOSS_PLACE_MERCHANT_ID);
   return { merchantId, apiReady: !!(merchantId && env.TOSS_PLACE_ACCESS_KEY && env.TOSS_PLACE_SECRET_KEY),
-    webhookReady: !!(merchantId && env.TOSS_PLACE_WEBHOOK_SECRET) };
+    webhookReady: !!(merchantId && env.TOSS_PLACE_WEBHOOK_SECRET), signingReady:!!env.TOSS_PLACE_WEBHOOK_SECRET };
+}
+
+// Discover the Open API merchant ID from a signed installation event. A candidate
+// never becomes the configured merchant automatically and contains no owner/contact data.
+export function installationFields(event) {
+  const merchantId=id(event.merchantId), at=stamp(event.createdAt);
+  const installed=event.type==='app.installation.created.v1';
+  if (!merchantId || !at || !['app.installation.created.v1','app.installation.deleted.v1'].includes(event.type)) return null;
+  if (installed && id(event.data?.merchant?.id)!==merchantId) return null;
+  if (!installed && id(event.data?.merchantId)!==merchantId) return null;
+  return {merchantId,updated:at.ms,installed:installed?1:0,name:installed?text(event.data.merchant.displayName||event.data.merchant.name,120):''};
 }
 
 export function normalizePayment(raw, merchantId) {

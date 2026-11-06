@@ -19,7 +19,8 @@
   async function load(){
     try{
       var d=await A.api('/api/admin/toss-sales');
-      $('#ts-status').textContent=(d.apiReady?'과거 내역 조회 설정됨':'과거 내역 조회: API 키·매장 연결 필요')+' · '+(d.webhookReady?'실시간 수신 설정됨':'실시간 수신: 웹훅 연결 필요');
+      $('#ts-status').textContent=(d.apiReady?'과거 내역 조회 설정됨':'과거 내역 조회: API 키·매장 연결 필요')+' · '+(d.webhookReady?'실시간 수신 설정됨':d.signingReady?'서명 수신 준비됨 · 운영 매장 연결 대기':'실시간 수신: 웹훅 연결 필요');
+      $('#ts-installations').textContent=(d.installations||[]).map(function(x){return (x.installed?'앱 설치 확인: ':'앱 설치 해제: ')+(x.merchant_name||'매장')+' · Open API 매장 ID '+x.merchant_id+' · '+x.received_at;}).join(' / ');
       $('#ts-times').textContent='일반 단말기 합산 '+A.num(d.summary.n)+'건 · '+A.won(d.summary.total)+' / 마지막 수신: '+(d.lastWebhook||'아직 없음');
       $('#ts-webhook-url').textContent=d.webhookUrl;
       $('#ts-recent').innerHTML=d.rows.length?table(d.rows,true):'<p class="small muted">아직 가져온 일반 단말기 결제가 없습니다.</p>';
