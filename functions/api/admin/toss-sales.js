@@ -7,8 +7,8 @@ export async function onRequestGet({request,env}) {
   await ensureTossSales(env);
   const cfg = tossConfig(env);
   const params=new URL(request.url).searchParams;
-  const page=Number(params.get('page')||1),filter=params.get('filter')||'all';
-  if(!Number.isInteger(page)||page<1||page>20000||!['all','included','exclude','review','duplicate','amount-input','amount-input-empty'].includes(filter))
+  const page=Number(params.get('page')||1),filter=params.get('filter')||'all',sort=params.get('sort')||'date-desc';
+  if(!Number.isInteger(page)||page<1||page>20000||!['all','included','exclude','review','duplicate','amount-input','amount-input-empty'].includes(filter)||!['date-desc','amount-desc','amount-asc'].includes(sort))
     return json({ok:false,message:'결제 목록 조회 조건을 확인해 주세요.'},400);
   const summary = await env.DB.prepare(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS total,MAX(received_at) AS latest FROM ${TOSS_SOURCE}`).first();
   const webhook = await env.DB.prepare("SELECT received_at FROM toss_webhook_events WHERE event_type IN ('payment.payment.approved.v1','payment.payment.cancelled.v1') ORDER BY received_at DESC LIMIT 1").first();
@@ -30,7 +30,8 @@ export async function onRequestGet({request,env}) {
   const dispositionFilter=!['all','amount-input','amount-input-empty'].includes(filter);
   const where=dispositionFilter?' WHERE disposition=?':'',args=[cfg.merchantId,...(dispositionFilter?[filter]:[])];
   const total=await env.DB.prepare('SELECT COUNT(*) n FROM ('+ledger+')'+where).bind(...args).first();
-  const rows=(await env.DB.prepare('SELECT * FROM ('+ledger+')'+where+' ORDER BY paid_at DESC,payment_id DESC LIMIT 50 OFFSET ?')
+  const orderBy=sort==='amount-desc'?'amount DESC,paid_at DESC,payment_id DESC':sort==='amount-asc'?'amount ASC,paid_at DESC,payment_id DESC':'paid_at DESC,payment_id DESC';
+  const rows=(await env.DB.prepare('SELECT * FROM ('+ledger+')'+where+' ORDER BY '+orderBy+' LIMIT 50 OFFSET ?')
     .bind(...args,(page-1)*50).all()).results||[];
   return json({ok:true,...cfg,summary,lastWebhook:webhook?.received_at || null,rows:await withOrderProducts(env,rows),installations,
     page,total:Number(total?.n)||0,pageSize:50,

@@ -152,6 +152,23 @@ test('unwritten amount-input filter clears selection, and saving either field re
   assert(!f.calls.some(c=>['commit','review'].includes(c.body?.action)));
 });
 
+test('amount header toggles descending and ascending server sorting, resets the page and preserves sort on filters',async()=>{
+  const f=harness(()=>({...empty(),total:51,rows:[ledgerRow('1')]}));
+  const sort=()=>f.$('#ts-recent').events.click({target:{closest:s=>s==='[data-ts-sort-amount]'?{dataset:{tsSortAmount:'true'}}:null}});
+  f.A.LOAD.sales();await tick();f.$('#ts-next').events.click.call(f.$('#ts-next'));await tick();assert(f.calls.at(-1).path.includes('page=2'));
+  sort();await tick();assert.equal(f.calls.at(-1).path,'/api/admin/toss-sales?page=1&filter=all&sort=amount-desc');assert(f.$('#ts-recent').innerHTML.includes('aria-sort="descending"'));
+  sort();await tick();assert.equal(f.calls.at(-1).path,'/api/admin/toss-sales?page=1&filter=all&sort=amount-asc');assert(f.$('#ts-recent').innerHTML.includes('aria-sort="ascending"'));
+  f.$('#ts-filter').value='amount-input-empty';f.$('#ts-filter').events.change();await tick();assert(f.calls.at(-1).path.includes('filter=amount-input-empty&sort=amount-asc'));
+  assert(f.$('#ts-recent').innerHTML.includes('<colgroup>'));assert(f.$('#ts-recent').innerHTML.includes('ts-ledger'));
+  assert(!f.calls.some(c=>c.body));
+});
+
+test('empty filtered lists retain table headers and the amount sort control',async()=>{
+  const f=harness(()=>empty());f.A.LOAD.sales();await tick();
+  assert(f.$('#ts-recent').innerHTML.includes('<colgroup>'));assert(f.$('#ts-recent').innerHTML.includes('결제금액'));assert(f.$('#ts-recent').innerHTML.includes('data-ts-sort-amount'));
+  assert(f.$('#ts-recent').innerHTML.includes('조건에 맞는 가져온 결제가 없습니다.'));
+});
+
 test('product labels, variants and quantities are escaped and missing product names stay explicit',async()=>{
   const f=harness(()=>({...empty(),rows:[ledgerRow('1','included',{product_items:[{title:'메가스팟 <img onerror=x>',variant:'<script>1호</script>',quantity:2,options:['주차권'],category:'대관'}]}),ledgerRow('2','included',{product_items:[]}),ledgerRow('3')]}));
   f.A.LOAD.sales();await tick();const html=f.$('#ts-recent').innerHTML;

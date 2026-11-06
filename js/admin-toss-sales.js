@@ -3,7 +3,7 @@
   var A=window.SF_ADMIN; if(!A)return;
   var $=A.$,esc=A.esc,payments=null,serial=0,busy=false;
   var status=$('#ts-import-status'),preview=$('#ts-preview'),commit=$('#ts-commit');
-  var ledgerPage=1,loadVersion=0,ledgerRows=[],selected=new Set(),reviewIds=[],reviewDecision='',ledgerLoading=false,labelId='';
+  var ledgerPage=1,loadVersion=0,ledgerRows=[],selected=new Set(),reviewIds=[],reviewDecision='',ledgerLoading=false,labelId='',ledgerSort='';
   var labels={new:'신규',updated:'변경 반영',unchanged:'이미 반영',blocked:'확인 필요',included:'합산',duplicate:'이용권 중복 제외',exclude:'제외',review:'확인 필요'};
   var types={CARD:'카드',CASH:'현금',BARCODE:'간편결제',ACCOUNT_TRANSFER:'계좌이체',PREPAID_VALUE:'선불수단',EXTERNAL:'외부 결제수단'};
   function request(body){return A.api('/api/admin/toss-sales',{method:'POST',body:body});}
@@ -25,7 +25,8 @@
       (recent?'<button class="btn btn-light btn-xs mt-s" type="button" data-ts-label-id="'+esc(r.payment_id)+'">상품명·메모 편집</button>':'');
   }
   function table(rows,recent){
-    return '<table class="tbl"><thead><tr>'+(recent?'<th>선택</th>':'')+'<th>승인일시 · 결제 ID</th><th>상품명 · 수량</th><th>수단</th><th>결제금액</th><th>취소금액</th><th>처리</th></tr></thead><tbody>'+rows.map(function(r){
+    var amountHeading=recent?'<th scope="col" aria-sort="'+(ledgerSort==='amount-desc'?'descending':ledgerSort==='amount-asc'?'ascending':'none')+'"><button type="button" class="ts-sort" data-ts-sort-amount="true" aria-label="결제금액 '+(ledgerSort==='amount-desc'?'낮은':'높은')+' 금액순으로 정렬">결제금액 <span aria-hidden="true">'+(ledgerSort==='amount-desc'?'▼':ledgerSort==='amount-asc'?'▲':'↕')+'</span></button></th>':'<th>결제금액</th>';
+    return '<table class="tbl'+(recent?' ts-ledger':'')+'">'+(recent?'<colgroup><col class="ts-col-select"><col class="ts-col-date"><col class="ts-col-product"><col class="ts-col-method"><col class="ts-col-amount"><col class="ts-col-refund"><col class="ts-col-state"></colgroup>':'')+'<thead><tr>'+(recent?'<th>선택</th>':'')+'<th>승인일시 · 결제 ID</th><th>상품명 · 수량</th><th>수단</th>'+amountHeading+'<th>취소금액</th><th>처리</th></tr></thead><tbody>'+rows.map(function(r){
       var state=recent?r.disposition:r.result;
       var editable=recent&&canSelect(r),controls='';
       if(editable){
@@ -36,7 +37,7 @@
       }
       var reason=r.reason||r.review_note||(state==='review'?'기존 수기 매출/직접 발급분과 중복 여부를 확인해 주세요.':'');
       return '<tr>'+(recent?'<td>'+(editable?'<input type="checkbox" data-ts-select="'+esc(r.payment_id)+'" aria-label="결제 '+esc(r.payment_id)+' 선택"'+(selected.has(r.payment_id)?' checked':'')+'>':'—')+'</td>':'')+'<td>'+esc(r.paid_at)+'<br><small class="mono">'+esc(r.payment_id)+'</small>'+(recent&&r.approval_no?'<br><small>승인 '+esc(r.approval_no)+'</small>':'')+'</td><td class="ts-product-cell">'+products(r,recent)+'</td><td>'+esc(types[r.source_type]||r.source_type)+'</td><td>'+A.won(r.amount)+'</td><td>'+A.won(r.refund_amount)+'</td><td>'+esc(labels[state]||state)+(reason?'<br><small>'+esc(reason)+'</small>':'')+controls+'</td></tr>';
-    }).join('')+'</tbody></table>';
+    }).join('')+(!rows.length?'<tr><td colspan="'+(recent?'7':'6')+'"><p class="small muted">조건에 맞는 가져온 결제가 없습니다.</p></td></tr>':'')+'</tbody></table>';
   }
   function canSelect(r){return r.disposition!=='duplicate'&&r.source_type!=='EXTERNAL';}
   function selection(){
@@ -49,7 +50,7 @@
     $('#ts-include-selected').disabled=!chosen.some(function(r){return r.disposition!=='included';})||busy||ledgerLoading;
   }
   function renderLedger(){
-    $('#ts-recent').innerHTML=ledgerRows.length?table(ledgerRows,true):'<p class="small muted">조건에 맞는 가져온 결제가 없습니다.</p>';
+    $('#ts-recent').innerHTML=table(ledgerRows,true);
     selection();
   }
   function closeReview(){reviewIds=[];$('#ts-review-form').hidden=true;}
@@ -79,7 +80,7 @@
     var version=++loadVersion;
     ledgerLoading=true;selected.clear();closeReview();closeLabel();selection();
     try{
-      var d=await A.api('/api/admin/toss-sales?page='+ledgerPage+'&filter='+$('#ts-filter').value);
+      var d=await A.api('/api/admin/toss-sales?page='+ledgerPage+'&filter='+$('#ts-filter').value+(ledgerSort?'&sort='+ledgerSort:''));
       if(version!==loadVersion)return;
       var total=d.total===undefined?d.rows.length:d.total,size=d.pageSize||50,lastPage=Math.max(1,Math.ceil(total/size));
       if(ledgerPage>lastPage){ledgerPage=lastPage;return load();}
@@ -143,6 +144,9 @@
     finally{locked(false);}
   });
   $('#ts-recent').addEventListener('click',function(e){
+    var sort=e.target.closest('[data-ts-sort-amount]');if(sort&&sort.dataset.tsSortAmount){
+      if(busy||ledgerLoading)return;ledgerSort=ledgerSort==='amount-desc'?'amount-asc':'amount-desc';ledgerPage=1;load();return;
+    }
     var label=e.target.closest('[data-ts-label-id]');if(label&&label.dataset.tsLabelId){openLabel(label.dataset.tsLabelId);return;}
     var b=e.target.closest('[data-ts-id]');if(!b||busy)return;
     openReview([b.dataset.tsId],b.dataset.tsDecision);
