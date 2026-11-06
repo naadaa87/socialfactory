@@ -156,7 +156,9 @@ export async function tossGet(env, path) {
   if (!cfg.apiReady) throw Error('토스 Open API 키와 매장 연결이 필요합니다.');
   const response = await fetch(API + '/merchants/' + cfg.merchantId + path, {
     headers: { 'x-access-key':env.TOSS_PLACE_ACCESS_KEY, 'x-secret-key':env.TOSS_PLACE_SECRET_KEY, 'Content-Type':'application/json' },
-    redirect:'error', signal:AbortSignal.timeout(12000)
+    // Workers supports manual/follow, not error. Reject 3xx below so keys are
+    // never forwarded to a redirected destination.
+    redirect:'manual', signal:AbortSignal.timeout(12000)
   });
   if (!response.ok) {
     const failure = await response.json().catch(()=>null);

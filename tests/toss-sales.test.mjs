@@ -168,7 +168,7 @@ test('historical API uses official endpoint, all order states, stable paging and
   t.mock.method(globalThis,'fetch',async(url,options)=>{
     count++;const u=new URL(url);assert.equal(u.origin,'https://open-api.tossplace.com');assert.equal(u.pathname,'/api-public/openapi/v1/merchants/42/order/orders');
     assert.equal(u.searchParams.get('page'),'2');assert.equal(u.searchParams.get('size'),'25');assert(u.searchParams.get('orderStates').includes('OPENED'));
-    assert.equal(options.headers['x-secret-key'],'secret-private');assert.equal(options.redirect,'error');
+    assert.equal(options.headers['x-secret-key'],'secret-private');assert.equal(options.redirect,'manual');
     return Response.json({resultType:'SUCCESS',success:[{merchantId:42,payments:[payment()]}]});
   });
   const d=await(await f.post({action:'fetch',from:'2020-01-01',to:currentDay,page:2})).json();assert.equal(count,1);assert.equal(d.payments.length,1);assert.equal(d.nextPage,null);assert.equal(f.included().length,0);
@@ -181,6 +181,19 @@ test('connection status never exposes keys; missing setup, foreign payments, rat
   t.mock.method(globalThis,'fetch',async()=>new Response('private-upstream-error',{status:429}));
   const r=await f.post({action:'fetch',from:'2020-01-01',to:currentDay,page:1});assert.equal(r.status,422);assert(!(await r.text()).includes('private-upstream-error'));
   f.env.TOSS_PLACE_MERCHANT_ID='';assert.equal((await f.post({action:'commit',payments:[payment()]})).status,400);assert.equal((await f.send()).status,503);
+});
+
+test('Workers-compatible fetch refuses redirects without forwarding credentials',async t=>{
+  const f=fixture(t);let calls=0;
+  t.mock.method(globalThis,'fetch',async(url,options)=>{
+    calls++;assert.equal(new URL(url).origin,'https://open-api.tossplace.com');
+    assert.equal(options.redirect,'manual');
+    return new Response(null,{status:302,headers:{location:'https://other.example/collect'}});
+  });
+  const r=await f.post({action:'fetch',from:'2020-01-01',to:currentDay,page:1});
+  assert.equal(r.status,422);assert.equal(calls,1);
+  assert.match((await r.json()).message,/HTTP 302/);
+  assert.equal(f.included().length,0);
 });
 
 test('signed installation discovers merchant before configuration without enabling payments or saving owner contacts',async t=>{
