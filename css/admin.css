@@ -526,3 +526,4 @@ details.help ol { padding-left: 20px; margin-bottom: 0; }
 #ts-preview,#ts-recent{max-height:480px;overflow:auto}
 .ts-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:12px 0}.ts-toolbar .input{width:auto}.ts-toolbar label{display:flex;align-items:center;gap:6px}.ts-review[hidden]{display:none}.ts-review h4{margin-bottom:8px}.ts-review .frow{margin:14px 0}#ts-recent td:last-child{min-width:230px}#ts-recent input[type=checkbox]{width:18px;height:18px}#ts-review-status{white-space:pre-line}
 .ts-product-cell{min-width:190px;max-width:360px;white-space:normal;overflow-wrap:anywhere}.ts-product+.ts-product{margin-top:8px}.ts-product-cell details{margin-top:8px}
+.ts-memo{white-space:pre-wrap}#ts-label-form textarea{width:100%;resize:vertical}#ts-label-reference{overflow-wrap:anywhere}

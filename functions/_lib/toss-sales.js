@@ -43,6 +43,12 @@ export async function ensureTossSales(env) {
     provider_updated INTEGER NOT NULL, received_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours')),
     PRIMARY KEY(merchant_id,order_id)
   )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS toss_payment_labels (
+    merchant_id TEXT NOT NULL, payment_id TEXT NOT NULL,
+    product_name TEXT NOT NULL DEFAULT '', memo TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours')),
+    PRIMARY KEY(merchant_id,payment_id)
+  )`).run();
 }
 
 // Store only product labels, variants and quantities; never order memos or customer data.
@@ -69,13 +75,20 @@ export async function saveOrderProducts(env, orders) {
 }
 
 export async function withOrderProducts(env, rows) {
-  const ids=[...new Set(rows.map(r=>r.order_id))],products=new Map();
+  const ids=[...new Set(rows.map(r=>r.order_id))],products=new Map(),labels=new Map();
   for(let i=0;i<ids.length;i+=50){
     const chunk=ids.slice(i,i+50),found=(await env.DB.prepare('SELECT order_id,items_json FROM toss_order_products WHERE merchant_id=? AND order_id IN ('+chunk.map(()=>'?').join(',')+')')
       .bind(tossConfig(env).merchantId,...chunk).all()).results||[];
     found.forEach(r=>products.set(r.order_id,JSON.parse(r.items_json)));
   }
-  return rows.map(r=>({...r,product_items:products.has(r.order_id)?products.get(r.order_id):null}));
+  const paymentIds=[...new Set(rows.map(r=>r.payment_id))];
+  for(let i=0;i<paymentIds.length;i+=50){
+    const chunk=paymentIds.slice(i,i+50),found=(await env.DB.prepare('SELECT payment_id,product_name,memo FROM toss_payment_labels WHERE merchant_id=? AND payment_id IN ('+chunk.map(()=>'?').join(',')+')')
+      .bind(tossConfig(env).merchantId,...chunk).all()).results||[];
+    found.forEach(r=>labels.set(r.payment_id,r));
+  }
+  return rows.map(r=>({...r,product_items:products.has(r.order_id)?products.get(r.order_id):null,
+    manual_product_name:labels.get(r.payment_id)?.product_name||'',manual_memo:labels.get(r.payment_id)?.memo||''}));
 }
 
 export async function refreshOrderProducts(env, ids) {
