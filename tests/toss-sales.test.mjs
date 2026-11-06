@@ -166,7 +166,20 @@ test('amount-input filter uses original product titles across the full ledger, p
   const renamed=rows.find(r=>r.payment_id===payments[0].id);assert.equal(renamed.manual_product_name,'주차 결제');assert.equal(renamed.disposition,'exclude');
   assert.deepEqual(f.db.prepare('SELECT * FROM toss_payments ORDER BY payment_id').all(),before);
   assert.equal(first.summary.total,(await list('')).summary.total);
+  // A name OR a memo completes a label; review/exclusion notes are separate.
+  let pending=await list('?filter=amount-input-empty');assert.equal(pending.total,50);assert.equal(pending.rows.length,50);
+  assert(!pending.rows.some(r=>r.payment_id===payments[0].id));
+  await f.post({action:'label',paymentId:payments[1].id,productName:'',memo:'주차 확인'});
+  await f.post({action:'review',paymentIds:[payments[2].id],decision:'exclude',note:'주차 결제'});
+  pending=await list('?filter=amount-input-empty');assert.equal(pending.total,49);assert(pending.rows.some(r=>r.payment_id===payments[2].id));
+  assert(!pending.rows.some(r=>r.payment_id===payments[1].id));assert(!pending.rows.some(r=>r.payment_id===other.id));
+  await f.post({action:'label',paymentId:payments[0].id,productName:'',memo:''});
+  await f.post({action:'label',paymentId:payments[1].id,productName:'  ',memo:'\n  '});
+  pending=await list('?filter=amount-input-empty');assert.equal(pending.total,51);assert.equal(pending.rows.length,50);
+  assert.equal((await list('?filter=amount-input-empty&page=2')).rows.length,1);
+  assert.equal((await list('?filter=amount-input')).total,51);
   f.env.TOSS_PLACE_MERCHANT_ID='43';assert.equal((await list('?filter=amount-input')).total,0);
+  assert.equal((await list('?filter=amount-input-empty')).total,0);
 });
 
 test('existing and split payments receive only their order product labels without changing exclusion or amounts',async t=>{
