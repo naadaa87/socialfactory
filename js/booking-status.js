@@ -58,7 +58,7 @@
     }else{
       title.textContent=checkoutRequested?'결제 직전 일정을 다시 확인하고 있습니다':(j.can_pay || j.can_start_payment)?'예약·청구 내용을 확인해 주세요':paid?'예약 확정을 확인하고 있습니다':'결제 완료 확인을 기다리고 있습니다';
       message.textContent=checkoutRequested?'스페이스클라우드의 최신 일정을 확인한 뒤 페이앱으로 연결합니다.':(j.can_pay || j.can_start_payment)?'아래 내용과 조건을 확인한 뒤 페이앱으로 결제해 주세요. 이미 결제했다면 다시 확인을 눌러 주세요.':'결제 결과가 반영되는 데 시간이 걸릴 수 있습니다. 이미 결제했다면 다시 결제하지 않고 잠시 후 확인해 주세요.';
-      if(!j.can_pay && !j.can_start_payment)poll();
+      if(!j.can_pay && (checkoutRequested || !j.can_start_payment))poll();
     }
     controls();
   }

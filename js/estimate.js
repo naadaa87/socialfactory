@@ -214,7 +214,7 @@
     var paymentNote = "독립사무실은 입주 가능 여부와 계약 조건을 상담한 뒤 페이앱 결제를 안내합니다.";
     if (mode === "cowork") {
       actionUrl = "/space#cowork-kiosk"; actionText = "현장 키오스크 결제 안내"; shortText = "키오스크 안내";
-      paymentNote = "코워킹은 방문 후 무인 키오스크에서 결제합니다. 이용 시간은 현장 결제 시각부터 시작합니다.";
+      paymentNote = "코워킹은 방문 후 무인 키오스크에서 결제합니다. 새 이용권은 결제 시각부터 시작하고, 남은 좌석 이용권이 있으면 기존 만료 시각부터 이어서 연장됩니다.";
     } else if (mode === "room") {
       var s = readRoom(), booking = new URLSearchParams();
       if (ROOMS[s.room]) booking.set("room", s.room);
@@ -285,7 +285,7 @@
     var sheet = document.getElementById("est-print");
     if (!sheet) { sheet = document.createElement("div"); sheet.id = "est-print"; document.body.appendChild(sheet); }
     var c = CFG.contact || {};
-    var today = new Date();
+    var today = parse(new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10));
     var refund = r.refund ? "<h3>취소 · 환불 (이 날짜 기준)</h3><table class='ep-t'>" + r.refund.map(function (x) { return "<tr><td>" + esc(x.when) + "</td><td class='n'>" + (x.rate ? x.rate + "% 환불" : "환불 불가") + "</td></tr>"; }).join("") + "</table>" : "";
     sheet.innerHTML =
       "<div class='ep'>" +
@@ -296,7 +296,7 @@
       "<h3>금액 구성</h3><table class='ep-t'>" + r.lines.map(function (x) { return "<tr><td>" + esc(x[0]) + "</td><td class='n'>" + esc(x[1]) + "</td></tr>"; }).join("") +
       "<tr class='ep-sum'><td>합계 (" + esc(r.vat) + ")</td><td class='n'>" + esc(r.totalText) + "</td></tr></table>" +
       (r.sub ? "<p class='ep-note'>" + esc(r.sub) + "</p>" : "") + refund +
-      "<p class='ep-note'>예상 금액입니다. 예약 가능 여부와 최종 금액은 상담 후 확정해 안내해 드립니다.</p>" +
+      "<p class='ep-note'>" + (r.kind === "room" ? "예상 금액입니다. 예약 페이지에서 최신 일정과 최종 금액을 확인한 후 결제해 주세요." : r.kind === "cowork" ? "코워킹은 방문 후 현장 무인 키오스크에서 결제해 주세요." : "예상 금액입니다. 입주 조건과 최종 금액은 상담 후 확정해 안내해 드립니다.") + "</p>" +
       "<footer class='ep-f'><div><strong>일자 · 시간 · 인원 · 모임 유형을 알려 주시면 빠르게 안내해 드립니다.</strong>" +
       (c.kakao ? "<span>카카오톡 문의채널 " + esc(c.kakao.replace(/^https?:\/\//, "")) + "</span>" : "") +
       (c.email ? "<span>이메일 " + esc(c.email) + "</span>" : "") +
@@ -351,8 +351,9 @@
   });
 
   /* ---------- 처음 값 (주소의 ?room=r2 · 오늘 날짜) ---------- */
-  var today = new Date();
+  var today = parse(new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10));
   form.elements.date.min = iso(today);
+  form.elements.date.max = iso(addDays(today, 365));
   form.elements.date.value = iso(addDays(today, 1));
   var params = {};
   location.search.replace(/^\?/, "").split("&").forEach(function (kv) { if (kv) { var p = kv.split("="); params[p[0]] = decodeURIComponent(p[1] || ""); } });

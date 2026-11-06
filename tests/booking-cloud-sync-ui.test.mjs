@@ -38,6 +38,34 @@ test('checkout waits for a fresh verification, then continues only the submitted
   assert.equal(calls.filter(c=>c.body).every(c=>c.body.code==='BTEST' && c.body.t==='private-token' && c.body.consent===true),true);
 });
 
+test('checkout keeps polling through a full Cron delay without repeating POSTs before a fresh receipt',async()=>{
+  let ready=false,posts=0;
+  const h=harness(async(_url,options)=>{
+    if(options.method==='POST')return response(++posts===1?{ok:true,pending:true}:{ok:true,url:'https://payapp.kr/after-cron-check'});
+    return response({...pending,can_pay:ready,can_start_payment:true});
+  });
+  await h.flush();h.node('payment-agree').checked=true;h.node('payment-consent').events.submit({preventDefault(){}});await h.flush();
+  for(let poll=0;poll<30;poll++){
+    await h.poll();assert.equal(posts,1);assert.equal(h.node('payment-open').disabled,true);assert.deepEqual(h.navigations,[]);
+    assert([...h.timers.values()].some(timer=>timer.ms===2000),'a later Cron verification must still have another status poll');
+  }
+  ready=true;await h.poll();assert.equal(posts,2);assert.deepEqual(h.navigations,['https://payapp.kr/after-cron-check']);
+});
+
+test('a cancelled, reviewed or failed status check stops an explicitly pending checkout',async()=>{
+  for(const ending of ['cancelled','sync_review','network-error']){
+    let end=false,posts=0;
+    const h=harness(async(_url,options)=>{
+      if(options.method==='POST'){posts++;return response({ok:true,pending:true});}
+      if(end && ending==='network-error')throw new Error('offline');
+      return response(end?{...pending,status:ending,can_pay:false,can_start_payment:false,can_cancel:false,sync:{state:ending==='sync_review'?'review':'released'}}:pending);
+    });
+    await h.flush();h.node('payment-agree').checked=true;h.node('payment-consent').events.submit({preventDefault(){}});await h.flush();
+    end=true;await h.poll();assert.equal(posts,1);assert.deepEqual(h.navigations,[]);assert.equal(h.node('payment-consent').hidden,true);
+    assert.equal([...h.timers.values()].some(timer=>timer.ms===2000),false);
+  }
+});
+
 test('withdrawing consent during verification prevents automatic checkout',async()=>{
   let posts=0,gets=0;
   const h=harness(async(url,options)=>options.method==='POST'?(posts++,response({ok:true,pending:true})):response({...pending,can_pay:++gets>1}));

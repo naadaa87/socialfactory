@@ -94,6 +94,15 @@ export async function onRequestPost({ request, env }) {
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(row.submission_id)) errors.push("submissionId");
   if (errors.length) return json({ ok: false, error: "invalid", fields: errors }, 400);
 
+  // Keep the optional selector in the existing message, including staff alerts.
+  // Validate the original required message first: a selector alone is not an inquiry.
+  const meetingType = clean(body.meetingType, 40).replace(/\s+/g, " ");
+  if (meetingType) {
+    const line = "모임 유형: " + meetingType;
+    if (!row.message.split(/\r?\n/).some(part => part.trim() === line))
+      row.message = row.message.slice(0, 3000 - line.length - 2).trimEnd() + "\n\n" + line;
+  }
+
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
 
   const ip = request.headers.get("cf-connecting-ip") || "";

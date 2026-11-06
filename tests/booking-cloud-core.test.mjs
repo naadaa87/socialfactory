@@ -41,6 +41,15 @@ test('server pricing handles half hours, midnight, weekends and previous-night h
   assert.equal(BOOKING_RATES.rooms.r3.max,16);
 });
 
+test('Labor Day and its 2027 substitute use the existing holiday rate without changing surrounding weekdays',()=>{
+  for (const date of ['2026-05-01','2027-05-03']) {
+    assert.equal(calculateBookingAmount({room:'r3',date,start_min:600,end_min:720}),30000);
+  }
+  assert.equal(calculateBookingAmount({room:'r3',date:'2027-05-03',start_min:0,end_min:120}),30000);
+  assert.equal(calculateBookingAmount({room:'r3',date:'2027-05-04',start_min:600,end_min:720}),20000);
+  for (const date of ['2026-05-01','2027-05-01','2027-05-03']) assert(BOOKING_RATES.holidays.includes(date));
+});
+
 test('validation rejects impossible dates, fractional/negative times, bad capacity and missing consent',()=>{
   const base=value();
   for (const [extra,field] of [[{date:'2027-02-30'},'date'],[{date:addDaysIso(kstToday(),-1)},'date'],[{start_min:610},'start_min'],[{start_min:600.5},'start_min'],[{end_min:660},'end_min'],[{end_min:2070},'end_min'],[{people:37},'people'],[{people:0},'people'],[{phone:'123'},'phone'],[{consent:false},'consent'],[{purpose:'other',purpose_detail:''},'purpose_detail']]) assert.equal(validateBooking({...base,...extra}).field,field);

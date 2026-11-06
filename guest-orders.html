@@ -47,13 +47,13 @@
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="메뉴 열기"><span></span></button>
   </div>
 </header>
-<main id="main"><section class="page-hero"><div class="container"><div class="crumbs"><a href="/">Home</a> / Guest orders</div><span class="eyebrow">My orders</span><h1 class="mt-16">비회원 주문 조회</h1><p class="lead">구매할 때 입력한 휴대폰 번호로 인증하면 최근 90일의 비회원 주문을 다시 확인할 수 있습니다. 2시간권·데이패스는 이용 시작 전에 시간을 변경할 수 있습니다.</p></div></section>
+<main id="main"><section class="page-hero"><div class="container"><div class="crumbs"><a href="/">Home</a> / Guest orders</div><span class="eyebrow">My orders</span><h1 class="mt-16">비회원 주문 조회</h1><p class="lead">예약·구매할 때 입력한 휴대폰 번호로 인증하면 최근 90일의 공간대관 예약, 독립사무실 결제와 기존 비회원 주문을 확인할 수 있습니다. 현장 키오스크 결제 내역은 현장에서 문의해 주세요.</p></div></section>
 <section class="section tight"><div class="container"><div class="oc-wrap" data-guest-orders>
 <p class="my-loading" data-guest-loading>조회 화면을 준비하고 있습니다…</p>
 <div class="my-card" data-guest-auth hidden><h2>구매한 휴대폰 번호 인증</h2><form data-guest-phone-form class="mt-24" novalidate><label class="af-field"><span>휴대폰 번호 <em>*</em></span><input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000" maxlength="20" required></label><p class="note mt-16">주문 조회를 위해 이 번호로 인증 문자를 보냅니다. 인증번호는 5분 동안 유효합니다. <a href="/privacy">개인정보 처리방침</a></p><button type="submit" class="btn btn-primary mt-16" data-guest-send>인증번호 받기</button></form>
 <div data-guest-code-box hidden class="mt-24"><form data-guest-code-form novalidate><label class="af-field"><span>인증번호 6자리 <em>*</em></span><input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></label><button type="submit" class="btn btn-primary mt-16" data-guest-check>인증하고 주문 조회</button></form></div></div>
-<div class="my-card" data-guest-list hidden><div class="mc-head"><h2>내 비회원 주문</h2><button type="button" class="btn btn-outline btn-sm" data-guest-logout>인증 종료</button></div><p class="note mt-16"><b data-guest-phone></b> 번호로 구매한 최근 주문입니다. 인증은 30분 동안 유지됩니다.</p><ul class="my-inq mt-24" data-guest-rows></ul><p class="note mt-24" data-guest-empty hidden>최근 90일 동안 이 번호로 확인되는 비회원 주문이 없습니다. 로그인하고 구매한 주문은 마이페이지에서 확인해 주세요.</p><button type="button" class="btn btn-outline mt-16" data-guest-refresh>주문 새로고침</button></div>
-<p class="auth-notice mt-16" role="status" data-guest-message hidden></p><div class="actions mt-24"><a class="btn btn-outline" href="/mypage">회원 주문은 마이페이지</a><a class="btn btn-kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener">카카오톡 문의</a></div></div></div></section></main>
+<div class="my-card" data-guest-list hidden><div class="mc-head"><h2>내 예약·주문</h2><button type="button" class="btn btn-outline btn-sm" data-guest-logout>인증 종료</button></div><p class="note mt-16"><b data-guest-phone></b> 번호로 구매한 최근 주문입니다. 인증은 30분 동안 유지됩니다.</p><ul class="my-inq mt-24" data-guest-rows></ul><p class="note mt-24" data-guest-empty hidden>최근 90일 동안 이 번호로 확인되는 예약·주문이 없습니다. 기존 회원 이용권 주문은 마이페이지에서 확인해 주세요.</p><button type="button" class="btn btn-outline mt-16" data-guest-refresh>주문 새로고침</button></div>
+<p class="auth-notice mt-16" role="status" data-guest-message hidden></p><div class="actions mt-24"><a class="btn btn-outline" href="/mypage">기존 회원 주문은 마이페이지</a><a class="btn btn-kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener">카카오톡 문의</a></div></div></div></section></main>
 <footer class="site-footer">
   <div class="container">
     <div class="footer-grid">
@@ -130,9 +130,9 @@
   </div>
 </footer>
 <a class="kakao-fab" data-channel="kakao" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener" aria-label="카카오톡으로 문의하기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span class="kf-t">카카오톡 문의</span></a>
-<script src="/js/booking-rates.js?v=20261106-sync"></script>
-<script src="js/site-config.js?v=20261106-sync"></script>
-<script src="js/main.js?v=20261106-sync"></script>
-<script src="js/guest-orders.js?v=parking20261104"></script>
+<script src="/js/booking-rates.js?v=customer-audit-20261106"></script>
+<script src="js/site-config.js?v=customer-audit-20261106"></script>
+<script src="js/main.js?v=customer-audit-20261106"></script>
+<script src="js/guest-orders.js?v=customer-audit-20261106"></script>
 </body>
 </html>

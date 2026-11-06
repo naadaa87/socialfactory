@@ -196,16 +196,17 @@
   });
   window.SF_FAMILY = FAM;
 
-  // 회원 메뉴 — site-config.js 의 members.enabled 가 true 일 때만 보인다 (sf_m 쿠키는 로그인 여부 표시용)
+  // 신규 회원 메뉴 설정과 별개로 기존 로그인 회원은 마이페이지로 돌아갈 수 있다.
+  // sf_m 은 화면 표시용이며 실제 조회 권한은 서버 로그인 세션에서 확인한다.
   var memberCfg = CFG.members || {};
   var loggedIn = /(?:^|;\s*)sf_m=1/.test(document.cookie);
   $$("[data-member-link]").forEach(function (a) {
-    a.hidden = !memberCfg.enabled;
-    if (memberCfg.enabled && loggedIn) { a.textContent = "마이페이지"; a.href = "/mypage"; }
+    a.hidden = !memberCfg.enabled && !loggedIn;
+    if (loggedIn) { a.textContent = "마이페이지"; a.href = "/mypage"; }
   });
   $$("[data-member-note]").forEach(function (el) {
-    el.hidden = !memberCfg.enabled;
-    if (!memberCfg.enabled) return;
+    el.hidden = !memberCfg.enabled && !loggedIn;
+    if (!memberCfg.enabled && !loggedIn) return;
     el.innerHTML = loggedIn
       ? "로그인한 상태입니다. 이 문의의 처리 상태는 <a href=\"/mypage\">마이페이지</a>에서 확인할 수 있습니다."
       : "<a href=\"/login?next=%2Fcontact%23inquiry\">로그인</a>하고 문의하면 마이페이지에서 처리 상태를 확인할 수 있습니다. 회원가입 없이도 문의할 수 있습니다.";
@@ -365,8 +366,8 @@
             rental: "예: 20명 교육, 토요일 오후 2시간, 노트북 화면 연결 필요",
             regular: "예: 매주 화요일 19~21시, 12명 독서모임, 3개월 이상 · 레지던트 호스트 희망",
             business: "예: 신입 교육 30명, 10월 셋째 주 평일 하루, 견적서 필요",
-            coworking: "예: 4주권 문의, 야간 이용 위주, 통화 가능 구역 여부",
-            office: "예: 2인, 1주권, 11월 둘째 주부터, 화상회의 위주",
+            coworking: "예: 2시간권·24시간권·월 이용권 문의, 야간 이용 위주, 통화 가능 구역 여부",
+            office: "예: 2인, 월 단위 이용, 희망 입주 시기, 화상회의 위주",
             partner: "예: 원데이 클래스 월 2회, 8~10명, 토요일 오후 · 공동 기획·홍보 희망",
             proposal: "예: ○○동 2층 60평, 공실 기간, 임대 조건 협의 가능",
             other: "궁금한 내용을 적어 주세요"
