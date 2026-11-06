@@ -3,28 +3,69 @@
   var A=window.SF_ADMIN; if(!A)return;
   var $=A.$,esc=A.esc,payments=null,serial=0,busy=false;
   var status=$('#ts-import-status'),preview=$('#ts-preview'),commit=$('#ts-commit');
+  var ledgerPage=1,loadVersion=0,ledgerRows=[],selected=new Set(),reviewIds=[],reviewDecision='',ledgerLoading=false;
   var labels={new:'신규',updated:'변경 반영',unchanged:'이미 반영',blocked:'확인 필요',included:'합산',duplicate:'이용권 중복 제외',exclude:'제외',review:'확인 필요'};
   var types={CARD:'카드',CASH:'현금',BARCODE:'간편결제',ACCOUNT_TRANSFER:'계좌이체',PREPAID_VALUE:'선불수단',EXTERNAL:'외부 결제수단'};
   function request(body){return A.api('/api/admin/toss-sales',{method:'POST',body:body});}
   function locked(value){busy=value;['#ts-fetch','#ts-file','#ts-from','#ts-to','#ts-commit'].forEach(function(s){$(s).disabled=value;});}
   function error(e){if(!A.guard(e))status.textContent=e.message||'처리하지 못했습니다. 다시 시도해 주세요.';}
   function table(rows,recent){
-    return '<table class="tbl"><thead><tr><th>승인일시 · 결제 ID</th><th>수단</th><th>결제금액</th><th>취소금액</th><th>처리</th></tr></thead><tbody>'+rows.map(function(r){
+    return '<table class="tbl"><thead><tr>'+(recent?'<th>선택</th>':'')+'<th>승인일시 · 결제 ID</th><th>수단</th><th>결제금액</th><th>취소금액</th><th>처리</th></tr></thead><tbody>'+rows.map(function(r){
       var state=recent?r.disposition:r.result;
-      var controls=recent&&state==='review'&&r.source_type!=='EXTERNAL'?'<div class="acts"><button class="btn btn-light btn-xs" type="button" data-ts-id="'+esc(r.payment_id)+'" data-ts-decision="exclude">중복으로 제외</button><button class="btn btn-light btn-xs" type="button" data-ts-id="'+esc(r.payment_id)+'" data-ts-decision="include">별도 결제로 합산</button></div>':'';
+      var editable=recent&&canSelect(r),controls='';
+      if(editable){
+        controls='<div class="acts">';
+        if(state!=='exclude')controls+='<button class="btn btn-light btn-xs" type="button" data-ts-id="'+esc(r.payment_id)+'" data-ts-decision="exclude">매출에서 제외</button>';
+        if(state!=='included')controls+='<button class="btn btn-light btn-xs" type="button" data-ts-id="'+esc(r.payment_id)+'" data-ts-decision="include">다시 합산</button>';
+        controls+='</div>';
+      }
       var reason=r.reason||r.review_note||(state==='review'?'기존 수기 매출/직접 발급분과 중복 여부를 확인해 주세요.':'');
-      return '<tr><td>'+esc(r.paid_at)+'<br><small class="mono">'+esc(r.payment_id)+'</small></td><td>'+esc(types[r.source_type]||r.source_type)+'</td><td>'+A.won(r.amount)+'</td><td>'+A.won(r.refund_amount)+'</td><td>'+esc(labels[state]||state)+(reason?'<br><small>'+esc(reason)+'</small>':'')+controls+'</td></tr>';
+      return '<tr>'+(recent?'<td>'+(editable?'<input type="checkbox" data-ts-select="'+esc(r.payment_id)+'" aria-label="결제 '+esc(r.payment_id)+' 선택"'+(selected.has(r.payment_id)?' checked':'')+'>':'—')+'</td>':'')+'<td>'+esc(r.paid_at)+'<br><small class="mono">'+esc(r.payment_id)+'</small>'+(recent&&r.approval_no?'<br><small>승인 '+esc(r.approval_no)+'</small>':'')+'</td><td>'+esc(types[r.source_type]||r.source_type)+'</td><td>'+A.won(r.amount)+'</td><td>'+A.won(r.refund_amount)+'</td><td>'+esc(labels[state]||state)+(reason?'<br><small>'+esc(reason)+'</small>':'')+controls+'</td></tr>';
     }).join('')+'</tbody></table>';
   }
+  function canSelect(r){return r.disposition!=='duplicate'&&r.source_type!=='EXTERNAL';}
+  function selection(){
+    var choices=ledgerRows.filter(canSelect),chosen=choices.filter(function(r){return selected.has(r.payment_id);});
+    $('#ts-selection').textContent=A.num(chosen.length)+'건 선택 · '+A.won(chosen.reduce(function(n,r){return n+r.amount-r.refund_amount;},0));
+    $('#ts-select-all').checked=!!choices.length&&chosen.length===choices.length;
+    $('#ts-select-all').indeterminate=chosen.length>0&&chosen.length<choices.length;
+    $('#ts-select-all').disabled=!choices.length||busy||ledgerLoading;
+    $('#ts-exclude-selected').disabled=!chosen.some(function(r){return r.disposition!=='exclude';})||busy||ledgerLoading;
+    $('#ts-include-selected').disabled=!chosen.some(function(r){return r.disposition!=='included';})||busy||ledgerLoading;
+  }
+  function renderLedger(){
+    $('#ts-recent').innerHTML=ledgerRows.length?table(ledgerRows,true):'<p class="small muted">조건에 맞는 가져온 결제가 없습니다.</p>';
+    selection();
+  }
+  function closeReview(){reviewIds=[];$('#ts-review-form').hidden=true;}
+  function openReview(ids,decision){
+    if(busy||ledgerLoading||!ids.length)return;
+    ids=ids.filter(function(id){return ledgerRows.some(function(r){return r.payment_id===id&&canSelect(r)&&(decision==='exclude'?r.disposition!=='exclude':r.disposition!=='included');});});
+    if(!ids.length)return;
+    reviewIds=ids;reviewDecision=decision;
+    var amount=ledgerRows.filter(function(r){return ids.includes(r.payment_id);}).reduce(function(n,r){return n+r.amount-r.refund_amount;},0);
+    $('#ts-review-title').textContent=A.num(ids.length)+'건 · '+A.won(amount)+' '+(decision==='exclude'?'매출에서 제외':'다시 합산');
+    $('#ts-reason-field').hidden=decision!=='exclude';$('#ts-reason').required=decision==='exclude';$('#ts-reason').value='';$('#ts-review-note').value='';
+    $('#ts-review-form').hidden=false;$('#ts-review-status').textContent='';
+    (decision==='exclude'?$('#ts-reason'):$('#ts-review-note')).focus();
+  }
   async function load(){
+    var version=++loadVersion;
+    ledgerLoading=true;selected.clear();closeReview();selection();
     try{
-      var d=await A.api('/api/admin/toss-sales');
+      var d=await A.api('/api/admin/toss-sales?page='+ledgerPage+'&filter='+$('#ts-filter').value);
+      if(version!==loadVersion)return;
+      var total=d.total===undefined?d.rows.length:d.total,size=d.pageSize||50,lastPage=Math.max(1,Math.ceil(total/size));
+      if(ledgerPage>lastPage){ledgerPage=lastPage;return load();}
       $('#ts-status').textContent=(d.apiReady?'과거 내역 조회 설정됨':'과거 내역 조회: API 키·매장 연결 필요')+' · '+(d.webhookReady?'실시간 수신 설정됨':d.signingReady?'서명 수신 준비됨 · 운영 매장 연결 대기':'실시간 수신: 웹훅 연결 필요');
       $('#ts-installations').textContent=(d.installations||[]).map(function(x){return (x.installed?'앱 설치 확인: ':'앱 설치 해제: ')+(x.merchant_name||'매장')+' · Open API 매장 ID '+x.merchant_id+' · '+x.received_at;}).join(' / ');
       $('#ts-times').textContent='일반 단말기 합산 '+A.num(d.summary.n)+'건 · '+A.won(d.summary.total)+' / 마지막 수신: '+(d.lastWebhook||'아직 없음');
       $('#ts-webhook-url').textContent=d.webhookUrl;
-      $('#ts-recent').innerHTML=d.rows.length?table(d.rows,true):'<p class="small muted">아직 가져온 일반 단말기 결제가 없습니다.</p>';
-    }catch(e){if(!A.guard(e))$('#ts-status').textContent=e.message||'연결 상태를 확인하지 못했습니다.';}
+      ledgerRows=d.rows;selected.clear();closeReview();renderLedger();
+      $('#ts-page').textContent=A.num(total)+'건 · '+ledgerPage+' / '+Math.max(1,Math.ceil(total/size))+'페이지';
+      $('#ts-prev').disabled=ledgerPage<=1;$('#ts-next').disabled=ledgerPage*size>=total;
+    }catch(e){if(version===loadVersion){ledgerRows=[];renderLedger();if(!A.guard(e))$('#ts-status').textContent=e.message||'연결 상태를 확인하지 못했습니다.';}}
+    finally{if(version===loadVersion){ledgerLoading=false;selection();}}
   }
   function reset(){serial++;payments=null;commit.hidden=true;preview.innerHTML='';status.textContent='';}
   async function previewAll(raw,version){
@@ -71,18 +112,40 @@
         status.textContent=A.num(done)+' / '+A.num(payments.length)+'건 반영 중…';
       }
       commit.hidden=true;payments=null;preview.innerHTML='';status.textContent=A.num(changed)+'건 반영 완료. 기존 이용권 중복과 확인 필요 내역은 합산에서 제외했습니다.';
-      await load();A.LOAD.sales();
+      await load();previous();
     }catch(e){error(e);status.textContent+=' 완료한 '+A.num(done)+'건은 저장됐습니다. 같은 내역을 다시 반영해도 중복 합산하지 않습니다.';}
     finally{locked(false);}
   });
   $('#ts-recent').addEventListener('click',function(e){
-    var b=e.target.closest('[data-ts-id]');if(!b)return;
-    var panel=document.createElement('form');panel.className='card mt-s';
-    panel.innerHTML='<p class="small">결제 '+esc(b.dataset.tsId)+' · '+(b.dataset.tsDecision==='include'?'기존 수기 매출과 별개 거래로 합산':'기존 매출과 중복되어 합산 제외')+'</p><label>확인 메모 <input class="input" name="note" required minlength="3" maxlength="300"></label><button class="btn btn-primary btn-sm" type="submit">확인한 처리 저장</button><button class="btn btn-light btn-sm" type="button">닫기</button>';
-    b.closest('td').appendChild(panel);panel.querySelector('button[type="button"]').addEventListener('click',function(){panel.remove();});
-    panel.addEventListener('submit',async function(event){event.preventDefault();var button=panel.querySelector('button');button.disabled=true;try{await request({action:'review',paymentId:b.dataset.tsId,decision:b.dataset.tsDecision,note:panel.elements.note.value});await load();A.LOAD.sales();}catch(ex){error(ex);button.disabled=false;}});
-    panel.querySelector('input').focus();
+    var b=e.target.closest('[data-ts-id]');if(!b||busy)return;
+    openReview([b.dataset.tsId],b.dataset.tsDecision);
   });
+  $('#ts-recent').addEventListener('change',function(e){
+    var id=e.target.dataset.tsSelect;if(!id||busy||ledgerLoading)return;
+    if(e.target.checked)selected.add(id);else selected.delete(id);closeReview();selection();
+  });
+  $('#ts-select-all').addEventListener('change',function(){
+    if(busy||ledgerLoading)return;selected.clear();if(this.checked)ledgerRows.filter(canSelect).forEach(function(r){selected.add(r.payment_id);});closeReview();renderLedger();
+  });
+  $('#ts-exclude-selected').addEventListener('click',function(){openReview(Array.from(selected),'exclude');});
+  $('#ts-include-selected').addEventListener('click',function(){openReview(Array.from(selected),'include');});
+  $('#ts-review-cancel').addEventListener('click',function(){if(!busy)closeReview();});
+  $('#ts-review-form').addEventListener('submit',async function(e){
+    e.preventDefault();if(busy||!reviewIds.length)return;
+    var decision=reviewDecision,ids=reviewIds.slice(),reason=$('#ts-reason').value,note=$('#ts-review-note').value.trim();
+    if(decision==='exclude'&&(!reason||(reason==='기타'&&note.length<3))){$('#ts-review-status').textContent='제외 사유를 선택해 주세요. 기타 사유는 메모를 3자 이상 적어주세요.';return;}
+    note=decision==='exclude'?reason+(note?' · '+note:''):'매출 제외 취소 · 소셜팩토리 결제로 확인'+(note?' · '+note:'');
+    locked(true);selection();$('#ts-review-save').disabled=true;
+    try{
+      await request({action:'review',paymentIds:ids,decision:decision,note:note});
+      $('#ts-review-status').textContent=A.num(ids.length)+'건 '+(decision==='exclude'?'매출 합산에서 제외했습니다.':'합산 여부를 갱신했습니다. 이용권 자동 중복 제외는 유지됩니다.');
+      await load();previous();
+    }catch(ex){if(!A.guard(ex))$('#ts-review-status').textContent=ex.message||'저장하지 못했습니다. 다시 시도해 주세요.';}
+    finally{locked(false);selection();$('#ts-review-save').disabled=false;}
+  });
+  $('#ts-filter').addEventListener('change',function(){if(busy)return;ledgerPage=1;load();});
+  $('#ts-prev').addEventListener('click',function(){if(busy||ledgerPage<=1)return;ledgerPage--;load();});
+  $('#ts-next').addEventListener('click',function(){if(busy||this.disabled)return;ledgerPage++;load();});
   $('#ts-refresh').addEventListener('click',load);
   $('#ts-from').addEventListener('change',reset);$('#ts-to').addEventListener('change',reset);
   $('#ts-from').value='2022-01-01';$('#ts-to').value=new Date(Date.now()+9*3600e3).toISOString().slice(0,10);
