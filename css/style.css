@@ -55,7 +55,11 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.25; letter-spacing: -0.02em; font-wei
 p { margin: 0; }
 ul, ol { margin: 0; padding: 0; list-style: none; }
 button { font: inherit; cursor: pointer; }
-input, select, textarea { font: inherit; color: inherit; }
+input, select, textarea { font: inherit; color: inherit; min-width: 0; max-width: 100%; }
+/* Native date controls must be able to shrink inside mobile flex/grid fields. */
+input:is([type="date"], [type="time"], [type="datetime-local"], [type="month"], [type="week"]) { -webkit-appearance: none; appearance: none; }
+input::-webkit-date-and-time-value { min-width: 0; text-align: start; }
+input::-webkit-datetime-edit { min-width: 0; padding: 0; }
 ::selection { background: var(--blue-50); color: var(--navy); }
 
 .en { font-family: var(--font-en); }
@@ -372,7 +376,8 @@ table.table td .en { font-weight: 800; color: var(--blue); }
 /* --------------------------------------------------------------------------
    문의 폼
    -------------------------------------------------------------------------- */
-.form { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.field { min-width: 0; }
 .form .full { grid-column: 1 / -1; }
 .field label { display: block; font-weight: 700; font-size: 14px; margin-bottom: 8px; color: var(--navy); }
 .field label .req { color: var(--blue); margin-left: 2px; }
@@ -1697,7 +1702,7 @@ table.table td.strong a.rt-calc::after { content: ""; position: absolute; inset:
 .af-err { font-size: 12.5px; font-weight: 600; color: #C0392B; }
 .af-err[hidden], .af-field[hidden], .af-group[hidden] { display: none; }
 .af-group { display: grid; gap: 14px; }
-.af-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.af-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .af-submit { width: 100%; justify-content: center; margin-top: 4px; }
 .af-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .auth-links { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; font-size: 14px; color: var(--muted); }
@@ -2183,3 +2188,15 @@ a[data-family-link]:not([href]) { color: inherit; text-decoration: none; font-we
 p a[data-family-link][href], .faq .a a[data-family-link][href], .checks li a[data-family-link][href], .fam-hint a { display: inline-block; padding: 10px 7px; margin: -10px -7px; }
 
 .od-schedule{margin:20px 0;padding:16px;border-radius:12px;background:#f1f6ff;color:#243957;line-height:1.65}.od-schedule p{margin:8px 0;font-weight:600;overflow-wrap:anywhere}.od-schedule small{display:block;color:#52657d}
+
+/* Keep focused mobile fields at a readable size without changing their width. */
+@media (max-width: 600px) {
+  .field input, .field select, .field textarea { font-size: 16px; }
+}
+@media (max-width: 360px) {
+  .site-header .brand { gap: 8px; }
+  .site-header .brand .wordmark .en { font-size: 12px; }
+  .site-header .nav { gap: 4px; }
+  .site-header .nav-kakao { padding-inline: 8px; }
+  .site-header .nav-toggle { flex-shrink: 0; }
+}
