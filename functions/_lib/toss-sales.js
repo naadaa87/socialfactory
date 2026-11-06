@@ -6,7 +6,9 @@ const id = value => typeof value === 'string' && /^\d{1,24}$/.test(value) ? valu
 const text = (value, max = 80) => typeof value === 'string' ? value.trim().slice(0, max) : '';
 const money = value => Number.isSafeInteger(value) && value >= 0 && value <= 100000000;
 export function stamp(value) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})?$/.test(value)) return null;
+  // Toss's Java timestamps include up to nine fractional digits in live events.
+  // Date.parse retains milliseconds, which is the precision used by our ledger.
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})?$/.test(value)) return null;
   const local = value.replace(/(?:Z|[+-]\d{2}:\d{2})$/, '');
   const check = Date.parse(local + 'Z');
   if (!Number.isFinite(check) || new Date(check).toISOString().slice(0, 19) !== local.slice(0, 19)) return null;

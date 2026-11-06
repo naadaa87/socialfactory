@@ -43,6 +43,23 @@ test('timestamps normalize KST and reject invalid dates, unsafe IDs, amounts and
   for(const bad of [{merchantId:43},{id:640000000000000001},{amount:-1},{amount:'12000'},{state:'PENDING'},{approvedAt:'bad'},{updatedAt:'2000-01-01T00:00:00Z'},{state:'CANCELLED',cancelledAt:null}])assert.throws(()=>normalizePayment(payment(bad),'42'));
 });
 
+test('live Toss nanosecond timestamps work for signed installation and payment events',async t=>{
+  const f=fixture(t);
+  const at=currentDay+'T09:00:00.123456789+09:00';
+  assert.equal(stamp(at).ms,Date.parse(currentDay+'T09:00:00.123+09:00'));
+  assert.equal(stamp('2026-02-30T10:00:00.123456789Z'),null);
+  assert.equal(stamp(currentDay+'T09:00:00.1234567890Z'),null);
+  f.env.TOSS_PLACE_MERCHANT_ID='';
+  assert.equal((await f.send(payment(),'live-install',{event:{type:'app.installation.created.v1',createdAt:at,merchantId:42,data:{merchant:{id:42,name:'소셜팩토리 건대'}}}})).status,200);
+  assert.equal(f.db.prepare('SELECT installed FROM toss_installations').get().installed,1);
+  f.env.TOSS_PLACE_MERCHANT_ID='42';
+  const p=payment({approvedAt:at,updatedAt:at});
+  assert.equal((await f.send(p,'live-payment')).status,200);
+  assert.equal(f.included()[0].paid_at,currentDay+' 09:00:00');
+  await f.post({action:'commit',payments:[p]});
+  assert.equal(f.included().length,1);
+});
+
 test('admin import requires authentication and validates whole batch before writing',async t=>{
   const f=fixture(t);
   assert.equal((await admin({env:f.env,request:f.request({action:'commit',payments:[payment()]},false)})).status,401);
