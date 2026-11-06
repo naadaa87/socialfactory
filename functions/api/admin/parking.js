@@ -8,7 +8,7 @@ export async function onRequestGet({request,env}){
  const q=clean(new URL(request.url).searchParams.get('q'),60),filter=new URL(request.url).searchParams.get('filter')||'queue';let where='',args=[];
  if(filter==='queue')where=" AND o.status='paid' AND (p.status<>'applied' OR p.request_at IS NOT NULL AND p.reviewed_at IS NULL)";
  else if(filter==='requested')where=" AND p.arrival_at IS NOT NULL AND p.status<>'applied' AND o.status='paid'";
- if(q){where+=' AND (p.plate LIKE ? OR p.oid LIKE ? OR o.buyer_phone LIKE ? OR o.buyer_name LIKE ?)';args=Array(4).fill('%'+q+'%');}
+ if(q){where+=' AND (p.plate LIKE ? OR p.oid LIKE ? OR p.payment_oid LIKE ? OR o.buyer_phone LIKE ? OR o.buyer_name LIKE ?)';args=Array(5).fill('%'+q+'%');}
  const {results}=await env.DB.prepare(PARKING_JOIN+' WHERE 1=1'+where+" ORDER BY CASE WHEN p.request_at IS NOT NULL AND p.reviewed_at IS NULL THEN 0 WHEN p.arrival_at IS NOT NULL AND p.status<>'applied' THEN 1 ELSE 2 END,p.created_at DESC LIMIT 200").bind(...args).all();
  const {results:events}=await env.DB.prepare("SELECT id,oid,kind,status,message_id,last_error,created_at,sent_at FROM parking_events ORDER BY id DESC LIMIT 100").all();
  const s=await parkingSettings(env);return json({ok:true,settings:s,operation:operationText(s),templates:await parkingTemplateStatus(env),payReady:payConfig(env).ready,events,results:results.map(p=>({...publicParking(p),name:p.buyer_name,phone:p.buyer_phone,entryId:p.entry_id,entryAt:p.entry_at,memo:p.memo,requestReason:p.request_reason}))});
