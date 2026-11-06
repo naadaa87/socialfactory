@@ -98,3 +98,21 @@ test('changing ledger filter clears selection and late responses cannot replace 
   release({...empty(),rows:[ledgerRow('1')],total:51});await tick();
   assert(!f.$('#ts-recent').innerHTML.includes('data-ts-id="1"'));assert(f.$('#ts-page').textContent.includes('1 / 1'));
 });
+
+test('product labels, variants and quantities are escaped and missing product names stay explicit',async()=>{
+  const f=harness(()=>({...empty(),rows:[ledgerRow('1','included',{product_items:[{title:'메가스팟 <img onerror=x>',variant:'<script>1호</script>',quantity:2,options:['주차권'],category:'대관'}]}),ledgerRow('2','included',{product_items:[]}),ledgerRow('3')]}));
+  f.A.LOAD.sales();await tick();const html=f.$('#ts-recent').innerHTML;
+  assert(html.includes('상품명 · 수량'));assert(html.includes('메가스팟 &lt;img'));assert(!html.includes('<script>'));assert(html.includes('× 2'));assert(html.includes('주차권'));
+  assert(html.includes('상품명 없음'));assert(html.includes('상품정보 미조회'));
+});
+
+test('product refresh follows every cursor and refreshes labels without committing or reviewing payments',async()=>{
+  const f=harness(b=>{
+    if(!b)return {...empty(),rows:[ledgerRow('1','exclude',{product_items:[{title:'주차권',quantity:1}]})]};
+    assert.equal(b.action,'refresh-products');return b.after?{processed:1,updated:1,missing:0,nextCursor:null}:{processed:25,updated:25,missing:0,nextCursor:'25'};
+  });
+  await f.$('#ts-products-refresh').events.click();
+  assert.deepEqual(f.calls.filter(c=>c.body).map(c=>c.body.after),['','25']);assert(f.$('#ts-product-status').textContent.includes('26건'));
+  assert(f.$('#ts-recent').innerHTML.includes('주차권'));assert(f.$('#ts-recent').innerHTML.includes('다시 합산'));
+  assert(!f.calls.some(c=>['commit','review'].includes(c.body?.action)));
+});

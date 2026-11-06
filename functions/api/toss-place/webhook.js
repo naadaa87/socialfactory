@@ -1,8 +1,9 @@
 import { json } from '../../_lib/auth.js';
 import { ensureSchema } from '../../_lib/admin.js';
-import { ensureTossSales, tossConfig, verifyWebhook, preparePayments, paymentStatement, installationFields } from '../../_lib/toss-sales.js';
+import { ensureTossSales, tossConfig, verifyWebhook, preparePayments, paymentStatement, installationFields, refreshOrderProducts } from '../../_lib/toss-sales.js';
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost(context) {
+  const {request,env}=context;
   if (!env.DB || !env.TOSS_PLACE_WEBHOOK_SECRET) return json({ok:false,error:'not-configured'},503);
   if (Number(request.headers.get('content-length')) > 100000) return json({ok:false,error:'too-large'},413);
   const raw = await request.text();
@@ -66,6 +67,10 @@ export async function onRequestPost({ request, env }) {
       env.DB.prepare('INSERT INTO toss_webhook_events(event_id,merchant_id,payment_id,event_type) VALUES (?,?,?,?) ON CONFLICT(event_id) DO NOTHING')
         .bind(eventId,rows[0].merchant_id,rows[0].payment_id,event.type)
     ]);
+    // Product lookup must not delay or fail an otherwise valid payment event.
+    if(tossConfig(env).apiReady&&typeof context.waitUntil==='function')context.waitUntil(
+      refreshOrderProducts(env,[rows[0].order_id]).catch(()=>console.warn('toss-order-products-unavailable'))
+    );
     return json({ok:true});
   } catch { return json({ok:false,error:'storage-or-payment'},500); }
 }

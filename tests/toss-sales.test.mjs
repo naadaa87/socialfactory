@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
-import { normalizePayment, stamp, ensureTossSales, TOSS_SOURCE, preparePayments, savePayments, verifyWebhook } from '../functions/_lib/toss-sales.js';
+import { normalizePayment, stamp, ensureTossSales, TOSS_SOURCE, preparePayments, savePayments, verifyWebhook, saveOrderProducts, refreshOrderProducts } from '../functions/_lib/toss-sales.js';
 import { onRequestPost as webhook } from '../functions/api/toss-place/webhook.js';
 import { onRequestPost as admin, onRequestGet as status } from '../functions/api/admin/toss-sales.js';
 import { onRequestGet as sales } from '../functions/api/admin/sales.js';
@@ -12,6 +12,7 @@ import { onRequestGet as dashboard } from '../functions/api/admin/dashboard.js';
 const currentDay=new Date(Date.now()+9*3600e3).toISOString().slice(0,10), year=currentDay.slice(0,4);
 const paidAt=currentDay+'T09:00:00+09:00';
 const payment=(extra={})=>({id:'640000000000000001',merchantId:42,orderId:'620000000000000001',state:'APPROVED',sourceType:'CARD',paymentMethod:'CARD_IC',amount:12000,approvedNo:'00123456',approvedAt:paidAt,updatedAt:paidAt,...extra});
+const productOrder=(extra={})=>({id:payment().orderId,merchantId:42,updatedAt:paidAt,lineItems:[{item:{title:'메가스팟 공간대여',category:{title:'공간대여'}},itemPrice:{title:'2호'},quantity:2,optionChoices:[{title:'주차권 포함'}],memo:'private-item-memo'}],memo:'private-order-memo',orderer:{phone:'private-phone'},...extra});
 function fixture(t){
   const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));t.after(()=>db.close());
   const DB={prepare(sql){let args=[];const q={bind(...a){args=a;return q},async all(){return {results:db.prepare(sql).all(...args)}},async first(){return db.prepare(sql).get(...args)||null},async run(){return {meta:db.prepare(sql).run(...args)}}};return q;},async batch(qs){db.exec('BEGIN');try{const result=[];for(const q of qs)result.push(await q.run());db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}}};
@@ -24,7 +25,7 @@ function fixture(t){
     const event={id:eventId,type:p.state==='CANCELLED'?'payment.payment.cancelled.v1':'payment.payment.approved.v1',createdAt:paidAt,merchantId:42,data:{payment:p},...options.event};
     const raw=JSON.stringify(event),timestamp=String(options.timestamp??Date.now());
     const signature='v1='+createHmac('sha256',options.secret||env.TOSS_PLACE_WEBHOOK_SECRET).update(timestamp+'.'+raw).digest('hex');
-    return webhook({env,request:new Request('https://example.test/api/toss-place/webhook',{method:'POST',headers:{'x-toss-webhook-id':eventId,'x-toss-timestamp':timestamp,'x-toss-signature':options.signature||signature},body:raw})});
+    return webhook({env,waitUntil:options.waitUntil,request:new Request('https://example.test/api/toss-place/webhook',{method:'POST',headers:{'x-toss-webhook-id':eventId,'x-toss-timestamp':timestamp,'x-toss-signature':options.signature||signature},body:raw})});
   };
   const included=()=>db.prepare('SELECT * FROM '+TOSS_SOURCE).all();
   const seedPass=(p=payment(),testMode=0)=>{
@@ -116,6 +117,56 @@ test('ledger pagination reaches older imports and exclusion filters cover the fu
   const excluded=await list('?filter=exclude');assert.equal(excluded.total,1);assert.equal(excluded.rows[0].payment_id,id);
   assert.equal((await list('?filter=included')).total,54);
   assert.equal((await status({env:f.env,request:f.get('/api/admin/toss-sales?page=-1')})).status,400);
+});
+
+test('existing and split payments receive only their order product labels without changing exclusion or amounts',async t=>{
+  const f=fixture(t),p=payment(),q=payment({id:'640000000000000002',amount:8000});
+  await f.post({action:'commit',payments:[p,q]});await f.post({action:'review',paymentIds:[p.id],decision:'exclude',note:'메가스팟 결제'});
+  const before=f.db.prepare('SELECT * FROM toss_payments ORDER BY payment_id').all();
+  t.mock.method(globalThis,'fetch',async(url,options)=>{
+    const u=new URL(url);assert(u.pathname.endsWith('/order/orders/by-ids'));assert.equal(u.searchParams.get('ids'),p.orderId);
+    assert.equal(options.headers['x-secret-key'],'secret-private');
+    return Response.json({resultType:'SUCCESS',success:[productOrder()]});
+  });
+  const r=await f.post({action:'refresh-products',after:''});assert.equal(r.status,200);assert.equal((await r.json()).updated,1);
+  assert.deepEqual(f.db.prepare('SELECT * FROM toss_payments ORDER BY payment_id').all(),before);
+  const d=await(await status({env:f.env,request:f.get('/api/admin/toss-sales')})).json();
+  assert.equal(d.rows.length,2);assert(d.rows.every(r=>r.product_items[0].title==='메가스팟 공간대여'));
+  assert.equal(d.rows[0].product_items[0].quantity,2);assert.equal(d.rows[0].product_items[0].variant,'2호');assert.deepEqual(d.rows[0].product_items[0].options,['주차권 포함']);
+  assert.equal(d.summary.total,8000);assert.equal(d.rows.find(r=>r.payment_id===p.id).disposition,'exclude');
+  const stored=f.db.prepare('SELECT items_json FROM toss_order_products').get().items_json;
+  for(const value of ['private-item-memo','private-order-memo','private-phone','secret-private']){assert(!stored.includes(value));assert(!JSON.stringify(d).includes(value));}
+  assert.equal((await f.post({action:'refresh-products',after:p.orderId})).status,200);
+  for(const table of ['passes','pass_payments','reservations','notification_jobs'])assert.equal(f.db.prepare('SELECT COUNT(*) n FROM '+table).get().n,0);
+});
+
+test('older or empty product snapshots do not erase known labels and foreign/unrequested orders cannot be stored',async t=>{
+  const f=fixture(t);await f.post({action:'commit',payments:[payment()]});
+  const at=hour=>currentDay+'T'+hour+':00:00+09:00';
+  await saveOrderProducts(f.env,[productOrder({updatedAt:at('10')})]);
+  await saveOrderProducts(f.env,[productOrder({updatedAt:at('09'),lineItems:[{item:{title:'stale'}}]})]);
+  await saveOrderProducts(f.env,[productOrder({updatedAt:at('11'),lineItems:[]})]);
+  assert.match(f.db.prepare('SELECT items_json FROM toss_order_products').get().items_json,/메가스팟/);
+  await assert.rejects(saveOrderProducts(f.env,[productOrder({updatedAt:at('12')}),productOrder({merchantId:43})]));
+  t.mock.method(globalThis,'fetch',async()=>Response.json({resultType:'SUCCESS',success:[productOrder({id:'999'})]}));
+  await assert.rejects(refreshOrderProducts(f.env,[payment().orderId]));
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM toss_order_products').get().n,1);
+  const before=f.db.prepare('SELECT * FROM toss_payments').get();
+  assert.equal((await f.post({action:'refresh-products',after:'invalid'})).status,400);
+  assert.deepEqual(f.db.prepare('SELECT * FROM toss_payments').get(),before);
+});
+
+test('payment webhook saves revenue even when background product lookup fails',async t=>{
+  const f=fixture(t),pending=[];
+  t.mock.method(globalThis,'fetch',async()=>Response.json({resultType:'SUCCESS',success:[productOrder()]}));
+  assert.equal((await f.send(payment(),'products-event',{waitUntil:p=>pending.push(p)})).status,200);
+  await Promise.all(pending);assert.equal(f.included().length,1);
+  assert.match(f.db.prepare('SELECT items_json FROM toss_order_products').get().items_json,/메가스팟/);
+  t.mock.method(globalThis,'fetch',async()=>{throw Error('upstream unavailable');});
+  const cancelled=payment({state:'CANCELLED',cancelledAt:currentDay+'T11:00:00+09:00',updatedAt:currentDay+'T11:00:00+09:00'});
+  assert.equal((await f.send(cancelled,'products-cancel',{waitUntil:p=>pending.push(p)})).status,200);
+  await Promise.all(pending);assert.equal((await f.getSales()).total,0);
+  assert.match(f.db.prepare('SELECT items_json FROM toss_order_products').get().items_json,/메가스팟/);
 });
 
 test('general terminal appears in all totals/months/channels/dashboard even with passes unchecked',async t=>{
@@ -223,9 +274,10 @@ test('historical API uses official endpoint, all order states, stable paging and
     assert.equal(u.searchParams.get('from'),'2022-01-01T00:00:00Z');
     assert.equal(options.headers['x-secret-key'],'secret-private');assert.equal(options.redirect,'manual');
     assert.equal(options.headers['User-Agent'],'SocialfactorySales/1.0 (+https://socialfactory.co.kr)');
-    return Response.json({resultType:'SUCCESS',success:[{merchantId:42,payments:[payment()]}]});
+    return Response.json({resultType:'SUCCESS',success:[{id:payment().orderId,merchantId:42,payments:[payment()],lineItems:[{item:{title:'메가스팟 공간대여'},quantity:1}],updatedAt:paidAt}]});
   });
   const d=await(await f.post({action:'fetch',from:'2020-01-01',to:currentDay,page:2})).json();assert.equal(count,1);assert.equal(d.payments.length,1);assert.equal(d.nextPage,null);assert.equal(f.included().length,0);
+  assert.equal(d.rows[0].product_items[0].title,'메가스팟 공간대여');
   assert(!JSON.stringify(d).includes('secret-private'));
 });
 

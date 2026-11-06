@@ -1,6 +1,6 @@
 import { json } from '../../_lib/auth.js';
 import { adminGate, isIsoDate } from '../../_lib/admin.js';
-import { ensureTossSales, tossConfig, TOSS_SOURCE, PASS_MATCH, MANUAL_CANDIDATE, preparePayments, savePayments, tossGet } from '../../_lib/toss-sales.js';
+import { ensureTossSales, tossConfig, TOSS_SOURCE, PASS_MATCH, MANUAL_CANDIDATE, preparePayments, savePayments, tossGet, saveOrderProducts, withOrderProducts, refreshOrderProducts } from '../../_lib/toss-sales.js';
 
 export async function onRequestGet({request,env}) {
   const deny = await adminGate(request,env); if (deny) return deny;
@@ -13,7 +13,7 @@ export async function onRequestGet({request,env}) {
   const summary = await env.DB.prepare(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS total,MAX(received_at) AS latest FROM ${TOSS_SOURCE}`).first();
   const webhook = await env.DB.prepare("SELECT received_at FROM toss_webhook_events WHERE event_type IN ('payment.payment.approved.v1','payment.payment.cancelled.v1') ORDER BY received_at DESC LIMIT 1").first();
   const installations=(await env.DB.prepare('SELECT merchant_id,merchant_name,installed,received_at FROM toss_installations ORDER BY received_at DESC LIMIT 20').all()).results||[];
-  const ledger=`SELECT t.merchant_id,t.payment_id,t.paid_at,t.source_type,t.amount,t.refund_amount,t.approval_no,t.state,t.origin,
+  const ledger=`SELECT t.merchant_id,t.payment_id,t.order_id,t.paid_at,t.source_type,t.amount,t.refund_amount,t.approval_no,t.state,t.origin,
     CASE WHEN EXISTS(SELECT 1 FROM pass_payments p WHERE ${PASS_MATCH}) THEN 'duplicate'
       WHEN t.review_state='exclude' THEN 'exclude'
       WHEN t.review_state='review' OR t.source_type='EXTERNAL' THEN 'review'
@@ -24,7 +24,7 @@ export async function onRequestGet({request,env}) {
   const total=await env.DB.prepare('SELECT COUNT(*) n FROM ('+ledger+')'+where).bind(...args).first();
   const rows=(await env.DB.prepare('SELECT * FROM ('+ledger+')'+where+' ORDER BY paid_at DESC,payment_id DESC LIMIT 50 OFFSET ?')
     .bind(...args,(page-1)*50).all()).results||[];
-  return json({ok:true,...cfg,summary,lastWebhook:webhook?.received_at || null,rows,installations,
+  return json({ok:true,...cfg,summary,lastWebhook:webhook?.received_at || null,rows:await withOrderProducts(env,rows),installations,
     page,total:Number(total?.n)||0,pageSize:50,
     webhookUrl:new URL('/api/toss-place/webhook',request.url).href});
 }
@@ -37,6 +37,17 @@ export async function onRequestPost({request,env}) {
   let b; try { b = JSON.parse(raw); } catch { return json({ok:false,message:'가져오기 요청을 읽을 수 없습니다.'},400); }
   if (!b || typeof b !== 'object') return json({ok:false,message:'요청을 확인해 주세요.'},400);
   await ensureTossSales(env);
+  if(b.action==='refresh-products') {
+    const after=b.after||'';
+    if(typeof after!=='string'||(after&&!/^\d{1,24}$/.test(after)))return json({ok:false,message:'상품정보 조회 위치를 확인해 주세요.'},400);
+    const ids=((await env.DB.prepare('SELECT DISTINCT order_id FROM toss_payments WHERE merchant_id=? AND order_id>? ORDER BY order_id LIMIT 25')
+      .bind(tossConfig(env).merchantId,after).all()).results||[]).map(x=>x.order_id);
+    if(!ids.length)return json({ok:true,processed:0,updated:0,missing:0,nextCursor:null});
+    try {
+      const updated=await refreshOrderProducts(env,ids);
+      return json({ok:true,processed:ids.length,updated,missing:ids.length-updated,nextCursor:ids.length===25?ids.at(-1):null});
+    }catch(e){return json({ok:false,message:e.message||'상품정보를 불러오지 못했습니다.'},422);}
+  }
   if (b.action === 'fetch') {
     if (!isIsoDate(b.from) || !isIsoDate(b.to) || b.from > b.to || !Number.isInteger(b.page) || b.page < 1 || b.page > 10000)
       return json({ok:false,message:'조회 시작일·종료일을 확인해 주세요.'},400);
@@ -55,8 +66,9 @@ export async function onRequestPost({request,env}) {
         payments.push(...order.payments);
       }
       if (payments.length > 200) throw Error('결제가 많은 주문이 있습니다. 토스 결제 JSON 파일로 나누어 가져와 주세요.');
+      await saveOrderProducts(env,orders);
       const rows = payments.length ? await preparePayments(env,payments) : [];
-      return json({ok:true,rows,payments,nextPage:orders.length === 25 ? b.page+1 : null});
+      return json({ok:true,rows:await withOrderProducts(env,rows),payments,nextPage:orders.length === 25 ? b.page+1 : null});
     } catch (e) {
       console.warn('toss-history-failed', {message:e.message || 'unknown'});
       // Keep actionable connection/validation errors in the admin response. Edge
@@ -79,6 +91,6 @@ export async function onRequestPost({request,env}) {
   try {
     const rows = await preparePayments(env,b.payments);
     const changed = b.action === 'commit' ? await savePayments(env,rows,'import') : 0;
-    return json({ok:true,rows,changed});
+    return json({ok:true,rows:await withOrderProducts(env,rows),changed});
   } catch (e) { return json({ok:false,message:e.message},400); }
 }

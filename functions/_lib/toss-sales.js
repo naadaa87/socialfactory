@@ -38,6 +38,51 @@ export async function ensureTossSales(env) {
     merchant_id TEXT PRIMARY KEY, merchant_name TEXT NOT NULL DEFAULT '', installed INTEGER NOT NULL,
     provider_updated INTEGER NOT NULL, received_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
   )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS toss_order_products (
+    merchant_id TEXT NOT NULL, order_id TEXT NOT NULL, items_json TEXT NOT NULL,
+    provider_updated INTEGER NOT NULL, received_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours')),
+    PRIMARY KEY(merchant_id,order_id)
+  )`).run();
+}
+
+// Store only product labels, variants and quantities; never order memos or customer data.
+export function orderProducts(order, merchantId) {
+  if(id(order?.merchantId)!==merchantId||!id(order?.id))throw Error('주문 상품의 매장·주문 ID가 일치하지 않습니다.');
+  if(!Array.isArray(order.lineItems))return null;
+  const items=order.lineItems.slice(0,100).map(line=>({
+    title:text(line?.item?.title,160),variant:text(line?.itemPrice?.title,80),category:text(line?.item?.category?.title,80),
+    quantity:Number.isSafeInteger(line?.quantity)&&line.quantity>0?line.quantity:null,
+    options:Array.isArray(line?.optionChoices)?line.optionChoices.slice(0,20).map(x=>text(x?.title,80)).filter(Boolean):[]
+  })).filter(x=>x.title);
+  return {merchantId,orderId:id(order.id),items,updated:stamp(order.updatedAt)?.ms||0};
+}
+
+export async function saveOrderProducts(env, orders) {
+  if(!Array.isArray(orders)||orders.length>25)throw Error('주문 상품 응답을 확인해 주세요.');
+  const rows=orders.map(order=>orderProducts(order,tossConfig(env).merchantId)).filter(Boolean);
+  if(rows.length)await env.DB.batch(rows.map(r=>env.DB.prepare(`INSERT INTO toss_order_products(merchant_id,order_id,items_json,provider_updated) VALUES(?,?,?,?)
+    ON CONFLICT(merchant_id,order_id) DO UPDATE SET items_json=excluded.items_json,provider_updated=excluded.provider_updated,received_at=datetime('now','+9 hours')
+    WHERE excluded.provider_updated>=toss_order_products.provider_updated
+      AND (excluded.items_json<>'[]' OR toss_order_products.items_json='[]')`)
+    .bind(r.merchantId,r.orderId,JSON.stringify(r.items),r.updated)));
+  return rows.length;
+}
+
+export async function withOrderProducts(env, rows) {
+  const ids=[...new Set(rows.map(r=>r.order_id))],products=new Map();
+  for(let i=0;i<ids.length;i+=50){
+    const chunk=ids.slice(i,i+50),found=(await env.DB.prepare('SELECT order_id,items_json FROM toss_order_products WHERE merchant_id=? AND order_id IN ('+chunk.map(()=>'?').join(',')+')')
+      .bind(tossConfig(env).merchantId,...chunk).all()).results||[];
+    found.forEach(r=>products.set(r.order_id,JSON.parse(r.items_json)));
+  }
+  return rows.map(r=>({...r,product_items:products.has(r.order_id)?products.get(r.order_id):null}));
+}
+
+export async function refreshOrderProducts(env, ids) {
+  if(!Array.isArray(ids)||!ids.length||ids.length>25||ids.some(x=>!id(x)))throw Error('조회할 주문 ID를 확인해 주세요.');
+  const orders=await tossGet(env,'/order/orders/by-ids?'+new URLSearchParams({ids:ids.join(',')}));
+  if(!Array.isArray(orders)||orders.length>ids.length||new Set(orders.map(o=>id(o?.id))).size!==orders.length||orders.some(o=>!ids.includes(id(o?.id))))throw Error('주문 상품 응답이 요청과 다릅니다.');
+  return saveOrderProducts(env,orders);
 }
 
 export function tossConfig(env) {
