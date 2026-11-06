@@ -116,6 +116,8 @@ test('queue never forwards credentials across redirects and uses exact job lease
   let input;const config={origin:'https://example.com',token:'x'.repeat(40)};
   const client=new QueueClient(config,async(url,options)=>{input={url,options};return new Response(JSON.stringify({ok:true}),{headers:{'Content-Type':'application/json'}});});
   await client.complete(makeJob(),{status:'review',message:'safe'});
-  assert.equal(input.url,'https://example.com/api/internal/spacecloud-sync');assert.equal(input.options.redirect,'error');
+  assert.equal(input.url,'https://example.com/api/internal/spacecloud-sync');assert.equal(input.options.redirect,'manual');
   const body=JSON.parse(input.options.body);assert.equal(body.action,'complete');assert.equal(body.job_id,1);assert.equal(body.lease_token,'lease-for-test');
+  let calls=0;const redirected=new QueueClient(config,async()=>{calls++;return new Response('',{status:302,headers:{Location:'https://other.test'}});});
+  await assert.rejects(redirected.claim(),{code:'queue-http-302'});assert.equal(calls,1);
 });

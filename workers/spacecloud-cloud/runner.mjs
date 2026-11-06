@@ -72,6 +72,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         live();
         if(job)leaseTimer=setInterval(async()=>{if(beating || leaseLost)return;beating=true;try{await heartbeat();}catch{leaseLost=true;}finally{beating=false;}},20000);
         const driver=new Driver(context,{allowWrites:kind==='run' && env.ALLOW_WRITES==='true',accountLabel:accountLabel(env)});
+      driver.reportReview=diagnostic=>console.error('spacecloud-cloud','job-review',diagnostic);
         await driver.initialize();live();
         if(kind==='check'){
           const rooms=[];for(const room of ['r1','r2','r3','r4','r5']){await heartbeat();await driver.openRoom(room);live();await driver.hostMonth();rooms.push(room);}
@@ -213,6 +214,16 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         return response({ok:false,error:'not-found'},404);
       } catch(error){return response({ok:false,error:error.code || 'cloud-error',message:error.code?error.message:'클라우드 작업을 완료하지 못했습니다. 새 결제를 보류하고 연결을 확인해 주세요.'},error.status || 503);}
     },
-    async scheduled(env){await maintenance(env);if(env.ENABLED==='true' && env.ALLOW_WRITES==='true'){try{await runOne(env);}catch(error){console.error('spacecloud-cloud',error.code || 'operation-failed');}}}
+    async scheduled(env){
+      // Never tie unpaid PayApp expiry to Chrome login, browser locks or budget.
+      // This authenticated website action cannot lease work or launch a browser.
+      try {await new Queue(queueConfig(env)).maintenance();}
+      catch(error){console.error('spacecloud-cloud','website-maintenance',error.code || 'operation-failed');}
+      try {await maintenance(env);}
+      catch(error){console.error('spacecloud-cloud','browser-maintenance',error.code || 'operation-failed');return;}
+      if(env.ENABLED==='true' && env.ALLOW_WRITES==='true'){
+        try{await runOne(env);}catch(error){console.error('spacecloud-cloud',error.code || 'operation-failed');}
+      }
+    }
   };
 }

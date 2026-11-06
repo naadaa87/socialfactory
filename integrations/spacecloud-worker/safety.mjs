@@ -45,13 +45,14 @@ export function inspectRecords(records, segment) {
 
 export async function executeJob(rawJob, driver, heartbeat) {
   const job = planJob(rawJob), receipt = {marker:job.marker,room:job.room,date:job.date,start_min:job.start_min,end_min:job.end_min,segments:job.segments};
-  let changed = false;const observationTimes=[];
+  let changed = false,phase='open-room';const observationTimes=[];
   try {
     driver.job=job;
     driver.beforeWrite=heartbeat;
     await driver.openRoom(job.room);
     // Read every affected date before the first change, including the next day for overnight bookings.
     const initial = [];
+    phase='read-initial';
     for (const segment of job.segments) initial.push(inspectRecords(await driver.recordsFor(segment.date),segment));
     if (job.action !== 'release' && initial.some(x => x.conflicts.length)) {
       const owned=initial.some(x => x.own);
@@ -61,22 +62,24 @@ export async function executeJob(rawJob, driver, heartbeat) {
     }
     for (let i=0;i<job.segments.length;i++) {
       const segment=job.segments[i];
+      phase='read-before-change';
       const current=inspectRecords(await driver.recordsFor(segment.date),segment);
       if (job.action === 'release') {
-        if (current.own) { await heartbeat(); await driver.removeSegment(segment,current.own); changed=true; }
+        if (current.own) { phase='remove-owned';await heartbeat(); await driver.removeSegment(segment,current.own); changed=true; }
+        phase='read-after-release';
         const after=inspectRecords(await driver.recordsFor(segment.date),segment);
         if (after.own) throw new ReviewRequired('등록한 차단의 해제를 확인하지 못했습니다.');
-        await driver.verifyPublic(segment,after.conflicts);
+        phase='verify-public-release';await driver.verifyPublic(segment,after.conflicts);
         observationTimes.push(Date.now());
       } else {
         if (current.conflicts.length) throw new ReviewRequired('작업 도중 다른 예약이 확인되었습니다. 결제를 보류합니다.');
         if (!current.own) {
           if (job.action === 'verify') throw new ReviewRequired('홈페이지 예약의 외부 차단을 찾지 못했습니다.');
-          await heartbeat(); await driver.createSegment(segment); changed=true;
+          phase='create-owned';await heartbeat(); await driver.createSegment(segment); changed=true;
         }
-        const after=inspectRecords(await driver.recordsFor(segment.date),segment);
+        phase='read-after-block';const after=inspectRecords(await driver.recordsFor(segment.date),segment);
         if (!after.own || after.conflicts.length) throw new ReviewRequired('차단 등록 또는 다른 예약 유무를 확인하지 못했습니다.');
-        await driver.verifyPublic(segment,[after.own]);
+        phase='verify-public-block';await driver.verifyPublic(segment,[after.own]);
         observationTimes.push(Date.now());
       }
     }
@@ -86,6 +89,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
     receipt[job.action === 'release' ? 'verified_released' : 'verified_blocked']=true;
     return {status:'succeeded',receipt};
   } catch (error) {
+    driver.reportReview?.({phase,kind:error?.name || 'Error',reason:error instanceof ReviewRequired ? error.message : error instanceof TypeError || error?.name==='TimeoutError' ? String(error.message).split('\n')[0].replace(/https?:\/\/\S+/g,'[url]').slice(0,160) : null});
     // The UI may have accepted a write before a timeout. Never blindly retry or delete on uncertainty.
     return {status:'review',receipt,message:changed ? '외부 예약 변경 후 확인이 중단되었습니다. 점유를 유지하고 확인이 필요합니다.' : '외부 예약 상태를 확인하지 못했습니다. 점유를 유지하고 확인이 필요합니다.'};
   }

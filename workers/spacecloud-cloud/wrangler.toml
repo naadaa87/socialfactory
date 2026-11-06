@@ -17,8 +17,8 @@ database_id = "0ea011b7-7834-40eb-bf4d-827af7d68cb2"
 crons = ["* * * * *"]
 
 [vars]
-ENABLED = "false"
-ALLOW_WRITES = "false"
+ENABLED = "true"
+ALLOW_WRITES = "true"
 CLOUD_PLAN_CONFIRMED_FREE = "false"
 CLOUD_PLAN_MODE = "paid-included"
 INCLUDED_BUDGET_CONFIRMED = "true"

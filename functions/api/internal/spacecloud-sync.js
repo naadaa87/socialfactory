@@ -16,9 +16,15 @@ export async function onRequestPost({request,env}) {
   let body;try {const text=await request.text();if(text.length>300000)return json({ok:false,error:'too-large'},413);body=JSON.parse(text);}catch{return json({ok:false,error:'bad-json'},400);}
   try {
     await prepareBookings(env);
-    if(body.action==='heartbeat')return json(await heartbeatSyncJob(env,body));
-    if(body.action==='snapshot')return json(await saveWorkerCalendar(env,body));
-    if(body.action!=='complete')return json({ok:false,error:'invalid-action'},400);
+    // This action deliberately never claims a job. Payment expiry must keep running
+    // even when the browser is logged out, quarantined or out of usage allowance.
+    if(body?.action==='maintenance') {
+      await sweepUnpaidBookings(env);await loadSpacecloud(env);
+      return json({ok:true,maintenance:true});
+    }
+    if(body?.action==='heartbeat')return json(await heartbeatSyncJob(env,body));
+    if(body?.action==='snapshot')return json(await saveWorkerCalendar(env,body));
+    if(body?.action!=='complete')return json({ok:false,error:'invalid-action'},400);
     const result=await finishSyncJob(env,body);
     // A repeated completion also retries a failed post-acknowledgement payment finalization.
     if(result.status==='succeeded' || result.status==='conflict') {

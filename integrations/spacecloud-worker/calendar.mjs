@@ -2,7 +2,7 @@ import { ReviewRequired } from './safety.mjs';
 
 export function calendarGridDates(month, labels) {
   if (!/^\d{4}\.\d{2}$/.test(month) || !Array.isArray(labels) || labels.length < 28 || labels.length > 42) throw new ReviewRequired('캘린더 월간 구조가 변경되었습니다.');
-  const first=labels.findIndex(label => String(label).trim() === '1');
+  const first=labels.findIndex(label => /^\d{1,2}$/.test(String(label).trim()) && Number(label) === 1);
   if (first < 0 || first > 6) throw new ReviewRequired('월간 달력의 첫 날짜를 확인하지 못했습니다.');
   const start=Date.parse(month.replace('.','-')+'-01T00:00:00Z');
   const dates=labels.map((label,index) => {

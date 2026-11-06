@@ -7,22 +7,72 @@ const monthOf=date=>date.slice(0,7).replace('-','.');
 const numberOfMonth=month=>Number(month.slice(0,4))*12+Number(month.slice(5,7));
 const normalize=text=>text.replace(/\s+/g,' ').trim();
 
+const diagnosticPathWords=new Set(['api','v1','v2','v3','partner','reservation','reservations','calendar','user','users','auth','login','logout','profile','space','spaces','product','products','availability','holidays','status','me','host','hosts','qna','notification','notifications','chat','logs','log','track','event','events','booking','bookings','schedule','schedules','external','session','sessions','config','configuration','settings','assets','static','token','refresh','info','information','account','accounts','check','detail','list','search','common','service','services','categories','category','policy','policies','coupon','coupons','payment','payments','banner','banners']);
+export function readinessDiagnostic(request,{status=null,failure='network-error'}={}) {
+  let host='unknown',path='[unavailable]';
+  try{const url=new URL(request.url());host=url.hostname;path=url.pathname.split('/').map(part=>part===''?'':diagnosticPathWords.has(part)?part:'[segment]').join('/');}catch{}
+  let type='unknown';try{type=request.resourceType();}catch{}
+  return {phase:'request-readiness',host,path,type,status:Number.isInteger(status)?status:null,failure};
+}
+
+/** Observe only application request metadata; never read private response bodies. */
+export class SpacecloudReadiness {
+  constructor(page,{now=()=>Date.now(),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),quietMs=750,timeoutMs=15000,report=()=>{}}={}) {
+    this.now=now;this.pause=pause;this.quietMs=quietMs;this.timeoutMs=timeoutMs;this.epoch=0;this.version=0;this.pending=new Set();this.tracked=new WeakMap();this.failed=false;this.lastActivity=now();this.report=report;this.reported=0;
+    const relevant=request=>{try{const url=new URL(request.url());return url.protocol==='https:' && (url.hostname==='spacecloud.kr' || url.hostname.endsWith('.spacecloud.kr')) && ['document','xhr','fetch'].includes(request.resourceType());}catch{return false;}};
+    page.on('request',request=>{if(!relevant(request))return;this.tracked.set(request,this.epoch);this.pending.add(request);this.version++;this.lastActivity=this.now();});
+    const finish=async(request,failed)=>{
+      if(this.tracked.get(request)!==this.epoch || !this.pending.has(request))return;
+      let status=null,failure=failed?'network-error':'missing-response';
+      if(!failed){try{const response=await request.response();status=response?response.status():null;failed=!response || status>=400;failure=response?'http-error':'missing-response';}catch{failed=true;}}
+      else {try{const reason=request.failure()?.errorText;const known=['net::ERR_ABORTED','net::ERR_FAILED','net::ERR_TIMED_OUT','net::ERR_CONNECTION_RESET','net::ERR_CONNECTION_CLOSED','net::ERR_NAME_NOT_RESOLVED'];if(known.includes(reason))failure=reason;}catch{}}
+      if(this.tracked.get(request)!==this.epoch)return;
+      this.pending.delete(request);this.failed ||= failed;this.version++;this.lastActivity=this.now();
+      if(failed && this.reported++<3){try{this.report(readinessDiagnostic(request,{status,failure}));}catch{}}
+    };
+    page.on('requestfinished',request=>{void finish(request,false);});
+    page.on('requestfailed',request=>{void finish(request,true);});
+  }
+  navigate(){this.epoch++;this.pending.clear();this.failed=false;this.reported=0;this.version++;this.lastActivity=this.now();}
+  changed(){this.lastActivity=this.now();}
+  async settle(){
+    const deadline=this.now()+this.timeoutMs;
+    while(this.now()<deadline){
+      if(this.failed)throw new ReviewRequired('스페이스클라우드 일정 조회에 실패하여 최신 상태를 확인하지 못했습니다.');
+      if(!this.pending.size && this.now()-this.lastActivity>=this.quietMs)return this.version;
+      await this.pause(100);
+    }
+    throw new ReviewRequired('스페이스클라우드 일정 조회가 끝나지 않아 최신 상태 확인을 중단했습니다.');
+  }
+}
+
 export class SpacecloudUI {
-  constructor(context,config) { this.context=context;this.config=config;this.room=null;this.job=null; }
-  async initialize() {this.host=await this.context.newPage();this.guest=await this.context.newPage();this.host.setDefaultTimeout(15000);this.guest.setDefaultTimeout(15000);}
-  async click(locator) {
-    if(await locator.count()!==1 || !await locator.isVisible()) throw new ReviewRequired('화면의 조작 대상을 하나로 확인하지 못했습니다.');
-    await locator.scrollIntoViewIfNeeded();
-    const box=await locator.boundingBox();if(!box) throw new ReviewRequired('화면의 조작 대상을 확인하지 못했습니다.');
-    await locator.page().mouse.click(box.x+box.width/2,box.y+box.height/2);
+  constructor(context,config) { this.context=context;this.config=config;this.room=null;this.job=null;this.readiness=new WeakMap(); }
+  async initialize() {this.host=await this.context.newPage();this.guest=await this.context.newPage();this.host.setDefaultTimeout(15000);this.guest.setDefaultTimeout(15000);this.observe(this.host);this.observe(this.guest);}
+  observe(page){let state=this.readiness.get(page);if(!state){state=new SpacecloudReadiness(page,{report:diagnostic=>this.reportReview?.(diagnostic)});this.readiness.set(page,state);}return state;}
+  async click(locator,label='화면 조작') {
+    // Responsive layouts can retain hidden copies. Only one visible target may receive input.
+    const target=locator.filter({visible:true});
+    const count=await target.count();
+    if(count!==1 || !await target.isVisible()) throw new ReviewRequired(label+': 보이는 조작 대상이 '+count+'개여서 중단했습니다.');
+    await target.scrollIntoViewIfNeeded();
+    const box=await target.boundingBox();if(!box) throw new ReviewRequired('화면의 조작 대상을 확인하지 못했습니다.');
+    const page=target.page(),state=this.readiness.get(page);if(state)state.changed();
+    await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
+  }
+  async settle(page) {
+    // First-party calendar requests and visible DOM are authoritative; analytics are unrelated.
+    return this.observe(page).settle();
   }
   async openRoom(room) {
     if(!ROOMS[room]) throw new ReviewRequired('등록되지 않은 방입니다.');
     this.room=room;
+    this.observe(this.host).navigate();
     await this.host.goto(`https://partner.spacecloud.kr/reservation-calendar?product=${ROOMS[room].product}&space=82026`,{waitUntil:'domcontentloaded'});
     const heading=this.host.getByRole('heading',{name:`${this.config.accountLabel}, ${Number(room.slice(1))}번룸 (최대 ${ROOMS[room].max}명)`,exact:true});
     await heading.waitFor({state:'visible'});
     await this.host.locator('.booking_wrap').first().waitFor({state:'visible'});
+    await this.settle(this.host);
   }
   async hostMonth() {
     const text=normalize(await this.host.locator('a[title="달력레이어 팝업 열림"] em').innerText());
@@ -34,8 +84,9 @@ export class SpacecloudUI {
       const current=await this.hostMonth(),target=monthOf(date);
       if(current===target) return;
       const direction=numberOfMonth(target)>numberOfMonth(current)?'다음달':'이전달';
-      await this.click(this.host.getByText(direction,{exact:true}));
-      await this.host.waitForFunction(({selector,current})=>document.querySelector(selector)?.textContent.trim()!==current,{selector:'a[title="달력레이어 팝업 열림"] em',current});
+      await this.click(this.host.getByText(direction,{exact:true}),'호스트 달력 월 이동');
+      await this.host.waitForFunction(({selector,current})=>{const text=document.querySelector(selector)?.textContent.trim();return !!text && text!==current;},{selector:'a[title="달력레이어 팝업 열림"] em',current});
+      await this.settle(this.host);
     }
     throw new ReviewRequired('호스트 달력의 날짜 이동을 완료하지 못했습니다.');
   }
@@ -50,10 +101,17 @@ export class SpacecloudUI {
   }
   async readDate(date) {
     const cell=await this.dateCell(date);
-    const entries=await cell.locator('.booking_list li').evaluateAll(nodes=>nodes.map((node,index)=>{
+    const version=await this.settle(this.host);
+    let entries=await cell.locator('.booking_list li').evaluateAll(nodes=>nodes.map((node,index)=>{
       const a=node.querySelector('a');
       return {index,text:a?.textContent?.replace(/\s+/g,' ').trim()||'',href:a?.getAttribute('href')||'',hours:a?[...a.querySelectorAll('em')].map(em=>em.textContent.trim()):[]};
     }));
+    const settled=await this.settle(this.host);
+    if(settled!==version) {
+      const refreshed=await this.dateCell(date);
+      entries=await refreshed.locator('.booking_list li').evaluateAll(nodes=>nodes.map((node,index)=>{const a=node.querySelector('a');return {index,text:a?.textContent?.replace(/\s+/g,' ').trim()||'',href:a?.getAttribute('href')||'',hours:a?[...a.querySelectorAll('em')].map(em=>em.textContent.trim()):[]};}));
+      if(await this.settle(this.host)!==settled)throw new ReviewRequired('일정 조회 중 내용이 변경되어 다시 확인이 필요합니다.');
+    }
     if(entries.length>300 || entries.some(e=>!e.text)) throw new ReviewRequired('예약 목록 구조를 확인하지 못했습니다.');
     return entries.map(e=>parseCalendarEntry(date,e));
   }
@@ -99,7 +157,7 @@ export class SpacecloudUI {
     const entries=cell.locator('.booking_list li a');
     const entry=entries.nth(record.source.index);
     if(normalize(await entry.innerText())!==record.source.text || await entry.getAttribute('href')) throw new ReviewRequired('대상 외부 예약의 표식이 변경되었습니다.');
-    await this.click(entry);
+    await this.click(entry,'외부예약 상세 열기');
     const popup=this.host.locator('.layer_popup.reservation_state._popup4:visible');
     await popup.waitFor({state:'visible'});
     if(normalize(await popup.locator('.pop_header.type5').innerText())!=='직접 추가한 예약 건입니다.') throw new ReviewRequired('직접 등록한 외부 예약이 아닙니다.');
@@ -127,7 +185,7 @@ export class SpacecloudUI {
     return result;
   }
   async chooseFormDate(date) {
-    await this.click(this.host.locator('#_dpicker1 a._miniCalOpen'));
+    await this.click(this.host.locator('#_dpicker1 a._miniCalOpen'),'예약 날짜 선택기 열기');
     const wrap=this.host.locator('.calendar_wrap:visible').filter({has:this.host.getByRole('table',{name:'달력 월간 테이블'})});
     await wrap.waitFor({state:'visible'});
     for(let tries=0;tries<15;tries++) {
@@ -135,7 +193,7 @@ export class SpacecloudUI {
       const month=parts.length===2?parts[0]+'.'+parts[1].padStart(2,'0'):'';
       if(!/^\d{4}\.\d{2}$/.test(month)) throw new ReviewRequired('날짜 선택 창의 기준 월을 확인하지 못했습니다.');
       const target=monthOf(date);if(month===target)break;
-      await this.click(wrap.locator(numberOfMonth(target)>numberOfMonth(month)?'.btn_month_next':'.btn_month_prev'));
+      await this.click(wrap.locator(numberOfMonth(target)>numberOfMonth(month)?'.btn_month_next':'.btn_month_prev'),'예약 날짜 선택기 월 이동');
       await this.host.waitForFunction(({month})=>[...document.querySelectorAll('.calendar_wrap')].filter(e=>e.getBoundingClientRect().width).some(e=>{const p=[...e.querySelectorAll('.calendar_tit strong em')].map(n=>n.textContent.trim());return p.length===2 && p[0]+'.'+p[1].padStart(2,'0')!==month;}),{month});
       if(tries===14)throw new ReviewRequired('날짜 선택 창의 이동을 완료하지 못했습니다.');
     }
@@ -146,13 +204,13 @@ export class SpacecloudUI {
     if(index<0)throw new ReviewRequired('날짜 선택 창의 이용일을 확인하지 못했습니다.');
     const anchor=cells.nth(index).locator('a');
     if(await anchor.count()!==1 || !/^\d{1,2}$/.test(normalize(await anchor.innerText())) || Number(await anchor.innerText())!==Number(date.slice(8)))throw new ReviewRequired('날짜 선택 창의 이용일이 선택 가능한 상태가 아닙니다.');
-    await this.click(anchor);
+    await this.click(anchor,'예약 날짜 선택');
     const value=await this.host.locator('#start_day').inputValue();
     if(value.replace(/[^0-9]/g,'')!==date.replaceAll('-','')) throw new ReviewRequired('외부 예약 양식의 날짜가 일치하지 않습니다.');
   }
   async createSegment(segment) {
     if(!this.config.allowWrites)throw new ReviewRequired('외부 예약 쓰기가 비활성 상태입니다.');
-    await this.click(this.host.getByText('예약추가',{exact:true}));
+    await this.click(this.host.getByText('예약추가',{exact:true}),'외부예약 추가 열기');
     await this.host.locator('#reserve_name').waitFor({state:'visible'});
     await this.chooseFormDate(segment.date);
     await this.host.locator('#shour').selectOption({label:`${segment.start_min/60} 시`});
@@ -165,7 +223,7 @@ export class SpacecloudUI {
     if(await this.host.locator('#reserve_name').inputValue()!==segment.marker
       ||await this.host.locator('#reserve_memo').inputValue()!==memoFor(segment))throw new ReviewRequired('외부 예약 표식 입력을 확인하지 못했습니다.');
     await this.beforeWrite();
-    await this.click(this.host.locator('a#_addExternalSchedule'));
+    await this.click(this.host.locator('a#_addExternalSchedule'),'외부예약 등록 확인');
     await this.host.locator('#reserve_name').waitFor({state:'hidden'});
   }
   async removeSegment(segment,record) {
@@ -174,34 +232,38 @@ export class SpacecloudUI {
     if(checked.name!==segment.marker || checked.memo!==memoFor(segment) || checked.date!==segment.date
       ||checked.start_min!==segment.start_min ||checked.end_min!==segment.end_min)throw new ReviewRequired('해제할 외부 예약의 정보가 다릅니다.');
     const popup=this.host.locator('.layer_popup.reservation_state._popup4:visible');
-    await this.click(popup.locator('a.btn_negative').filter({hasText:/^\s*예약\s*삭제\s*$/}));
+    await this.click(popup.locator('a.btn_negative').filter({hasText:/^\s*예약\s*삭제\s*$/}),'자체 외부예약 삭제 요청');
     const confirm=this.host.locator('.layer_popup:visible').filter({has:this.host.getByText('예약을 삭제하시겠습니까?',{exact:true})});
     await confirm.waitFor({state:'visible'});
     await this.beforeWrite();
-    await this.click(confirm.getByText('확인',{exact:true}));
+    await this.click(confirm.getByText('확인',{exact:true}),'자체 외부예약 삭제 확인');
     await confirm.waitFor({state:'hidden'});
   }
   async openPublicDate(date) {
+    this.observe(this.guest).navigate();
     await this.guest.goto('https://www.spacecloud.kr/space/82026',{waitUntil:'domcontentloaded'});
+    await this.settle(this.guest);
     const room=this.guest.getByRole('radio',{name:`${Number(this.room.slice(1))}번룸 (최대 ${ROOMS[this.room].max}명)`,exact:true});
-    await room.waitFor({state:'visible'});await room.press('Space');
+    await room.waitFor({state:'visible'});this.observe(this.guest).changed();await room.press('Space');await this.settle(this.guest);
     const time=this.guest.getByRole('radio',{name:'시간 단위 예약하기(최소 2시간 부터)',exact:true});
-    await time.waitFor({state:'visible'});await time.press('Space');
+    await time.waitFor({state:'visible'});this.observe(this.guest).changed();await time.press('Space');await this.settle(this.guest);
     const next=this.guest.locator('a.btn_month_next');await next.waitFor({state:'visible'});
     for(let tries=0;tries<15;tries++) {
       const month=await next.evaluate(el=>el.parentElement.textContent.match(/\d{4}\s*\.\s*\d{1,2}/)?.[0]?.replace(/\s/g,'')||'');
       const parts=month.split('.');const current=parts.length===2?parts[0]+'.'+parts[1].padStart(2,'0'):'';
       if(!current)throw new ReviewRequired('고객 예약 화면의 기준 월을 확인하지 못했습니다.');
       if(current===monthOf(date))break;
-      await this.click(this.guest.locator(numberOfMonth(monthOf(date))>numberOfMonth(current)?'a.btn_month_next':'a.btn_month_prev'));
+      await this.click(this.guest.locator(numberOfMonth(monthOf(date))>numberOfMonth(current)?'a.btn_month_next':'a.btn_month_prev'),'고객 달력 월 이동');
       await this.guest.waitForFunction(({current})=>[...document.querySelectorAll('a.btn_month_next')].some(el=>{const p=el.parentElement.textContent.match(/(\d{4})\s*\.\s*(\d{1,2})/);return p && p[1]+'.'+p[2].padStart(2,'0')!==current;}),{current});
+      await this.settle(this.guest);
       if(tries===14)throw new ReviewRequired('고객 예약 화면의 날짜 이동을 완료하지 못했습니다.');
     }
     const day=this.guest.locator('a').filter({hasText:new RegExp('^\\s*'+Number(date.slice(8))+'\\s*$')});
     const visible=[];for(const a of await day.all())if(await a.isVisible())visible.push(a);
     if(visible.length!==1)throw new ReviewRequired('고객 예약 화면의 이용일이 모호합니다.');
-    await this.click(visible[0]);
+    await this.click(visible[0],'고객 예약 날짜 선택');
     await this.guest.locator('.ts-row[data-row-idx="0"]').waitFor({state:'visible'});
+    await this.settle(this.guest);
   }
   async verifyPublic(segment,remaining) {
     const expected=publicSlotExpectations(segment,remaining);

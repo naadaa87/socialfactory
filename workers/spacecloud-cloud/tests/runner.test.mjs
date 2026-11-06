@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { ensureStore,encryptState,decryptState,saveState,loadState,reserveBudget,settleBudget,lockRunner,dailyLimit,monthlyLimit } from '../store.mjs';
 import { createRunner } from '../runner.mjs';
 import { persistentConnector } from '../connection.mjs';
+import { QueueClient } from '../../../integrations/spacecloud-worker/queue.mjs';
 
 const CLOCK=Date.parse('2026-11-06T10:00:00Z');
 const PRIVATE_STATE={cookies:[{name:'auth',value:'PRIVATE-LOGIN-COOKIE',domain:'partner.spacecloud.kr',path:'/'}],origins:[{origin:'https://partner.spacecloud.kr',localStorage:[{name:'example',value:'PRIVATE-LOCAL-STATE'}]}]};
@@ -18,7 +19,7 @@ function fixture(overrides={}) {
       const task=tail.then(async()=>{sqlite.exec('BEGIN');try{const result=[];for(const statement of statements)result.push(await statement.run());sqlite.exec('COMMIT');return result;}catch(error){sqlite.exec('ROLLBACK');throw error;}});
       tail=task.catch(()=>{});return task;
     }};
-  const counters={claims:0,heartbeats:0,completions:[],launches:0,connects:0,acquires:0,closes:[],disconnects:0,driverInitializations:0,rooms:[],restored:[]};
+  const counters={claims:0,maintenance:0,heartbeats:0,completions:[],launches:0,connects:0,acquires:0,closes:[],disconnects:0,driverInitializations:0,rooms:[],restored:[]};
   const sessions=new Map();
   let nextSession=0,clock=CLOCK,closeFails=false,knownMissing404=false,launchFails=false,currentJob=job;
   function context(){const pages=[];return {pages:()=>pages,
@@ -30,7 +31,7 @@ function fixture(overrides={}) {
   const BROWSER={async acquire(){counters.acquires++;const id='session-'+(++nextSession);sessions.set(id,{context:context()});return {sessionId:id};},
     async closeSession(id){counters.closes.push(id);if(closeFails)throw new Error('remote closure was not acknowledged');sessions.delete(id);return {status:'closed'};},
     async getSession(id){if(!sessions.has(id) && knownMissing404)throw Object.assign(new Error('no such session'),{status:404});return sessions.has(id)?{sessionId:id,status:'active'}:null;}};
-  class Queue {async claim(){counters.claims++;return currentJob;}async heartbeat(){counters.heartbeats++;}async complete(claim,result){counters.completions.push({claim,result});return {ok:true};}}
+  class Queue {async claim(){counters.claims++;return currentJob;}async maintenance(){counters.maintenance++;return {ok:true,maintenance:true};}async heartbeat(){counters.heartbeats++;}async complete(claim,result){counters.completions.push({claim,result});return {ok:true};}}
   class Driver {constructor(ctx,config){this.context=ctx;this.config=config;}async initialize(){counters.driverInitializations++;}async openRoom(room){counters.rooms.push(room);}async hostMonth(){return '2026.11';}}
   const deps={Queue,Driver,now:()=>clock,
     async launch(){counters.launches++;if(launchFails)throw new Error('unknown acquisition result');const {sessionId}=await BROWSER.acquire();return browserFor(sessionId);},
@@ -205,7 +206,38 @@ test('cost confirmation and a cleanup schedule are prerequisites even for read-o
 });
 
 test('disabled automatic scheduling performs maintenance without leasing bookings or starting browsers',async()=>{
-  const f=await ready(fixture({ENABLED:'false'}));await f.runner.scheduled(f.env);assert.equal(f.counters.claims,0);assert.equal(f.counters.launches,0);
+  const f=await ready(fixture({ENABLED:'false'}));await f.runner.scheduled(f.env);assert.equal(f.counters.maintenance,1);assert.equal(f.counters.claims,0);assert.equal(f.counters.launches,0);
+});
+
+test('website payment expiry runs before missing login, browser budget and quarantined lock gates',async()=>{
+  const noLogin=fixture();await noLogin.runner.scheduled(noLogin.env);
+  assert.equal(noLogin.counters.maintenance,1);assert.equal(noLogin.counters.claims,0);assert.equal(noLogin.counters.launches,0);
+  const noBudget=await ready(fixture({DAILY_BROWSER_BUDGET_MS:'0'}));await noBudget.runner.scheduled(noBudget.env);
+  assert.equal(noBudget.counters.maintenance,1);assert.equal(noBudget.counters.claims,0);assert.equal(noBudget.counters.launches,0);
+  const quarantined=await ready(fixture());quarantined.sqlite.prepare('UPDATE cloud_runner_lock SET review=1 WHERE id=1').run();await quarantined.runner.scheduled(quarantined.env);
+  assert.equal(quarantined.counters.maintenance,1);assert.equal(quarantined.counters.claims,0);assert.equal(quarantined.counters.launches,0);
+});
+
+test('payment expiry does not require a configured cloud browser or paid-plan confirmation',async()=>{
+  const f=fixture({BROWSER:null,CLOUD_PLAN_CONFIRMED_FREE:'false'});await f.runner.scheduled(f.env);
+  assert.equal(f.counters.maintenance,1);assert.equal(f.counters.claims,0);assert.equal(f.counters.launches,0);
+});
+
+test('scheduled expiry failures are contained and never waive the browser budget gate',async()=>{
+  const f=await ready(fixture({DAILY_BROWSER_BUDGET_MS:'0'}));
+  class FailingQueue extends f.deps.Queue {async maintenance(){f.counters.maintenance++;throw Object.assign(new Error('website unavailable'),{code:'queue-http-503'});}}
+  const runner=createRunner({...f.deps,Queue:FailingQueue});await runner.scheduled(f.env);
+  assert.equal(f.counters.maintenance,1);assert.equal(f.counters.claims,0);assert.equal(f.counters.launches,0);
+});
+
+test('website maintenance uses the scoped queue token with no lease request or credential redirect',async()=>{
+  const calls=[],queue=new QueueClient({origin:'https://site.example',token:'scoped-private-queue-token-longer-than-thirty-two'},async(url,options)=>{
+    calls.push({url,options});return Response.json({ok:true,maintenance:true});
+  });
+  assert.deepEqual(await queue.maintenance(),{ok:true,maintenance:true});assert.equal(calls.length,1);
+  assert.equal(calls[0].url,'https://site.example/api/internal/spacecloud-sync');assert.equal(calls[0].options.method,'POST');assert.equal(calls[0].options.redirect,'manual');
+  assert.equal(calls[0].options.headers.Authorization,'Bearer scoped-private-queue-token-longer-than-thirty-two');
+  assert.deepEqual(JSON.parse(calls[0].options.body),{action:'maintenance'});
 });
 
 test('saved authentication excludes Google, Naver and other SSO provider storage',async()=>{
