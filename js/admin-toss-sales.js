@@ -3,13 +3,13 @@
   var A=window.SF_ADMIN; if(!A)return;
   var $=A.$,esc=A.esc,payments=null,serial=0,busy=false;
   var status=$('#ts-import-status'),preview=$('#ts-preview'),commit=$('#ts-commit');
-  var ledgerPage=1,loadVersion=0,ledgerRows=[],selected=new Set(),reviewIds=[],reviewDecision='',ledgerLoading=false;
+  var ledgerPage=1,loadVersion=0,ledgerRows=[],selected=new Set(),reviewIds=[],reviewDecision='',ledgerLoading=false,labelId='';
   var labels={new:'신규',updated:'변경 반영',unchanged:'이미 반영',blocked:'확인 필요',included:'합산',duplicate:'이용권 중복 제외',exclude:'제외',review:'확인 필요'};
   var types={CARD:'카드',CASH:'현금',BARCODE:'간편결제',ACCOUNT_TRANSFER:'계좌이체',PREPAID_VALUE:'선불수단',EXTERNAL:'외부 결제수단'};
   function request(body){return A.api('/api/admin/toss-sales',{method:'POST',body:body});}
   function locked(value){busy=value;['#ts-fetch','#ts-file','#ts-from','#ts-to','#ts-commit','#ts-products-refresh'].forEach(function(s){$(s).disabled=value;});}
   function error(e){if(!A.guard(e))status.textContent=e.message||'처리하지 못했습니다. 다시 시도해 주세요.';}
-  function products(r){
+  function originalProducts(r){
     if(!Array.isArray(r.product_items))return '<span class="small muted">상품정보 미조회</span>';
     if(!r.product_items.length)return '<span class="small muted">상품명 없음</span>';
     var items=r.product_items.map(function(p){
@@ -17,6 +17,12 @@
       return '<div class="ts-product"><b>'+esc(p.title)+'</b>'+(p.quantity?' <span class="small">× '+A.num(p.quantity)+'</span>':'')+(details.length?'<br><small class="muted">'+details.map(esc).join(' · ')+'</small>':'')+'</div>';
     });
     return items.slice(0,3).join('')+(items.length>3?'<details><summary class="small">상품 '+A.num(items.length-3)+'개 더 보기</summary>'+items.slice(3).join('')+'</details>':'');
+  }
+  function products(r,recent){
+    return (r.manual_product_name?'<div class="ts-product"><b>'+esc(r.manual_product_name)+'</b> <small class="muted">직접 입력</small></div>':'')+
+      (r.manual_memo?'<div class="ts-product ts-memo"><small>메모: '+esc(r.manual_memo)+'</small></div>':'')+
+      (r.manual_product_name?'<details><summary class="small muted">토스 원본 상품정보</summary>'+originalProducts(r)+'</details>':originalProducts(r))+
+      (recent?'<button class="btn btn-light btn-xs mt-s" type="button" data-ts-label-id="'+esc(r.payment_id)+'">상품명·메모 편집</button>':'');
   }
   function table(rows,recent){
     return '<table class="tbl"><thead><tr>'+(recent?'<th>선택</th>':'')+'<th>승인일시 · 결제 ID</th><th>상품명 · 수량</th><th>수단</th><th>결제금액</th><th>취소금액</th><th>처리</th></tr></thead><tbody>'+rows.map(function(r){
@@ -29,7 +35,7 @@
         controls+='</div>';
       }
       var reason=r.reason||r.review_note||(state==='review'?'기존 수기 매출/직접 발급분과 중복 여부를 확인해 주세요.':'');
-      return '<tr>'+(recent?'<td>'+(editable?'<input type="checkbox" data-ts-select="'+esc(r.payment_id)+'" aria-label="결제 '+esc(r.payment_id)+' 선택"'+(selected.has(r.payment_id)?' checked':'')+'>':'—')+'</td>':'')+'<td>'+esc(r.paid_at)+'<br><small class="mono">'+esc(r.payment_id)+'</small>'+(recent&&r.approval_no?'<br><small>승인 '+esc(r.approval_no)+'</small>':'')+'</td><td class="ts-product-cell">'+products(r)+'</td><td>'+esc(types[r.source_type]||r.source_type)+'</td><td>'+A.won(r.amount)+'</td><td>'+A.won(r.refund_amount)+'</td><td>'+esc(labels[state]||state)+(reason?'<br><small>'+esc(reason)+'</small>':'')+controls+'</td></tr>';
+      return '<tr>'+(recent?'<td>'+(editable?'<input type="checkbox" data-ts-select="'+esc(r.payment_id)+'" aria-label="결제 '+esc(r.payment_id)+' 선택"'+(selected.has(r.payment_id)?' checked':'')+'>':'—')+'</td>':'')+'<td>'+esc(r.paid_at)+'<br><small class="mono">'+esc(r.payment_id)+'</small>'+(recent&&r.approval_no?'<br><small>승인 '+esc(r.approval_no)+'</small>':'')+'</td><td class="ts-product-cell">'+products(r,recent)+'</td><td>'+esc(types[r.source_type]||r.source_type)+'</td><td>'+A.won(r.amount)+'</td><td>'+A.won(r.refund_amount)+'</td><td>'+esc(labels[state]||state)+(reason?'<br><small>'+esc(reason)+'</small>':'')+controls+'</td></tr>';
     }).join('')+'</tbody></table>';
   }
   function canSelect(r){return r.disposition!=='duplicate'&&r.source_type!=='EXTERNAL';}
@@ -47,10 +53,21 @@
     selection();
   }
   function closeReview(){reviewIds=[];$('#ts-review-form').hidden=true;}
+  function closeLabel(){labelId='';$('#ts-label-form').hidden=true;}
+  function openLabel(id){
+    if(busy||ledgerLoading)return;
+    var row=ledgerRows.find(function(r){return r.payment_id===id;});if(!row)return;
+    closeReview();labelId=id;
+    $('#ts-label-reference').textContent=row.paid_at+' · '+A.won(row.amount)+' · 결제 '+id;
+    $('#ts-label-original').innerHTML=originalProducts(row);
+    $('#ts-label-name').value=row.manual_product_name||'';$('#ts-label-memo').value=row.manual_memo||'';
+    $('#ts-label-status').textContent='';$('#ts-label-form').hidden=false;$('#ts-label-name').focus();
+  }
   function openReview(ids,decision){
     if(busy||ledgerLoading||!ids.length)return;
     ids=ids.filter(function(id){return ledgerRows.some(function(r){return r.payment_id===id&&canSelect(r)&&(decision==='exclude'?r.disposition!=='exclude':r.disposition!=='included');});});
     if(!ids.length)return;
+    closeLabel();
     reviewIds=ids;reviewDecision=decision;
     var amount=ledgerRows.filter(function(r){return ids.includes(r.payment_id);}).reduce(function(n,r){return n+r.amount-r.refund_amount;},0);
     $('#ts-review-title').textContent=A.num(ids.length)+'건 · '+A.won(amount)+' '+(decision==='exclude'?'매출에서 제외':'다시 합산');
@@ -60,7 +77,7 @@
   }
   async function load(){
     var version=++loadVersion;
-    ledgerLoading=true;selected.clear();closeReview();selection();
+    ledgerLoading=true;selected.clear();closeReview();closeLabel();selection();
     try{
       var d=await A.api('/api/admin/toss-sales?page='+ledgerPage+'&filter='+$('#ts-filter').value);
       if(version!==loadVersion)return;
@@ -126,6 +143,7 @@
     finally{locked(false);}
   });
   $('#ts-recent').addEventListener('click',function(e){
+    var label=e.target.closest('[data-ts-label-id]');if(label&&label.dataset.tsLabelId){openLabel(label.dataset.tsLabelId);return;}
     var b=e.target.closest('[data-ts-id]');if(!b||busy)return;
     openReview([b.dataset.tsId],b.dataset.tsDecision);
   });
@@ -139,6 +157,19 @@
   $('#ts-exclude-selected').addEventListener('click',function(){openReview(Array.from(selected),'exclude');});
   $('#ts-include-selected').addEventListener('click',function(){openReview(Array.from(selected),'include');});
   $('#ts-review-cancel').addEventListener('click',function(){if(!busy)closeReview();});
+  $('#ts-label-cancel').addEventListener('click',function(){if(!busy)closeLabel();});
+  $('#ts-label-form').addEventListener('submit',async function(e){
+    e.preventDefault();if(busy||ledgerLoading||!labelId)return;
+    var id=labelId,name=$('#ts-label-name').value.trim(),memo=$('#ts-label-memo').value.trim();
+    if(name.length>160||memo.length>500){$('#ts-label-status').textContent='상품명은 160자, 메모는 500자 이하로 적어주세요.';return;}
+    locked(true);selection();$('#ts-label-save').disabled=true;
+    try{
+      await request({action:'label',paymentId:id,productName:name,memo:memo});
+      $('#ts-label-status').textContent=name||memo?'상품명·메모를 저장했습니다.':'직접 입력한 상품명·메모를 지웠습니다.';
+      await load();
+    }catch(ex){if(!A.guard(ex))$('#ts-label-status').textContent=ex.message||'저장하지 못했습니다. 다시 시도해 주세요.';}
+    finally{locked(false);selection();$('#ts-label-save').disabled=false;}
+  });
   $('#ts-review-form').addEventListener('submit',async function(e){
     e.preventDefault();if(busy||!reviewIds.length)return;
     var decision=reviewDecision,ids=reviewIds.slice(),reason=$('#ts-reason').value,note=$('#ts-review-note').value.trim();
@@ -154,7 +185,7 @@
   });
   $('#ts-filter').addEventListener('change',function(){if(busy)return;ledgerPage=1;load();});
   $('#ts-products-refresh').addEventListener('click',async function(){
-    if(busy)return;locked(true);closeReview();selection();var cursor='',processed=0,missing=0,box=$('#ts-product-status');
+    if(busy)return;locked(true);closeReview();closeLabel();selection();var cursor='',processed=0,missing=0,box=$('#ts-product-status');
     try{
       do{
         box.textContent='상품정보 불러오는 중… 주문 '+A.num(processed)+'건 확인';

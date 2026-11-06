@@ -10,7 +10,7 @@
   <title>관리자 | 소셜팩토리</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=toss-products20261106">
+  <link rel="stylesheet" href="/css/admin.css?v=toss-labels20261106">
   <link rel="stylesheet" href="/css/admin-kiosk-ui.css?v=d24708b714">
 </head>
 <body class="adm">
@@ -189,6 +189,15 @@
           <div class="ts-toolbar"><button class="btn btn-primary btn-sm" type="submit" id="ts-review-save">선택한 처리 저장</button><button class="btn btn-light btn-sm" type="button" id="ts-review-cancel">닫기</button></div>
         </form>
         <p id="ts-review-status" class="small" role="status" aria-live="polite"></p>
+        <p class="small muted">‘금액 입력’ 등 구분이 어려운 결제는 상품명·메모 편집을 눌러 직접 적어두세요. 상품정보를 다시 불러와도 유지됩니다.</p>
+        <form id="ts-label-form" class="ts-review card mt-s" hidden>
+          <h4>상품명·메모 편집</h4><p id="ts-label-reference" class="small"></p>
+          <div class="small muted mt-s">토스 원본 상품정보<div id="ts-label-original"></div></div>
+          <div class="frow"><div class="f"><label for="ts-label-name">직접 입력할 상품명</label><input class="input" id="ts-label-name" maxlength="160" placeholder="예: 메가스팟 공간 대여"></div><div class="f"><label for="ts-label-memo">구분 메모</label><textarea class="input" id="ts-label-memo" maxlength="500" rows="3" placeholder="예: 주차 결제 · 방문 일시 등"></textarea></div></div>
+          <p class="small muted">상품명이나 메모 중 필요한 것만 적으세요. 빈칸으로 저장하면 직접 입력한 내용이 지워집니다. 매출 제외 여부는 별도로 선택하세요.</p>
+          <div class="ts-toolbar"><button class="btn btn-primary btn-sm" type="submit" id="ts-label-save">상품명·메모 저장</button><button class="btn btn-light btn-sm" type="button" id="ts-label-cancel">취소</button></div>
+        </form>
+        <p id="ts-label-status" class="small" role="status" aria-live="polite"></p>
         <div id="ts-recent" class="tbl-wrap"></div>
         <div class="ts-toolbar mt-s"><button class="btn btn-light btn-sm" type="button" id="ts-prev" disabled>이전 페이지</button><span id="ts-page" class="small"></span><button class="btn btn-light btn-sm" type="button" id="ts-next" disabled>다음 페이지</button></div>
       </div>
@@ -601,7 +610,7 @@
 </div>
 <script src="/js/site-config.js?v=3361ee9a-room3-16"></script>
 <script src="/js/admin.js?v=toss20261105"></script>
-<script src="/js/admin-toss-sales.js?v=20261106-products"></script>
+<script src="/js/admin-toss-sales.js?v=20261106-labels"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>

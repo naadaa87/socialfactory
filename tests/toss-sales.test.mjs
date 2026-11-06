@@ -13,6 +13,37 @@ const currentDay=new Date(Date.now()+9*3600e3).toISOString().slice(0,10), year=c
 const paidAt=currentDay+'T09:00:00+09:00';
 const payment=(extra={})=>({id:'640000000000000001',merchantId:42,orderId:'620000000000000001',state:'APPROVED',sourceType:'CARD',paymentMethod:'CARD_IC',amount:12000,approvedNo:'00123456',approvedAt:paidAt,updatedAt:paidAt,...extra});
 const productOrder=(extra={})=>({id:payment().orderId,merchantId:42,updatedAt:paidAt,lineItems:[{item:{title:'메가스팟 공간대여',category:{title:'공간대여'}},itemPrice:{title:'2호'},quantity:2,optionChoices:[{title:'주차권 포함'}],memo:'private-item-memo'}],memo:'private-order-memo',orderer:{phone:'private-phone'},...extra});
+
+test('manual product labels stay per payment across reimport, product refresh and cancellation, and can be cleared',async t=>{
+  const f=fixture(t),p=payment(),split=payment({id:'640000000000000002',amount:8000});
+  await f.post({action:'commit',payments:[p,split]});
+  await f.post({action:'review',paymentIds:[p.id],decision:'exclude',note:'주차 결제'});
+  const before=f.db.prepare('SELECT * FROM toss_payments WHERE payment_id=?').get(p.id);
+  assert.equal((await f.post({action:'label',paymentId:p.id,productName:'  메가스팟 주차  ',memo:'방문 차량\n주차 2시간'})).status,200);
+  assert.deepEqual(f.db.prepare('SELECT * FROM toss_payments WHERE payment_id=?').get(p.id),before);
+  await f.post({action:'commit',payments:[p,split]});
+  await saveOrderProducts(f.env,[productOrder()]);
+  await f.send({...p,state:'CANCELLED',cancelledAt:currentDay+'T11:00:00+09:00',updatedAt:currentDay+'T11:00:00+09:00'},'label-cancel');
+  const getRows=async()=>(await(await status({env:f.env,request:f.get('/api/admin/toss-sales')})).json()).rows;
+  let rows=await getRows(),row=rows.find(r=>r.payment_id===p.id);
+  assert.equal(row.manual_product_name,'메가스팟 주차');assert.equal(row.manual_memo,'방문 차량\n주차 2시간');
+  assert.equal(row.disposition,'exclude');assert.equal(row.refund_amount,12000);assert.equal(row.product_items[0].title,'메가스팟 공간대여');
+  assert.equal(rows.find(r=>r.payment_id===split.id).manual_product_name,'');assert.equal(f.included().length,1);
+  assert.equal((await f.post({action:'label',paymentId:p.id,productName:'',memo:'메모만 보관'})).status,200);
+  row=(await getRows()).find(r=>r.payment_id===p.id);assert.equal(row.manual_product_name,'');assert.equal(row.manual_memo,'메모만 보관');
+  await f.post({action:'label',paymentId:p.id,productName:'',memo:''});row=(await getRows()).find(r=>r.payment_id===p.id);
+  assert.equal(row.manual_memo,'');assert.equal(row.disposition,'exclude');
+});
+
+test('manual labels require authentication, bounded text and a payment belonging to the configured store',async t=>{
+  const f=fixture(t),p=payment(),body={action:'label',paymentId:p.id,productName:'주차',memo:''};
+  await f.post({action:'commit',payments:[p]});
+  assert.equal((await admin({env:f.env,request:f.request(body,false)})).status,401);
+  for(const change of [{paymentId:'missing'},{paymentId:'999'},{paymentId:42},{productName:'x'.repeat(161)},{memo:'x'.repeat(501)},{memo:null},{productName:42}])
+    assert.equal((await f.post({...body,...change})).status,400);
+  f.env.TOSS_PLACE_MERCHANT_ID='43';assert.equal((await f.post(body)).status,400);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM toss_payment_labels').get().n,0);
+});
 function fixture(t){
   const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));t.after(()=>db.close());
   const DB={prepare(sql){let args=[];const q={bind(...a){args=a;return q},async all(){return {results:db.prepare(sql).all(...args)}},async first(){return db.prepare(sql).get(...args)||null},async run(){return {meta:db.prepare(sql).run(...args)}}};return q;},async batch(qs){db.exec('BEGIN');try{const result=[];for(const q of qs)result.push(await q.run());db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}}};

@@ -37,6 +37,17 @@ export async function onRequestPost({request,env}) {
   let b; try { b = JSON.parse(raw); } catch { return json({ok:false,message:'가져오기 요청을 읽을 수 없습니다.'},400); }
   if (!b || typeof b !== 'object') return json({ok:false,message:'요청을 확인해 주세요.'},400);
   await ensureTossSales(env);
+  if(b.action==='label') {
+    if(typeof b.paymentId!=='string'||!/^\d{1,24}$/.test(b.paymentId)||typeof b.productName!=='string'||b.productName.length>160||typeof b.memo!=='string'||b.memo.length>500)
+      return json({ok:false,message:'결제와 상품명(160자 이하)·메모(500자 이하)를 확인해 주세요.'},400);
+    const merchantId=tossConfig(env).merchantId;
+    const row=await env.DB.prepare('SELECT payment_id FROM toss_payments WHERE merchant_id=? AND payment_id=?').bind(merchantId,b.paymentId).first();
+    if(!row)return json({ok:false,message:'저장된 결제를 확인해 주세요.'},400);
+    await env.DB.prepare(`INSERT INTO toss_payment_labels(merchant_id,payment_id,product_name,memo) VALUES(?,?,?,?)
+      ON CONFLICT(merchant_id,payment_id) DO UPDATE SET product_name=excluded.product_name,memo=excluded.memo,updated_at=datetime('now','+9 hours')`)
+      .bind(merchantId,b.paymentId,b.productName.trim(),b.memo.trim()).run();
+    return json({ok:true});
+  }
   if(b.action==='refresh-products') {
     const after=b.after||'';
     if(typeof after!=='string'||(after&&!/^\d{1,24}$/.test(after)))return json({ok:false,message:'상품정보 조회 위치를 확인해 주세요.'},400);
