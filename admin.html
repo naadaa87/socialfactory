@@ -10,7 +10,7 @@
   <title>관리자 | 소셜팩토리</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=toss-sort20261106">
+  <link rel="stylesheet" href="/css/admin.css?v=payapp-sales20261106">
   <link rel="stylesheet" href="/css/admin-kiosk-ui.css?v=d24708b714">
 </head>
 <body class="adm">
@@ -138,6 +138,7 @@
         <div><h1>매출</h1><p class="muted small">예약·홈페이지·토스 이용권과 일반 단말기 결제의 매출을 모았습니다. 결제 전 예약은 미수금으로 따로 보여 줍니다.</p></div>
         <div class="acts">
           <select class="select select-sm" id="sl-year" aria-label="연도"></select>
+          <select class="select select-sm" id="sl-provider" aria-label="결제사"><option value="all">전체 결제사</option><option value="payapp">페이앱만 보기</option></select>
           <div class="seg" id="sl-basis" role="group" aria-label="집계 기준"><button type="button" data-basis="use">이용일 기준</button><button type="button" data-basis="paid" class="on">결제일 기준</button></div>
           <label class="chk small"><input type="checkbox" id="sl-orders" checked> 홈페이지·프론트 이용권 포함</label>
           <button class="btn btn-light btn-sm" type="button" id="sl-csv">CSV 내려받기</button>
@@ -148,12 +149,31 @@
         <div class="card"><h2 class="ch"><span>결제수단별 <small id="sl-year-label"></small></span></h2><div id="sl-methods" class="bars"></div></div>
         <div class="card"><h2 class="ch"><span>월별 추이</span></h2><div id="sl-chart" class="mchart"></div><div id="sl-chart-legend" class="mlegend small"></div></div>
       </div>
-      <div class="card mt"><h2 class="ch"><span>월별 · 결제수단별 매출 <small>월을 누르면 그 달의 예약 목록이 열립니다</small></span></h2><div class="tbl-wrap"><table class="tbl sl-table" id="sl-table"></table></div></div>
+      <div class="card mt"><h2 class="ch"><span>월별 · 결제수단별 매출 <small id="sl-table-help">월을 누르면 그 달의 예약 목록이 열립니다</small></span></h2><div class="tbl-wrap"><table class="tbl sl-table" id="sl-table"></table></div></div>
       <div class="grid2 mt">
         <div class="card"><h2 class="ch"><span>공간별</span></h2><div id="sl-spaces" class="bars"></div></div>
         <div class="card"><h2 class="ch"><span>채널별 매출 · 비중</span></h2><div id="sl-channels" class="bars"></div><details class="mt-s"><summary>채널별 상세보기</summary><div class="tbl-wrap" id="sl-channel-details"></div></details><p class="tiny muted mt" id="sl-channel-note"></p></div>
       </div>
       <p class="tiny muted mt">매출 = 결제 완료 · 환불 예약의 (결제 금액 − 환불 금액). 취소했어도 환불하지 않은 금액은 매출로 남습니다. 결제일 기준은 결제일을 적지 않은 예약을 이용일로 셉니다. 홈페이지 이용권은 결제일 기준이며 부분 환불액을 차감하고 테스트 결제와 환불 · 취소 주문은 빠집니다.</p>
+      <div class="card mt" id="payapp-sales-panel">
+        <h2>페이앱 결제 내역</h2>
+        <p class="small muted">홈페이지 결제와 판매자센터 직접 결제를 모았습니다. 직접 결제는 소셜팩토리 매출인지 확인한 뒤 합산하세요. 기존 예약에 이미 포함된 결제·메가스팟·주차·테스트는 제외할 수 있습니다.</p>
+        <p id="pa-status" class="small" role="status" aria-live="polite"></p>
+        <div class="ts-toolbar"><label for="pa-filter">페이앱 내역</label><select class="input" id="pa-filter"><option value="all">전체 내역</option><option value="review">확인 필요</option><option value="include">직접 결제 · 합산</option><option value="duplicate">기존 예약 중복</option><option value="exclude">매출 제외</option><option value="website">홈페이지 결제</option></select><button class="btn btn-light btn-sm" type="button" id="pa-refresh">페이앱 내역 새로고침</button></div>
+        <p class="tiny muted">‘페이앱만 보기’는 기존 예약에 반영된 페이앱 결제도 포함합니다. 전체 매출에는 기존 예약으로 한 번만 합산합니다. 메가스팟·주차·테스트 등 제외한 결제는 집계하지 않습니다. ‘카드결제(온라인)’는 예약에 직접 입력한 결제수단으로 페이앱 전용 분류가 아닙니다.</p>
+        <form id="pa-review-form" class="ts-review card mt-s" hidden>
+          <h4 id="pa-review-title"></h4><p class="small muted">매출 합산 여부만 바꿉니다. 기존 예약과 같은 결제라면 제외하고 사유에 적어주세요.</p>
+          <div class="f"><label for="pa-note">확인 사유</label><input class="input" id="pa-note" minlength="3" maxlength="300" required placeholder="예: 기존 예약에 포함 / 메가스팟 결제 / 소셜팩토리 결제로 확인"></div>
+          <div class="ts-toolbar"><button class="btn btn-primary btn-sm" type="submit" id="pa-save">확인 저장</button><button class="btn btn-light btn-sm" type="button" id="pa-cancel">닫기</button></div>
+        </form>
+        <p id="pa-review-status" class="small" role="status" aria-live="polite"></p>
+        <div id="pa-rows" class="tbl-wrap"></div>
+        <div class="ts-toolbar"><button class="btn btn-light btn-sm" type="button" id="pa-prev" disabled>이전 페이지</button><span id="pa-page" class="small"></span><button class="btn btn-light btn-sm" type="button" id="pa-next" disabled>다음 페이지</button></div>
+        <details><summary>이전 내역 가져오기 · 연결 안내</summary><p class="small muted">과거 내역은 판매자센터에서 확인한 페이앱 JSON으로 가져옵니다. 같은 결제번호는 중복 저장하지 않습니다. 신규 직접 결제는 판매자센터의 공통 통보 URL을 연결한 시점부터 수신합니다.</p>
+          <form id="pa-import-form"><label for="pa-json">과거 결제 JSON</label><textarea class="input" id="pa-json" rows="4" placeholder="확인한 페이앱 결제 배열 (최대 200건)"></textarea><button class="btn btn-light btn-sm" type="submit" id="pa-import">과거 페이앱 내역 가져오기</button></form>
+          <p class="small muted">공통 통보 URL: <code id="pa-webhook-url"></code></p>
+        </details>
+      </div>
       <div class="card mt" id="toss-sales-panel">
         <h2>토스 일반 단말기 매출 연동</h2>
         <p class="small muted">일반 단말기 결제와 과거 거래를 결제일 기준으로 합산합니다. 기존 이용권 결제는 중복으로 더하지 않습니다. 취소는 원결제 월에서 차감하며, 이용권·예약·알림톡은 새로 만들지 않습니다.</p>
@@ -609,8 +629,9 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </div>
 <script src="/js/site-config.js?v=3361ee9a-room3-16"></script>
-<script src="/js/admin.js?v=toss20261105"></script>
+<script src="/js/admin.js?v=payapp-sales20261106"></script>
 <script src="/js/admin-toss-sales.js?v=20261106-sort"></script>
+<script src="/js/admin-payapp-sales.js?v=20261106"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>
 <script src="js/spacecloud-auto.js?v=20261025-2"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>

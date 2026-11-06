@@ -1,4 +1,5 @@
 import { ensurePayapp, netOrderAmount } from "../../_lib/payapp.js";
+import {ensurePayappSales,payappSource,payappOnlySummary} from '../../_lib/payapp-sales.js';
 import { ensureSpacecloudSales, SALES_SOURCE } from "../../_lib/spacecloud-sales.js";
 /**
  * GET /api/admin/sales?year=2026&basis=use|paid&orders=1 — 매출 집계 (관리자)
@@ -17,11 +18,16 @@ import { ensureTossSales, TOSS_SOURCE, PASS_SALES_SOURCE } from "../../_lib/toss
 export async function onRequestGet({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
   await ensurePayapp(env);
+  await ensurePayappSales(env);
   await ensureSpacecloudSales(env);
   await ensureTossSales(env);
   const u = new URL(request.url);
   const today = kstToday();
   const year = /^\d{4}$/.test(u.searchParams.get("year") || "") ? u.searchParams.get("year") : today.slice(0, 4);
+  const provider=u.searchParams.get('provider')||'all';
+  if(!['all','payapp'].includes(provider))return json({ok:false,message:'결제사 필터를 확인해 주세요.'},400);
+  if(provider==='payapp')return json(await payappOnlySummary(env,year,today));
+  const PAYAPP_DIRECT=payappSource(env);
   const basis = clean(u.searchParams.get("basis") || "", 6) === "use" ? "use" : "paid";
   const withOrders = u.searchParams.get("orders") !== "0";
   const dcol = basis === "paid" ? "COALESCE(paid_at, date)" : "date";
@@ -30,7 +36,7 @@ export async function onRequestGet({ request, env }) {
   const all = async (sql, ...a) => { try { return (await env.DB.prepare(sql).bind(...a).all()).results || []; } catch (e) { console.error("sales", e && e.message); return []; } };
   const one = async (sql, ...a) => { try { return (await env.DB.prepare(sql).bind(...a).first()) || {}; } catch (e) { console.error("sales", e && e.message); return {}; } };
 
-  const methods = Object.keys(PAY_METHODS).concat(['toss_terminal'], withOrders ? ["orders", "kiosk"] : []);
+  const methods = Object.keys(PAY_METHODS).concat(['toss_terminal','payapp_direct'], withOrders ? ["orders", "kiosk"] : []);
   const KIOSK = `FROM ${PASS_SALES_SOURCE} WHERE channel <> 'website' AND status IN ('paid', 'refunded') AND test_mode = 0 AND paid_at IS NOT NULL`;
   const KNET = "MAX(amount - sales_refund, 0)";
   const blank = () => { const o = {}; methods.forEach((k) => { o[k] = 0; }); return o; };
@@ -64,6 +70,9 @@ export async function onRequestGet({ request, env }) {
     m.byMethod.toss_terminal=Number(r.s)||0; m.count.toss_terminal=Number(r.n)||0; m.refunds+=Number(r.rf)||0;
   }
   const byMethod = blank(), countBy = blank();
+  for(const r of await all(`SELECT substr(paid_at,1,7) ym,COUNT(*) n,SUM(amount-refund_amount) s,SUM(refund_amount) rf FROM ${PAYAPP_DIRECT} WHERE substr(paid_at,1,4)=?1 GROUP BY ym`,year)){
+    const m=byYm[r.ym];if(!m)continue;m.byMethod.payapp_direct=r.s||0;m.count.payapp_direct=r.n||0;m.refunds+=r.rf||0;
+  }
   let total = 0, n = 0, refunds = 0;
   months.forEach((m) => {
     methods.forEach((k) => { m.total += m.byMethod[k]; m.n += m.count[k]; byMethod[k] += m.byMethod[k]; countBy[k] += m.count[k]; });
@@ -90,6 +99,7 @@ export async function onRequestGet({ request, env }) {
   const terminalYear=await one(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS s FROM ${TOSS_SOURCE} WHERE substr(paid_at,1,4)=?1`,year);
   byChannel.toss_terminal={amount:Number(terminalYear.s)||0,n:Number(terminalYear.n)||0,label:'토스 일반 단말기'};
   if(withOrders) byChannel.kiosk={amount:byMethod.kiosk||0,n:countBy.kiosk||0,label:'토스프론트 이용권'};
+  byChannel.payapp_direct={amount:byMethod.payapp_direct||0,n:countBy.payapp_direct||0,label:'페이앱 직접 결제'};
   Object.values(byChannel).forEach(x => { x.share = total ? x.amount / total * 100 : 0; });
 
   // 누적(전체 기간) · 미수금 · 이번 달 · 지난달
@@ -97,18 +107,21 @@ export async function onRequestGet({ request, env }) {
   const ordAll = withOrders ? await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${netOrderAmount}), 0) AS s FROM orders WHERE status IN ('paid', 'used', 'refund_requested') AND test_mode = 0`) : { n: 0, s: 0 };
   const kioskAll = withOrders ? await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${KNET}), 0) AS s ${KIOSK}`) : { n: 0, s: 0 };
   const terminalAll=await one(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS s FROM ${TOSS_SOURCE}`);
+  const payappAll=await one(`SELECT COUNT(*) n,COALESCE(SUM(amount-refund_amount),0) s FROM ${PAYAPP_DIRECT}`);
   const unpaid = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM ${SALES_SOURCE} WHERE pay_status = 'unpaid' AND status = 'confirmed'`);
   const monthTotal = async (ym) => {
     const a = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}), 0) AS s FROM ${SALES_SOURCE} WHERE ${PAID} AND substr(${dcol}, 1, 7) = ?1`, ym);
     const o = withOrders ? await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${netOrderAmount}), 0) AS s FROM orders WHERE status IN ('paid', 'used', 'refund_requested') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1`, ym) : { n: 0, s: 0 };
     const k = withOrders ? await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${KNET}), 0) AS s ${KIOSK} AND substr(paid_at, 1, 7) = ?1`, ym) : { n: 0, s: 0 };
     const t=await one(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS s FROM ${TOSS_SOURCE} WHERE substr(paid_at,1,7)=?1`,ym);
-    return { ym, total: (Number(a.s) || 0) + (Number(o.s) || 0) + (Number(k.s) || 0)+(Number(t.s)||0), n: (Number(a.n) || 0) + (Number(o.n) || 0) + (Number(k.n) || 0)+(Number(t.n)||0) };
+    const pg=await one(`SELECT COUNT(*) n,COALESCE(SUM(amount-refund_amount),0) s FROM ${PAYAPP_DIRECT} WHERE substr(paid_at,1,7)=?1`,ym);
+    return { ym, total: (Number(a.s) || 0) + (Number(o.s) || 0) + (Number(k.s) || 0)+(Number(t.s)||0)+(Number(pg.s)||0), n: (Number(a.n) || 0) + (Number(o.n) || 0) + (Number(k.n) || 0)+(Number(t.n)||0)+(Number(pg.n)||0) };
   };
   const thisYm = today.slice(0, 7);
   const d = new Date(Date.parse(thisYm + "-01T00:00:00Z") - 864e5), lastYm = d.toISOString().slice(0, 7);
   const ys = (await all(`SELECT DISTINCT substr(date, 1, 4) AS y FROM ${SALES_SOURCE} UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM ${SALES_SOURCE} WHERE paid_at IS NOT NULL UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM orders WHERE paid_at IS NOT NULL AND status IN ('paid', 'used', 'refund_requested') AND test_mode = 0`))
     .concat(await all(`SELECT DISTINCT substr(paid_at, 1, 4) AS y ${KIOSK}`),await all(`SELECT DISTINCT substr(paid_at,1,4) AS y FROM ${TOSS_SOURCE}`));
+  ys.push(...await all(`SELECT DISTINCT substr(paid_at,1,4) y FROM ${PAYAPP_DIRECT}`));
   const years = Array.from(new Set(ys.map((r) => r.y).filter((y) => /^\d{4}$/.test(y || "")).concat([today.slice(0, 4), year]))).sort().reverse();
 
   const external = await loadSpacecloud(env);
@@ -117,10 +130,10 @@ export async function onRequestGet({ request, env }) {
   const missing = mergeCalendarRows(recorded, external.results).filter(x => x.external && x.date.slice(0,4) === year && !importedIds.has((x.source_url || '').split('/').pop()));
   return json({
     ok: true, today, year, basis, withOrders, years,
-    methods: methods.map((k) => ({ key: k, label: k === 'toss_terminal' ? '토스 일반 단말기' : k === "orders" ? "홈페이지 온라인 결제" : k === "kiosk" ? "토스프론트 이용권" : PAY_METHODS[k] })),
+    methods: methods.map((k) => ({ key: k, label: k==='payapp_direct'?'페이앱 직접 결제':k === 'toss_terminal' ? '토스 일반 단말기' : k === "orders" ? "홈페이지 온라인 결제" : k === "kiosk" ? "토스프론트 이용권" : PAY_METHODS[k] })),
     months, byMethod, countBy, total, n, refunds,
     bySpace, byChannel, channelTotal: total, unrecordedSpacecloud: missing.length, spacecloud: external.info,
-    allTime: { total: (Number(resAll.s) || 0) + (Number(ordAll.s) || 0) + (Number(kioskAll.s) || 0)+(Number(terminalAll.s)||0), n: (Number(resAll.n) || 0) + (Number(ordAll.n) || 0) + (Number(kioskAll.n) || 0)+(Number(terminalAll.n)||0) },
+    allTime: { total: (Number(resAll.s) || 0) + (Number(ordAll.s) || 0) + (Number(kioskAll.s) || 0)+(Number(terminalAll.s)||0)+(Number(payappAll.s)||0), n: (Number(resAll.n) || 0) + (Number(ordAll.n) || 0) + (Number(kioskAll.n) || 0)+(Number(terminalAll.n)||0)+(Number(payappAll.n)||0) },
     unpaid: { n: Number(unpaid.n) || 0, amount: Number(unpaid.s) || 0 },
     thisMonth: await monthTotal(thisYm), lastMonth: await monthTotal(lastYm)
   });
