@@ -11,12 +11,29 @@ export async function onRequestPost({ request, env }) {
   let event;
   try { event = JSON.parse(raw); } catch { return json({ok:false,error:'bad-json'},400); }
   const eventId = request.headers.get('x-toss-webhook-id');
-  if (!eventId || !/^[A-Za-z0-9_-]{1,100}$/.test(eventId) || event?.id !== eventId)
+  if (!eventId || !/^[A-Za-z0-9_-]{1,100}$/.test(eventId) || event?.id !== eventId) {
+    console.warn('toss-webhook-envelope', {
+      payloadIdType: typeof event?.id,
+      matchesWebhook: String(event?.id) === eventId,
+      matchesTrace: String(event?.id) === request.headers.get('x-toss-event-id'),
+      numericId: typeof event?.id === 'number',
+    });
     return json({ok:false,error:'event-or-merchant'},400);
+  }
   if(event.type==='_test.v1')return json({ok:true,test:true});
   if(['app.installation.created.v1','app.installation.deleted.v1'].includes(event.type)) {
     const candidate=installationFields(event);
-    if(!candidate)return json({ok:false,error:'installation'},400);
+    if(!candidate) {
+      console.warn('toss-webhook-installation', {
+        merchantIdType: typeof event.merchantId,
+        merchantIdsMatch: String(event.merchantId) === String(event.data?.merchant?.id),
+        deletionIdsMatch: String(event.merchantId) === String(event.data?.merchantId),
+        createdAtType: typeof event.createdAt,
+        fractionDigits: typeof event.createdAt === 'string' ? (event.createdAt.match(/\.(\d+)/)?.[1].length || 0) : 0,
+        timestampParses: typeof event.createdAt === 'string' && Number.isFinite(Date.parse(event.createdAt)),
+      });
+      return json({ok:false,error:'installation'},400);
+    }
     try {
       await ensureTossSales(env);
       await env.DB.batch([
