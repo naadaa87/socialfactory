@@ -91,3 +91,10 @@ https://:version.:project.pages.dev/*
   X-Robots-Tag: noindex, nofollow, noarchive
   Cache-Control: no-store
   Referrer-Policy: no-referrer
+
+# 매거진 원본(마크다운)과 생성 스크립트는 검색에 나오지 않게 합니다 (공개 페이지는 /magazine, /story, /founder)
+/content/*
+  X-Robots-Tag: noindex, nofollow
+
+/scripts/*
+  X-Robots-Tag: noindex, nofollow

@@ -640,3 +640,21 @@ Preview에는 운영 키를 복사하지 않습니다. 키가 누락되거나 �
 운영 설정은 Cloudflare Secrets에서 관리합니다. 토큰·전용 로그인 상태·운영 도구의 임시 인증 파일은 저장소나 정적 업로드에 포함하지 않습니다. Pages 배포에는 `workers`, `integrations`, `tests`, `deploy`, SQL 및 개발 도구를 제외합니다.
 
 검증: `node --test tests/*.test.mjs`, 실행기는 해당 폴더의 `npm test`. 스페이스클라우드에서 이미 결제 중인 요청과의 완전한 원자적 잠금은 보장하지 않으므로, 결제 후 충돌은 자동 확정을 보류하고 운영자가 확인합니다.
+
+## 매거진 · 브랜드 스토리 · 대표 이야기 (2026-11-07)
+
+검색 노출과 브랜드 소개를 위해 글 페이지를 더했습니다. 원본은 `content/` 에 있고, `scripts/magazine.mjs` 가 html 을 만듭니다.
+
+| 주소 | 원본 | 내용 |
+| --- | --- | --- |
+| `/story` | `content/pages/story.html` | 브랜드 스토리 — 2015 홍대 ~ 2026 건대 다섯 장면, 이름 · 네 가지 시간 · 운영 기준 |
+| `/founder` | `content/pages/founder.html` | 최시준 대표 이야기 — 이력, 패밀리 브랜드, 남아 있는 문장, 약력 |
+| `/magazine` | `content/magazine/posts/*.md` | 매거진 목록 (주제별 거르기) |
+| `/magazine/<slug>` | `content/magazine/posts/YYYY-MM-DD-<slug>.md` | 글 한 편 (차례, 표, 관련 글, 끝 안내 상자) |
+
+- 생성되는 파일: `magazine/*.html`, `magazine.html`, `story.html`, `founder.html`. 그리고 `index.html` 의 매거진 칸(`<!-- MAGAZINE:LATEST -->` 사이), `sitemap.xml` · `rss.xml` 의 `<!-- MAGAZINE -->` 사이. **이 부분은 직접 고치지 말고 원본을 고친 뒤 다시 만듭니다.**
+- 머리글 · 바닥글은 `about.html` 에서 가져옵니다. 메뉴나 바닥글을 바꾼 뒤 `node scripts/magazine.mjs` 를 한 번 실행하면 매거진 페이지도 같이 바뀝니다 (매일 발행 때도 자동으로 다시 만듭니다).
+- 글 안의 요금 · 인원은 `{{rate.r3.max}}` 같은 자리표시라 `js/booking-rates.js` · `js/site-config.js` 를 고치면 다음 생성 때 글에도 반영됩니다.
+- 만들기: `python3 scripts/magazine_og.py && node scripts/magazine.mjs` · 검사: `node --test tests/magazine.test.mjs`
+- 매일 낮 12시 발행은 Claude 예약 작업이 `content/magazine/EDITORIAL.md`(편집 기준)와 `PLAN.md`(주제 목록)를 따라 글 한 편을 쓰고 main 에 올립니다. 주제를 바꾸고 싶으면 `PLAN.md` 의 순서를 고치면 됩니다.
+- Pages 배포 묶음(`scripts/build-pages.mjs`)에 `magazine` 폴더를 넣었고, `content/` · `scripts/` 는 배포되지 않습니다(혹시 루트 배포라면 `robots.txt` · `_headers` 로 검색 제외).
