@@ -13,7 +13,9 @@ export class QueueClient {
   constructor(config,fetcher=(...args)=>globalThis.fetch(...args)) { this.config=config;this.fetcher=fetcher; }
   async request(body) {
     const response=await this.fetcher(this.config.origin+'/api/internal/spacecloud-sync',{
-      method:body ? 'POST' : 'GET',redirect:'manual',signal:AbortSignal.timeout(20000),
+      // Completion may also check capacity and issue the provider request or
+      // refresh iCal after release. The runner's overall deadline still applies.
+      method:body ? 'POST' : 'GET',redirect:'manual',signal:AbortSignal.timeout(body?.action==='complete'?45000:20000),
       headers:{Authorization:'Bearer '+this.config.token,...(body ? {'Content-Type':'application/json'} : {})},
       ...(body ? {body:JSON.stringify(body)} : {})
     });

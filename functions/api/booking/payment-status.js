@@ -3,6 +3,9 @@ import { ensurePayappSchema,validPayappUrl } from '../../_lib/booking-payapp.js'
 import { prepareBookings,getBooking,externalBookingConflict } from '../../_lib/booking.js';
 import { getSync,requireVerifiedBlock,enqueueSync } from '../../_lib/booking-spacecloud-sync.js';
 import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
+import { assertCloudAdmission } from '../../_lib/booking-cloud-admission.js';
+
+const capacityFailure=()=>json({ok:false,error:'cloud-admission-unavailable',message:'온라인 예약 연동을 점검 중입니다. 잠시 후 다시 시도하거나 담당자에게 문의해 주세요.'},503);
 
 export async function paymentContext(env,code,token) {
   await prepareBookings(env);await ensurePayappSchema(env);
@@ -56,6 +59,7 @@ export async function onRequestPost({request,env,waitUntil}) {
       try {await requireVerifiedBlock(env,booking);}
       catch(error) {
         if(block.state!=='blocked' || block.cancel_requested)return json({ok:false,message:'외부 예약 시간을 확인하고 있습니다. 현재 결제를 진행할 수 없습니다.'},409);
+        try{await assertCloudAdmission(env);}catch{return capacityFailure();}
         await enqueueSync(env,booking,'verify');
         await wakeCloudRunner(env,{waitUntil});
         return json({ok:true,pending:true,message:'스페이스클라우드 최신 일정을 확인하고 있습니다.'},202);
@@ -66,9 +70,11 @@ export async function onRequestPost({request,env,waitUntil}) {
     WHERE code=?1 AND status IN ('requested','pending')`).bind(row.code).run();
   if(!Number(accepted.meta?.changes))return json({ok:false,message:'결제 상태가 변경되었습니다. 다시 확인해 주세요.'},409);
   if(block) {
+    try{await assertCloudAdmission(env);}catch{return capacityFailure();}
     const latest=await getBooking(env,row.code);
     if(latest?.status!=='awaiting_payment' || latest.payment_status!=='pending')return json({ok:false,message:'예약 상태가 변경되었습니다. 다시 확인해 주세요.'},409);
-    await requireVerifiedBlock(env,latest);
+    // The status request can take time: its response cannot refresh calendar proof.
+    try{await requireVerifiedBlock(env,latest);}catch{return json({ok:false,message:'스페이스클라우드 최신 일정을 다시 확인한 뒤 결제를 진행해 주세요.'},409);}
   }
   return json({ok:true,url:row.pay_url});
 }

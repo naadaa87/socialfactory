@@ -49,12 +49,13 @@ async function notify(env,code,state,extra={}) {
   return feedback({request:new Request(ORIGIN+'/api/booking/payapp-feedback',{method:'POST',body:new URLSearchParams(fields)}),env});
 }
 const requestCheckout=(env,code,t)=>checkout({request:post('/api/booking/payment-status',{code,t,consent:true}),env});
-async function withProvider(run,{mode='success'}={}) {
+const readyCloudStatus=()=>({ok:true,enabled:true,allow_writes:true,login_saved:true,public_login_saved:true,runner:{busy:false,review:false},budget:{utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),daily_limit_ms:2700000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
+async function withProvider(run,{mode='success',cloudStatus}={}) {
   const previous=globalThis.fetch,calls=[];
   globalThis.fetch=async(url,options)=>{
     if(String(url)==='https://runner.example.workers.dev/status'){
       assert.equal(options?.method || 'GET','GET');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-cloud-admission-admin-token-more-than-thirty-two');
-      return Response.json({ok:true,enabled:true,allow_writes:true,login_saved:true,public_login_saved:true,runner:{busy:false,review:false},budget:{utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),daily_limit_ms:2700000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
+      const data=readyCloudStatus();if(cloudStatus)cloudStatus(data);return Response.json(data);
     }
     if(String(url)==='https://runner.example.workers.dev/run'){
       assert.equal(options?.method,'POST');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-worker-token-more-than-thirty-two-characters');
@@ -86,6 +87,62 @@ test('stale checkout waits for a fresh worker verification and only then returns
   const verify=await nextJob(env);assert.equal(verify.action,'verify');await done(env,verify);
   const allowed=await requestCheckout(env,code,t);assert.equal(allowed.status,200);assert((await allowed.json()).url.startsWith('https://payapp.kr/'));assert.equal(calls.length,1);
 }));
+
+test('lost capacity or runner readiness after blocking cannot claim creating or issue a PayApp invoice',async()=>{
+  for(const reason of ['budget','not-ready']){
+    let ready=true;
+    await withProvider(async calls=>{
+      const env=fixture(),{data}=await create(env),job=await nextJob(env);ready=false;
+      const response=await done(env,job);assert.equal(response.status,503);assert.equal(calls.length,0);assert(!paymentRow(env,data.code));
+      const booking=await getBooking(env,data.code);assert.equal(booking.payment_status,'sync_pending');assert.equal(booking.approved_at,null);assert.equal((await getSync(env,data.code)).state,'blocked');
+    },{cloudStatus(data){if(!ready){if(reason==='budget')data.budget.rolling_32d_reserved_ms=data.budget.rolling_32d_limit_ms;else data.runner.review=true;}}});
+  }
+});
+
+test('a stale checkout cannot enqueue another verification when cloud capacity is unavailable',async()=>{
+  let ready=true;
+  await withProvider(async calls=>{
+    const env=fixture(),{data}=await create(env),code=data.code,t=tokenFrom(data);await done(env,await nextJob(env));
+    env.sqlite.prepare('UPDATE spacecloud_blocks SET verified_at=? WHERE code=?').run(Date.now()-31000,code);ready=false;
+    const response=await requestCheckout(env,code,t),body=await response.json();assert.equal(response.status,503);assert.equal(body.error,'cloud-admission-unavailable');assert(!body.url);
+    assert.equal(env.sqlite.prepare("SELECT COUNT(*) n FROM spacecloud_sync_jobs WHERE booking_code=? AND action='verify'").get(code).n,0);
+    assert.equal(paymentRow(env,code).accepted_at,null);assert.equal(calls.length,1);assert.equal((await getBooking(env,code)).payment_status,'pending');
+  },{cloudStatus(data){if(!ready)data.budget.daily_reserved_ms=data.budget.daily_limit_ms;}});
+});
+
+test('a fresh block cannot expose an existing provider URL after cloud capacity or readiness is lost',async()=>{
+  for(const reason of ['budget','not-ready']){
+    let ready=true;
+    await withProvider(async calls=>{
+      const env=fixture(),{data}=await create(env),code=data.code;await done(env,await nextJob(env));ready=false;
+      const response=await requestCheckout(env,code,tokenFrom(data)),body=await response.json();assert.equal(response.status,503);assert.equal(body.error,'cloud-admission-unavailable');assert(!body.url);
+      assert.equal(calls.length,1);assert.equal((await getSync(env,code)).state,'blocked');assert.equal((await getBooking(env,code)).payment_status,'pending');
+    },{cloudStatus(data){if(!ready){if(reason==='budget')data.budget.monthly_reserved_ms=data.budget.monthly_limit_ms;else data.login_saved=false;}}});
+  }
+});
+
+test('a cloud status response cannot refresh stale calendar proof before issuing an invoice or returning its URL',async()=>{
+  let env,code,ageProof=false;
+  await withProvider(async calls=>{
+    env=fixture();const created=await create(env);code=created.data.code;const job=await nextJob(env);ageProof=true;
+    let response=await done(env,job);assert.equal(response.status,409);assert.equal(calls.length,0);assert(!paymentRow(env,code));assert.equal((await getBooking(env,code)).payment_status,'sync_pending');
+    ageProof=false;
+    env.sqlite.prepare('UPDATE spacecloud_blocks SET verified_at=? WHERE code=?').run(Date.now(),code);await onSyncCompleted(env,code);assert.equal(calls.length,1);
+    ageProof=true;response=await requestCheckout(env,code,tokenFrom(created.data));assert.equal(response.status,409);assert(!(await response.json()).url);
+  },{cloudStatus(){if(ageProof)env.sqlite.prepare('UPDATE spacecloud_blocks SET verified_at=? WHERE code=?').run(Date.now()-31000,code);}});
+});
+
+test('a later capacity failure cannot reject paid finalization or confirmed refund release',async()=>{
+  let ready=true,reads=0;
+  await withProvider(async calls=>{
+    const env=fixture(),{data}=await create(env),code=data.code;await done(env,await nextJob(env));ready=false;const before=reads;
+    assert.equal(await (await notify(env,code,'4')).text(),'SUCCESS');const verify=await nextJob(env);assert.equal(verify.action,'verify');assert.equal((await done(env,verify)).status,200);
+    assert.equal((await getBooking(env,code)).status,'confirmed');assert.equal((await getBooking(env,code)).payment_status,'paid');
+    assert.equal(await (await notify(env,code,'9')).text(),'SUCCESS');const release=await nextJob(env);assert.equal(release.action,'release');
+    assert.equal((await done(env,release,{proof:receipt(release,{verified_released:true,verified_blocked:false})})).status,200);
+    assert.equal((await getSync(env,code)).state,'released');assert.equal((await getBooking(env,code)).status,'cancelled');assert.equal(reads,before);assert.equal(calls.length,1);
+  },{cloudStatus(data){reads++;if(!ready)data.budget.rolling_32d_reserved_ms=data.budget.rolling_32d_limit_ms;}});
+});
 
 test('unknown provider issuance retains both holds, blocks cancellation and never issues a second payment',async()=>withProvider(async calls=>{
   const env=fixture(),{data}=await create(env),job=await nextJob(env);assert.equal((await done(env,job)).status,502);

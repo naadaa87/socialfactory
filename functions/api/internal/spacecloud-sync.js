@@ -30,6 +30,9 @@ export async function onRequestPost({request,env}) {
     if(result.status==='succeeded' || result.status==='conflict') {
       const {onSyncCompleted}=await import('../../_lib/booking-checkout.js');
       await onSyncCompleted(env,result.code);
+      // A released hold can still be present in the five-minute iCal cache.
+      // Refresh the real feed; retain its conservative stale fallback on errors.
+      if(result.status==='succeeded' && result.state==='released') await loadSpacecloud(env,{force:true});
     }
     return json(result);
   }catch(error){return failure(error);}

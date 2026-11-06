@@ -1,6 +1,7 @@
 import { getBooking, kstTimestamp,applyBookingPayment } from './booking.js';
 import { createBookingPayment, cancelBookingPayment, payappConfig, ensurePayappSchema } from './booking-payapp.js';
 import { syncEnabled, getSync, enqueueSync, queueRelease, requireVerifiedBlock, syncError } from './booking-spacecloud-sync.js';
+import { assertCloudAdmission } from './booking-cloud-admission.js';
 
 export const syncStatusUrl = row => '/booking-status?code='+encodeURIComponent(row.code)+'&t='+encodeURIComponent(row.access_token);
 
@@ -37,6 +38,10 @@ export async function onSyncCompleted(env, code) {
     return;
   }
   if (block.cancel_requested || block.state!=='blocked' || booking.status!=='awaiting_payment' || booking.payment_status!=='sync_pending') return;
+  await requireVerifiedBlock(env,booking);
+  // Capacity is checked again before provider issuance, before claiming creating.
+  // Paid finalization and release above must remain available independently.
+  await assertCloudAdmission(env);
   await requireVerifiedBlock(env,booking);
   const transition=await env.DB.prepare(`UPDATE booking_requests SET payment_status='creating',approved_at=?2,external_checked_at=?2,
     updated_at=?2 WHERE code=?1 AND status='awaiting_payment' AND payment_status='sync_pending'`).bind(code,kstTimestamp()).run();
