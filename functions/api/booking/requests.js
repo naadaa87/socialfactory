@@ -4,6 +4,7 @@ import { syncEnabled,getSync } from '../../_lib/booking-spacecloud-sync.js';
 import { startSynchronizedBooking,syncStatusUrl } from '../../_lib/booking-checkout.js';
 import { payappConfig } from '../../_lib/booking-payapp.js';
 import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
+import { assertCloudAdmission } from '../../_lib/booking-cloud-admission.js';
 
 const success = (booking,duplicate = false,sync = null) => json({ok:true,code:booking.code,status:booking.status,amount:booking.amount,duplicate,
   ...(sync ? {status_url:syncStatusUrl(sync),sync:{state:sync.state}} : {}),
@@ -41,6 +42,8 @@ export async function onRequestPost({request,env,waitUntil}) {
     const recent = await env.DB.prepare(`SELECT COUNT(*) AS n FROM booking_requests
       WHERE created_at > datetime('now','+9 hours','-10 minutes') AND (phone=?1 OR (?2 <> '' AND ip_hash=?2))`).bind(value.phone,ip).first();
     if (Number(recent?.n) >= 5) return json({ok:false,error:'too-many',message:'신청이 많이 접수되었습니다. 10분 뒤 다시 시도하거나 카카오톡으로 문의해 주세요.'},429);
+    // Existing receipts remain accessible; only a new hold needs live readiness.
+    if(syncEnabled(env))await assertCloudAdmission(env);
     if (await externalBookingConflict(env,value)) return json({ok:false,error:'conflict',field:'start_min',message:'선택한 시간에 다른 예약이 있습니다. 다른 시간을 골라 주세요.'},409);
     const amount = calculateBookingAmount(value);
     const start = Date.parse(value.date+'T00:00:00+09:00') + value.start_min * 60000;
@@ -69,6 +72,7 @@ export async function onRequestPost({request,env,waitUntil}) {
     }
     throw new Error('booking-code-collision');
   } catch (error) {
+    if(error?.code==='cloud-admission-unavailable')return json({ok:false,error:error.code,message:error.message},503);
     console.error('booking-request',error?.message);
     return json({ok:false,error:'unavailable',message:'신청을 저장하지 못했습니다. 잠시 후 다시 시도하거나 카카오톡으로 문의해 주세요.'},503);
   }

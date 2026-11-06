@@ -23,6 +23,7 @@ function fixture() {
       const task=batchTail.then(async()=>{sqlite.exec('BEGIN');try{const result=[];for(const s of statements)result.push(await s.run());sqlite.exec('COMMIT');return result;}
       catch(error){sqlite.exec('ROLLBACK');throw error;}});batchTail=task.catch(()=>{});return task;}};
   return {DB,sqlite,ADMIN_KEY:'test-sync-flow-admin',SPACECLOUD_SYNC_ENABLED:'true',SPACECLOUD_WORKER_TOKEN:'test-only-worker-token-more-than-thirty-two-characters',
+    SPACECLOUD_RUNNER_URL:'https://runner.example.workers.dev',CLOUD_ADMIN_TOKEN:'test-only-cloud-admission-admin-token-more-than-thirty-two',
     PAYAPP_ENABLED:'1',PAYAPP_USERID:'test-sync-merchant',PAYAPP_LINK_KEY:'test-sync-key',PAYAPP_LINK_VALUE:'test-sync-value',PAYAPP_REQUEST_KEY:'test-sync-request-key',PAYAPP_SITE_URL:ORIGIN};
 }
 const post=(path,body,token)=>new Request(ORIGIN+path,{method:'POST',headers:{'content-type':'application/json',origin:ORIGIN,...(token?{authorization:'Bearer '+token}:{})},body:JSON.stringify(body)});
@@ -50,7 +51,16 @@ async function notify(env,code,state,extra={}) {
 const requestCheckout=(env,code,t)=>checkout({request:post('/api/booking/payment-status',{code,t,consent:true}),env});
 async function withProvider(run,{mode='success'}={}) {
   const previous=globalThis.fetch,calls=[];
-  globalThis.fetch=async(url,options)=>{assert.equal(url,'https://api.payapp.kr/oapi/v2');const form=new URLSearchParams(options.body);calls.push(form);
+  globalThis.fetch=async(url,options)=>{
+    if(String(url)==='https://runner.example.workers.dev/status'){
+      assert.equal(options?.method || 'GET','GET');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-cloud-admission-admin-token-more-than-thirty-two');
+      return Response.json({ok:true,enabled:true,allow_writes:true,login_saved:true,runner:{busy:false,review:false},budget:{utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),daily_limit_ms:1800000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
+    }
+    if(String(url)==='https://runner.example.workers.dev/run'){
+      assert.equal(options?.method,'POST');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-worker-token-more-than-thirty-two-characters');
+      return Response.json({ok:true,scheduled:true},{status:202});
+    }
+    assert.equal(url,'https://api.payapp.kr/oapi/v2');const form=new URLSearchParams(options.body);calls.push(form);
     if(mode==='unknown')throw new Error('network interruption');
     if(mode==='rejected')return new Response('state=0&errorMessage=denied');
     return new Response(form.get('cmd')==='paycancel'?'state=1':'state=1&mul_no=987654&payurl=https%3A%2F%2Fpayapp.kr%2Ftest-sync-payment');};

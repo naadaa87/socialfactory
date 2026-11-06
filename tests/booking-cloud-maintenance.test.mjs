@@ -20,6 +20,7 @@ function fixture(){
     const task=tail.then(async()=>{sqlite.exec('BEGIN');try{const result=[];for(const statement of statements)result.push(await statement.run());sqlite.exec('COMMIT');return result;}catch(error){sqlite.exec('ROLLBACK');throw error;}});tail=task.catch(()=>{});return task;
   }};
   return {DB,sqlite,SPACECLOUD_SYNC_ENABLED:'true',SPACECLOUD_WORKER_TOKEN:'maintenance-test-worker-token-longer-than-thirty-two',
+    SPACECLOUD_RUNNER_URL:'https://runner.example.workers.dev',CLOUD_ADMIN_TOKEN:'test-only-cloud-admission-admin-token-more-than-thirty-two',
     PAYAPP_ENABLED:'1',PAYAPP_USERID:'maintenance-test-merchant',PAYAPP_LINK_KEY:'maintenance-test-key',PAYAPP_LINK_VALUE:'maintenance-test-value',
     PAYAPP_REQUEST_KEY:'maintenance-test-request-key',PAYAPP_SITE_URL:ORIGIN};
 }
@@ -47,7 +48,16 @@ async function paidNotification(env,code){
 }
 async function withProvider(run){
   const previous=globalThis.fetch,calls=[];
-  globalThis.fetch=async(url,options)=>{assert.equal(String(url),'https://api.payapp.kr/oapi/v2');const fields=new URLSearchParams(options.body);calls.push(fields.get('cmd'));
+  globalThis.fetch=async(url,options)=>{
+    if(String(url)==='https://runner.example.workers.dev/status'){
+      assert.equal(options?.method || 'GET','GET');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-cloud-admission-admin-token-more-than-thirty-two');
+      return Response.json({ok:true,enabled:true,allow_writes:true,login_saved:true,runner:{busy:false,review:false},budget:{utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),daily_limit_ms:1800000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
+    }
+    if(String(url)==='https://runner.example.workers.dev/run'){
+      assert.equal(options?.method,'POST');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer maintenance-test-worker-token-longer-than-thirty-two');
+      return Response.json({ok:true,scheduled:true},{status:202});
+    }
+    assert.equal(String(url),'https://api.payapp.kr/oapi/v2');const fields=new URLSearchParams(options.body);calls.push(fields.get('cmd'));
     return new Response(fields.get('cmd')==='paycancel'?'state=1':'state=1&mul_no=7654321&payurl=https%3A%2F%2Fpayapp.kr%2Fmaintenance-fixture');};
   try{return await run(calls);}finally{globalThis.fetch=previous;}
 }
