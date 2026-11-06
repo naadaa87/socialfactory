@@ -18,7 +18,8 @@ export async function onRequestPost({ request, env }) {
   await ensureSchema(env);
   await cleanupGuest(env).catch(()=>{});
   await ensureParking(env);
-  const {results}=await env.DB.prepare("SELECT p.oid FROM parking_orders p JOIN orders o ON o.oid=p.oid JOIN payapp_payments pg ON pg.oid=p.oid WHERE (o.status='paid' AND pg.refunded_amount=0 AND NOT EXISTS(SELECT 1 FROM parking_events e WHERE e.oid=p.oid AND e.kind='paid')) OR (pg.refunded_amount>0 AND NOT EXISTS(SELECT 1 FROM parking_events e WHERE e.oid=p.oid AND e.kind='refund' AND e.refund_amount=pg.refunded_amount)) ORDER BY p.created_at LIMIT 100").all();
+  // 누락 여부는 차량마다 검사하고, 같은 통합 결제는 한 번만 복구합니다.
+  const {results}=await env.DB.prepare("SELECT p.payment_oid AS oid FROM parking_orders p JOIN orders o ON o.oid=p.payment_oid JOIN payapp_payments pg ON pg.oid=p.payment_oid WHERE (o.status='paid' AND pg.refunded_amount=0 AND NOT EXISTS(SELECT 1 FROM parking_events e WHERE e.oid=p.oid AND e.kind='paid')) OR (pg.refunded_amount>0 AND (p.vehicle_price=o.amount OR pg.refunded_amount>=o.amount) AND NOT EXISTS(SELECT 1 FROM parking_events e WHERE e.oid=p.oid AND e.kind='refund' AND e.refund_amount=pg.refunded_amount)) GROUP BY p.payment_oid ORDER BY MIN(p.created_at) LIMIT 100").all();
   for(const p of results)await syncParkingOrder(env,p.oid);
   const normal=await runQueue(env, { limit: 50 });
   return json({...normal,parking:await runParkingQueue(env)});

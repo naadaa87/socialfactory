@@ -77,3 +77,36 @@ test('통합 결제의 총액이 다른 PG 승인 거절과 차량 저장 오류
  const f=await fixture(t),o=await f.purchase(multiBody(f));assert.equal(await(await f.cb(o,'4',{price:'4000'})).text(),'FAIL');assert.equal(f.db.prepare('SELECT status FROM orders WHERE oid=?').get(o.oid).status,'pending');assert.equal(f.db.prepare('SELECT COUNT(*) n FROM parking_events').get().n,0);
  const g=await fixture(t);g.db.exec("CREATE TRIGGER block_second_vehicle BEFORE INSERT ON parking_orders WHEN NEW.plate='45나6789' BEGIN SELECT RAISE(ABORT,'rollback test'); END");const r=await create({env:g.env,request:g.req('/api/parking/create',multiBody(g))});assert.equal(r.status,500);assert.equal(g.db.prepare('SELECT COUNT(*) n FROM orders').get().n,0);assert.equal(g.db.prepare('SELECT COUNT(*) n FROM parking_orders').get().n,0);assert.equal(g.db.prepare('SELECT COUNT(*) n FROM payapp_payments').get().n,0);assert.equal(g.calls.length,0);
 });
+
+test('주기 발송기는 첫 차량 알림이 있어도 두 번째 차량의 누락된 결제 알림을 복구',async t=>{
+ const {onRequestPost:run}=await import('../functions/api/notify/run.js');
+ const f=await fixture(t),o=await f.purchase(multiBody(f)),[a,b]=registrations(f,o);await f.cb(o);
+ f.db.prepare("DELETE FROM parking_events WHERE oid=? AND kind='paid'").run(b.oid);
+ assert.equal(f.db.prepare("SELECT COUNT(*) n FROM parking_events WHERE kind='paid'").get().n,1);
+ const r=await run({env:f.env,request:f.req('/api/notify/run',{}, {authorization:'Bearer '+f.env.ADMIN_KEY})});assert.equal(r.status,200);const j=await r.json();assert.equal(j.parking.sent,2);
+ assert.deepEqual(f.db.prepare("SELECT oid FROM parking_events WHERE kind='paid' ORDER BY oid").all().map(e=>e.oid).sort(),[a.oid,b.oid].sort());
+ const again=await run({env:f.env,request:f.req('/api/notify/run',{}, {authorization:'Bearer '+f.env.ADMIN_KEY})});assert.equal((await again.json()).parking.sent,0);
+});
+test('차량 2대의 결제·복귀·차량별 입차·운영 등록·알림 발송이 실제 핸들러에서 끝까지 이어짐',async t=>{
+ const {onRequest:back}=await import('../functions/api/pay/payapp/return.js');
+ const f=await fixture(t),o=await f.purchase(multiBody(f)),[a,b]=registrations(f,o);
+ const returned=await back({env:f.env,request:f.req('/api/pay/payapp/return?oid='+o.oid+'&t='+o.token)});assert.equal(returned.status,303);assert.equal(new URL(returned.headers.get('location')).pathname,'/parking-order');
+ let receipt=await(await detail({env:f.env,request:f.req('/api/orders/status?oid='+o.oid+'&t='+o.token)})).json();assert.equal(receipt.order.status,'pending');
+ await f.cb(o);assert.equal((await runParkingQueue(f.env)).sent,2);
+ for(const [i,p]of [a,b].entries()){
+  assert.equal((await vehicleAct(f,o,p,'arrival')).status,200);assert.equal((await vehicleAct(f,o,p,'arrival')).status,200);assert.equal((await runParkingQueue(f.env)).sent,1);
+  const other=[a,b][1-i];assert.equal((await parkingOrder(f.env,other.oid)).status,i?'applied':'waiting');
+  assert.equal((await f.operator({oid:p.oid},'claim',{entryId:'FLOW-'+i,entryAt:'2026-11-04T10:55',plateConfirm:p.plate,confirmEntry:true})).status,200);
+  assert.equal((await f.operator({oid:p.oid},'complete',{confirmApplied:true})).status,200);assert.equal((await runParkingQueue(f.env)).sent,1);
+ }
+ receipt=await(await detail({env:f.env,request:f.req('/api/orders/status?oid='+o.oid+'&t='+o.token)})).json();assert(receipt.order.parkingVehicles.every(p=>p.status==='applied'));assert.equal(receipt.order.amount,12000);assert.equal(f.db.prepare('SELECT COUNT(*) n FROM orders').get().n,1);
+ const sent=f.calls.filter(c=>String(c.url).includes('alimtalk/send'));assert.equal(sent.length,6);assert(sent.every(c=>c.form.get('receiver_1')==='01012345678'&&c.form.get('failover')==='Y'));
+ for(const p of [a,b]){const perVehicle=sent.filter(c=>c.form.get('message_1').includes(p.plate.slice(-4)));assert.equal(perVehicle.length,3);for(const c of perVehicle){const buttons=JSON.parse(c.form.get('button_1')).button;assert.equal(new URL(buttons[0].linkMo).searchParams.get('oid'),o.oid);assert.equal(new URL(buttons[0].linkMo).searchParams.get('t'),o.token);}}
+ assert.equal((await runParkingQueue(f.env)).sent,0);assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
+});
+test('복구 발송은 통합 결제 일부 환불을 차량별 환불로 오인하지 않고 누락된 전체 환불만 복구',async t=>{
+ const {onRequestPost:run}=await import('../functions/api/notify/run.js');const f=await fixture(t),o=await f.purchase(multiBody(f)),[a,b]=registrations(f,o);await f.cb(o);
+ const pg=f.db.prepare('SELECT mul_no FROM payapp_payments WHERE oid=?').get(o.oid);await f.cb(o,'70',{orig_price:'12000',orig_mul_no:pg.mul_no,mul_no:'2001',price:'4000'});
+ const invoke=()=>run({env:f.env,request:f.req('/api/notify/run',{}, {authorization:'Bearer '+f.env.ADMIN_KEY})});await invoke();assert.equal(f.db.prepare("SELECT COUNT(*) n FROM parking_events WHERE kind='refund'").get().n,0);
+ await f.cb(o,'9');f.db.prepare("DELETE FROM parking_events WHERE oid=? AND kind='refund'").run(b.oid);assert.equal((await(await invoke()).json()).parking.sent,2);assert.deepEqual(f.db.prepare("SELECT oid FROM parking_events WHERE kind='refund' ORDER BY oid").all().map(e=>e.oid).sort(),[a.oid,b.oid].sort());assert.equal((await(await invoke()).json()).parking.sent,0);
+});
