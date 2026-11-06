@@ -13,7 +13,7 @@ function ready(data,now) {
   const budget=data.budget,day=new Date(now).toISOString().slice(0,10);
   if(budget.utc_day!==day || budget.utc_month!==day.slice(0,7))return false;
   return [
-    ['daily_limit_ms','daily_reserved_ms',2700000],
+    ['daily_limit_ms','daily_reserved_ms',3600000],
     ['monthly_limit_ms','monthly_reserved_ms',7200000],
     ['rolling_32d_limit_ms','rolling_32d_reserved_ms',7200000]
   ].every(([limit,used,maximum])=>integer(budget[limit]) && budget[limit]<=maximum && integer(budget[used])

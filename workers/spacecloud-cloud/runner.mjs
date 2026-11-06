@@ -1,7 +1,7 @@
 import { QueueClient } from '../../integrations/spacecloud-worker/queue.mjs';
 import { SpacecloudUI } from '../../integrations/spacecloud-worker/spacecloud-ui.mjs';
 import { executeJob } from '../../integrations/spacecloud-worker/safety.mjs';
-import { ensureStore,problem,loadState,saveState,loadPublicState,savePublicState,lockRunner,assertLock,unlockRunner,reserveBudget,settleBudget,budgetStatus,paidIncluded } from './store.mjs';
+import { ensureStore,problem,loadState,saveState,loadPublicState,savePublicState,onlySpacecloudState,lockRunner,assertLock,unlockRunner,reserveBudget,settleBudget,budgetStatus,paidIncluded } from './store.mjs';
 
 const HOME='https://partner.spacecloud.kr/reservation-calendar?product=140492&space=82026';
 const GUEST_HOME='https://www.spacecloud.kr/auth/login?source=detail-page';
@@ -11,6 +11,15 @@ const response=(value,status=200)=>new Response(JSON.stringify(value),{status,he
 function equal(a,b){if(typeof a!=='string' || typeof b!=='string')return false;let diff=a.length^b.length;for(let i=0;i<Math.max(a.length,b.length);i++)diff|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);return diff===0;}
 function controlAllowed(request,env){const token=String(env.CLOUD_ADMIN_TOKEN || '');return token.length>=32 && equal(request.headers.get('authorization') || '','Bearer '+token);}
 function wakeAllowed(request,env){const token=String(env.SPACECLOUD_WORKER_TOKEN || '');return token.length>=32 && equal(request.headers.get('authorization') || '','Bearer '+token);}
+function guestDiagnostic(value) {
+  const result={};
+  for(const [key,allowed] of [['phase',['public-progress','request-readiness']],['step',['goto','ready','room','time','month','date','slots']],['type',['document','xhr','fetch']]])if(allowed.includes(value?.[key]))result[key]=value[key];
+  const events=['layout','mismatch',...['navigate','settle','attached','checked','identity','label','layout','read','click','changed','candidates','visible','compare'].flatMap(name=>[name+'-before',name+'-after'])];
+  if(events.includes(value?.event))result.event=value.event;
+  for(const key of ['elapsed_ms','attempt','status','client_width','client_height','inner_width','inner_height','heading_count','index'])if(Number.isFinite(value?.[key]) && value[key]>=0 && value[key]<=1e9)result[key]=value[key];
+  for(const key of ['matches','expected_disabled','actual_disabled','actual_selectable','prefetch','next_router_prefetch','rsc','navigation'])if(typeof value?.[key]==='boolean')result[key]=value[key];
+  return result;
+}
 function configured(env){
   if(!env.BROWSER)throw problem('browser-binding','클라우드 브라우저 연결이 필요합니다.',503);
   if(!(paidIncluded(env) || (env.CLOUD_PLAN_MODE!=='paid-included' && env.CLOUD_PLAN_CONFIRMED_FREE==='true')))
@@ -150,7 +159,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         if(!context)throw problem('persistent-context','유지되는 클라우드 로그인 화면을 확인하지 못했습니다.',503);
         live();const page=await context.newPage();await page.goto(guest?GUEST_HOME:HOME,{waitUntil:'domcontentloaded'});live();
         const cdp=await context.newCDPSession(page);
-        const liveView=await cdp.send('Cloudflare.getLiveView',{mode:'tab',expiresInMs:Math.max(60000,expires-now())});live();
+        const liveView=await cdp.send('Cloudflare.getLiveView',{mode:guest?'full':'tab',expiresInMs:Math.max(60000,expires-now())});live();
         if(typeof liveView.devtoolsFrontendUrl!=='string' || !liveView.devtoolsFrontendUrl.startsWith('https://live.browser.run/'))throw problem('login-view','로그인 화면 연결을 확인하지 못했습니다.',503);
         await browser.close();browser=null;
         return {ok:true,purpose:guest?'guest':'host',login_id:id,sessionId,expires_at:expires,live_view_url:liveView.devtoolsFrontendUrl,
@@ -182,10 +191,17 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         const prefix=guest?'https://www.spacecloud.kr/':'https://partner.spacecloud.kr/';
         const contexts=browser.contexts(),context=contexts.find(c=>c.pages().some(p=>p.url().startsWith(prefix)));
         if(!context)throw problem(guest?'guest-login-required':'login-required',guest?'스페이스클라우드 게스트 로그인을 완료해 주세요.':'스페이스클라우드 호스트 로그인을 완료해 주세요.');
-        const driver=new Driver(context,{allowWrites:false,accountLabel:accountLabel(env),...(guest?{publicContext:context}:{})});await driver.initialize();live();
+        let verificationContext=context;
+        if(guest){
+          const captured=onlySpacecloudState(await context.storageState({indexedDB:true}));live();
+          verificationContext=await browser.newContext({storageState:captured,locale:'ko-KR',timezoneId:'Asia/Seoul',viewport:{width:1600,height:1100}});live();
+        }
+        const driver=new Driver(verificationContext,{allowWrites:false,accountLabel:accountLabel(env),...(guest?{publicContext:verificationContext}:{})});
+        if(guest)driver.reportReview=diagnostic=>console.error('spacecloud-cloud','guest-login-review',guestDiagnostic(diagnostic));
+        await driver.initialize();live();
         if(guest){const verified=await driver.verifyGuestLogin();live();if(verified?.guest_ready!==true)throw problem('guest-login-required','고객 예약 화면의 로그인 완료를 확인하지 못했습니다.',503);}
         else {await driver.openRoom('r5');await driver.hostMonth();}
-        const state=await context.storageState({indexedDB:true});live();
+        const state=await verificationContext.storageState({indexedDB:true});live();
         if(guest)await savePublicState(env,state);else await saveState(env,state);
         live();saved=true;
         return {ok:true,purpose:guest?'guest':'host',saved:true,message:guest?'클라우드 게스트 로그인 상태를 별도로 암호화하여 저장했습니다.':'클라우드 로그인 상태를 암호화하여 저장했습니다.'};
@@ -197,6 +213,33 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       clearDeadline(timer);
       const closed=await finishRecorded(env,table,row,{browser,state:cancel?'cancelled':saved?'saved':'failed'});
       if(!closed)throw problem('close-unconfirmed','클라우드 브라우저 종료를 확인하지 못했습니다. 새 작업을 보류합니다.',503);
+    }
+  }
+  async function viewGuestLogin(env,id) {
+    await ensureStore(env);configured(env);
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))throw problem('login-session','유효한 클라우드 로그인 화면이 없습니다.');
+    const row=await env.STATE_DB.prepare("SELECT * FROM cloud_guest_login WHERE id=?1 AND state='active'").bind(id).first();
+    if(!row)throw problem('login-session','유효한 클라우드 게스트 로그인 화면이 없습니다.');
+    const live=async()=>{
+      // Cloudflare requires a minimum 60-second connection deadline. Never renew
+      // this login or issue a link extending its existing browser reservation.
+      if(row.expires_at-now()<65000)throw problem('login-expired','기존 로그인 화면의 유효시간이 얼마 남지 않았습니다. 열려 있는 화면에서 로그인을 완료해 주세요.');
+      await assertLock(env,row.lock_token,now());
+    };
+    let browser;
+    try {
+      await live();browser=await bounded(connect(env.BROWSER,row.session_id),5000);await live();
+      const context=browser.contexts()[0],pages=context?.pages() || [];
+      const page=pages.find(page=>page.url().startsWith('https://www.spacecloud.kr/')) || pages[0];
+      if(!context || !page)throw problem('login-view','기존 게스트 로그인 화면을 확인하지 못했습니다.',503);
+      const cdp=await bounded(context.newCDPSession(page),5000);await live();
+      const view=await bounded(cdp.send('Cloudflare.getLiveView',{mode:'full',expiresInMs:row.expires_at-now()-5000}),5000);await live();
+      if(typeof view.devtoolsFrontendUrl!=='string' || !view.devtoolsFrontendUrl.startsWith('https://live.browser.run/'))throw problem('login-view','로그인 화면 연결을 확인하지 못했습니다.',503);
+      return {ok:true,purpose:'guest',login_id:id,expires_at:row.expires_at,live_view_url:view.devtoolsFrontendUrl};
+    } finally {
+      // Persistent connect().close() only detaches this transport. The user's
+      // existing login, browser, lock and budget reservation remain untouched.
+      if(browser)try{await bounded(browser.close(),2000);}catch{}
     }
   }
   async function status(env){await ensureStore(env);const session=await env.STATE_DB.prepare("SELECT updated_at FROM cloud_session WHERE id='spacecloud'").first(),publicSession=await env.STATE_DB.prepare("SELECT updated_at FROM cloud_session WHERE id='spacecloud_public'").first(),lock=await env.STATE_DB.prepare('SELECT expires_at,review FROM cloud_runner_lock WHERE id=1').first();return {ok:true,enabled:env.ENABLED==='true',allow_writes:env.ALLOW_WRITES==='true',login_saved:!!session,session_updated_at:session?.updated_at || null,public_login_saved:!!publicSession,public_session_updated_at:publicSession?.updated_at || null,budget:await budgetStatus(env),runner:{busy:lock.expires_at>now(),review:!!lock.review}};}
@@ -215,6 +258,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
     maintenance,runOne,startLogin,saveLogin,status,
     startGuestLogin:env=>startLogin(env,{guest:true}),
     saveGuestLogin:(env,id,options={})=>saveLogin(env,id,{...options,guest:true}),
+    viewGuestLogin,
     async fetch(request,env){
       const url=new URL(request.url);
       if(url.pathname==='/health' && request.method==='GET')return response({ok:true,service:'spacecloud-cloud',enabled:env.ENABLED==='true'});
@@ -237,6 +281,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         if(url.pathname==='/login/start')return response(await startLogin(env));
         if(['/login/save','/login/cancel'].includes(url.pathname))return response(await saveLogin(env,String(body?.login_id || ''),{cancel:url.pathname==='/login/cancel'}));
         if(url.pathname==='/guest-login/start')return response(await startLogin(env,{guest:true}));
+        if(url.pathname==='/guest-login/view')return response(await viewGuestLogin(env,String(body?.login_id || '')));
         if(['/guest-login/save','/guest-login/cancel'].includes(url.pathname))return response(await saveLogin(env,String(body?.login_id || ''),{cancel:url.pathname==='/guest-login/cancel',guest:true}));
         if(url.pathname==='/maintenance'){await maintenance(env);return response({ok:true});}
         return response({ok:false,error:'not-found'},404);

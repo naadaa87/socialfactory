@@ -38,7 +38,7 @@ export const saveState=(env,state)=>saveStoredState(env,'spacecloud',state);
 export const savePublicState=(env,state)=>saveStoredState(env,'spacecloud_public',state);
 export const paidIncluded=env=>env.CLOUD_PLAN_MODE==='paid-included' && env.INCLUDED_BUDGET_CONFIRMED==='true';
 const configuredNumber=(value,fallback)=>value!==undefined && value!=='' && Number.isFinite(Number(value))?Number(value):fallback;
-export const dailyLimit=env=>Math.max(0,Math.min(paidIncluded(env)?2700000:540000,configuredNumber(env.DAILY_BROWSER_BUDGET_MS,paidIncluded(env)?2700000:540000)));
+export const dailyLimit=env=>Math.max(0,Math.min(paidIncluded(env)?3600000:540000,configuredNumber(env.DAILY_BROWSER_BUDGET_MS,paidIncluded(env)?3600000:540000)));
 export const monthlyLimit=env=>Math.max(0,Math.min(7200000,configuredNumber(env.MONTHLY_BROWSER_BUDGET_MS,7200000)));
 export const rollingLimit=env=>Math.max(0,Math.min(7200000,configuredNumber(env.ROLLING_32D_BROWSER_BUDGET_MS,7200000)));
 export async function lockRunner(env,{duration=120000,now=Date.now()}={}){

@@ -22,7 +22,7 @@ function statusFields(data,env){
     login_saved:data.login_saved,session_updated_at:timestamp(data.session_updated_at),
     public_login_saved:data.public_login_saved===true,public_session_updated_at:timestamp(data.public_session_updated_at===undefined?null:data.public_session_updated_at),
     runner:{busy:data.runner.busy,review:data.runner.review},budget:{utc_day:b.utc_day,utc_month:b.utc_month,
-      daily_limit_ms:finite(b.daily_limit_ms,2700000),monthly_limit_ms:finite(b.monthly_limit_ms,7200000),rolling_32d_limit_ms:finite(b.rolling_32d_limit_ms,7200000),
+      daily_limit_ms:finite(b.daily_limit_ms,3600000),monthly_limit_ms:finite(b.monthly_limit_ms,7200000),rolling_32d_limit_ms:finite(b.rolling_32d_limit_ms,7200000),
       daily_reserved_ms:finite(b.daily_reserved_ms,32*86400000),monthly_reserved_ms:finite(b.monthly_reserved_ms,32*86400000),rolling_32d_reserved_ms:finite(b.rolling_32d_reserved_ms,32*86400000)}};
 }
 function liveView(value){

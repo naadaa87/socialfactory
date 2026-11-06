@@ -20,12 +20,12 @@ function fixture(overrides={}) {
       const task=tail.then(async()=>{sqlite.exec('BEGIN');try{const result=[];for(const statement of statements)result.push(await statement.run());sqlite.exec('COMMIT');return result;}catch(error){sqlite.exec('ROLLBACK');throw error;}});
       tail=task.catch(()=>{});return task;
     }};
-  const counters={claims:0,maintenance:0,heartbeats:0,completions:[],launches:0,connects:0,acquires:0,closes:[],disconnects:0,driverInitializations:0,guestVerifications:0,rooms:[],restored:[],contexts:[],storageReads:[],drivers:[],navigations:[]};
+  const counters={claims:0,maintenance:0,heartbeats:0,completions:[],launches:0,connects:0,acquires:0,closes:[],disconnects:0,driverInitializations:0,guestVerifications:0,rooms:[],restored:[],contexts:[],storageReads:[],drivers:[],navigations:[],liveViews:[]};
   const sessions=new Map();
   let nextSession=0,clock=CLOCK,closeFails=false,knownMissing404=false,launchFails=false,currentJob=job;
   function context(savedState=PRIVATE_STATE){let currentState=structuredClone(savedState);const pages=[],ctx={pages:()=>pages,setStorageState(value){currentState=structuredClone(value);},
     async newPage(){let url='about:blank';const page={async goto(value){url=value;counters.navigations.push(value);if(value==='https://www.spacecloud.kr/auth/login?source=detail-page')currentState=PUBLIC_STATE;},url:()=>url};pages.push(page);return page;},
-    async newCDPSession(){return {async send(command,options){assert.equal(command,'Cloudflare.getLiveView');assert.equal(options.mode,'tab');return {devtoolsFrontendUrl:'https://live.browser.run/ui/view?jwt=PRIVATE-SHORT-LIVED-VIEW'};}};},
+    async newCDPSession(){return {async send(command,options){assert.equal(command,'Cloudflare.getLiveView');assert(['tab','full'].includes(options.mode));counters.liveViews.push(options);return {devtoolsFrontendUrl:'https://live.browser.run/ui/view?jwt=PRIVATE-SHORT-LIVED-VIEW'};}};},
     async storageState(){counters.storageReads.push(ctx);return structuredClone(currentState);}};return ctx;}
   function browserFor(id){const state=sessions.get(id);assert(state,'fake session must exist');return {sessionId:()=>id,contexts:()=>[state.context],
     async newContext(options){const ctx=context(options.storageState || PUBLIC_STATE);counters.restored.push(options.storageState);counters.contexts.push({context:ctx,options});return ctx;},async close(){counters.disconnects++;}};}
@@ -86,20 +86,23 @@ test('zero configured caps stop use and paid inclusion does not raise caps beyon
   const f=fixture({DAILY_BROWSER_BUDGET_MS:'0'});await ensureStore(f.env);
   assert.equal(dailyLimit(f.env),0);await assert.rejects(reserveBudget(f.env,1),{code:'daily-budget'});
   assert.equal(dailyLimit({DAILY_BROWSER_BUDGET_MS:'99999999'}),540000);
-  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999'}),2700000);
+  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999'}),3600000);
   assert.equal(monthlyLimit({MONTHLY_BROWSER_BUDGET_MS:'999999999'}),7200000);
   assert.equal(rollingLimit({ROLLING_32D_BROWSER_BUDGET_MS:'999999999'}),7200000);
 });
 
-test('the paid 45-minute day cannot increase either two-hour total cap or the free nine-minute ceiling',async()=>{
+test('the paid 60-minute day cannot overshoot a day or increase either two-hour total cap or the free nine-minute ceiling',async()=>{
   const f=fixture({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999',MONTHLY_BROWSER_BUDGET_MS:'99999999',ROLLING_32D_BROWSER_BUDGET_MS:'99999999'});
   await ensureStore(f.env);
-  for(const [offset,amount] of [[0,2700000],[1,2700000],[2,1800000]])await reserveBudget(f.env,amount,{now:CLOCK+offset*86400000});
-  assert.equal(budget(f).month_ms,7200000);assert.equal(budget(f).day_ms,1800000);
-  await assert.rejects(reserveBudget(f.env,1,{now:CLOCK+3*86400000}),{code:'daily-budget'});
+  await assert.rejects(reserveBudget(f.env,3600001,{now:CLOCK}),{code:'daily-budget'});
+  await reserveBudget(f.env,3600000,{now:CLOCK});
+  await assert.rejects(reserveBudget(f.env,1,{now:CLOCK}),{code:'daily-budget'});
+  await reserveBudget(f.env,3600000,{now:CLOCK+86400000});
+  assert.equal(budget(f).month_ms,7200000);assert.equal(budget(f).day_ms,3600000);
+  await assert.rejects(reserveBudget(f.env,1,{now:CLOCK+2*86400000}),{code:'daily-budget'});
   assert.equal(f.sqlite.prepare('SELECT SUM(reserved_ms) total FROM cloud_budget_reservations').get().total,7200000);
-  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'free',DAILY_BROWSER_BUDGET_MS:'2700000'}),540000);
-  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'false',DAILY_BROWSER_BUDGET_MS:'2700000'}),540000);
+  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'free',DAILY_BROWSER_BUDGET_MS:'3600000'}),540000);
+  assert.equal(dailyLimit({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'false',DAILY_BROWSER_BUDGET_MS:'3600000'}),540000);
 });
 
 test('confirmed closure refunds unused allowance once while uncertain closure retains the complete reservation',async()=>{
@@ -134,7 +137,7 @@ test('run wake endpoint is scoped, only acknowledges and never leases or launche
   const f=await ready(fixture());
   let res=await f.runner.fetch(request(f,'/run',{token:f.env.SPACECLOUD_WORKER_TOKEN}),f.env);assert.equal(res.status,202);assert.equal((await res.json()).scheduled,true);
   assert.equal(f.counters.claims,0);assert.equal(f.counters.launches,0);assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_budget_reservations').get().n,0);
-  for(const path of ['/status','/login/start','/guest-login/start','/guest-login/save','/guest-login/cancel','/check','/maintenance']){
+  for(const path of ['/status','/login/start','/guest-login/start','/guest-login/save','/guest-login/cancel','/guest-login/view','/check','/maintenance']){
     res=await f.runner.fetch(request(f,path,{token:f.env.SPACECLOUD_WORKER_TOKEN,method:path==='/status'?'GET':'POST'}),f.env);assert.equal(res.status,401,path);
   }
   res=await f.runner.fetch(request(f,'/run',{token:'incorrect-token'}),f.env);assert.equal(res.status,401);
@@ -207,6 +210,7 @@ test('the provider exact missing-session error confirms closure while arbitrary 
 
 test('manual login saves only verified encrypted state and explicitly ends the cloud session',async()=>{
   const f=fixture();const started=await f.runner.startLogin(f.env);
+  assert.equal(f.counters.liveViews[0].mode,'tab');
   assert(started.live_view_url.startsWith('https://live.browser.run/'));assert.equal(f.counters.claims,0);assert.equal(f.sessions.size,1);
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_session').get().n,0);assert.equal(lock(f).review,0);assert(lock(f).token);
   f.advance(20000);const saved=await f.runner.saveLogin(f.env,started.login_id);assert.equal(saved.saved,true);assert.deepEqual(await loadState(f.env),PRIVATE_STATE);
@@ -241,14 +245,55 @@ test('manual guest login opens the observed customer login route and saves only 
   const f=fixture();await ensureStore(f.env);await saveState(f.env,PRIVATE_STATE);
   const host=f.sqlite.prepare("SELECT cipher FROM cloud_session WHERE id='spacecloud'").get().cipher;
   const started=await f.runner.startGuestLogin(f.env);assert.equal(started.purpose,'guest');assert.deepEqual(f.counters.navigations,['https://www.spacecloud.kr/auth/login?source=detail-page']);
+  assert.equal(f.counters.liveViews[0].mode,'full');
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_login').get().n,0);assert.equal(f.sqlite.prepare('SELECT state FROM cloud_guest_login WHERE id=?').get(started.login_id).state,'active');
   assert.equal(f.sessions.size,1);assert.equal(f.counters.claims,0);assert.equal(await loadPublicState(f.env),null);
   f.advance(20000);const saved=await f.runner.saveGuestLogin(f.env,started.login_id);assert.equal(saved.saved,true);assert.equal(saved.purpose,'guest');
   assert.equal(f.counters.guestVerifications,1);assert.deepEqual(f.counters.rooms,[]);assert.equal(f.counters.drivers[0].config.allowWrites,false);
   assert.equal(f.counters.drivers[0].config.publicContext,f.counters.drivers[0].context);assert.deepEqual(await loadPublicState(f.env),PUBLIC_STATE);
+  assert.equal(f.counters.contexts.length,1);assert.deepEqual(f.counters.contexts[0].options,{storageState:PUBLIC_STATE,locale:'ko-KR',timezoneId:'Asia/Seoul',viewport:{width:1600,height:1100}});
+  assert.equal(f.counters.drivers[0].context,f.counters.contexts[0].context);assert.equal(f.counters.acquires,1);assert.equal(f.counters.storageReads.length,2);
+  assert.notEqual(f.counters.storageReads[0],f.counters.storageReads[1]);
   assert.equal(f.sqlite.prepare("SELECT cipher FROM cloud_session WHERE id='spacecloud'").get().cipher,host);assert.deepEqual(await loadState(f.env),PRIVATE_STATE);
   assert.equal(f.sqlite.prepare('SELECT state FROM cloud_guest_login WHERE id=?').get(started.login_id).state,'saved');
   assert.equal(f.sessions.size,0);assert.equal(lock(f).token,null);assert.equal(lock(f).review,0);assert.equal(reservation(f).state,'closed');
+});
+
+test('guest full view reuses the active browser and original budget without renewing or closing the login',async()=>{
+  const f=fixture(),started=await f.runner.startGuestLogin(f.env);f.advance(10000);
+  const before={login:f.sqlite.prepare('SELECT * FROM cloud_guest_login').get(),budget:reservation(f),lock:lock(f)};
+  const result=await f.runner.viewGuestLogin(f.env,started.login_id);
+  assert.equal(result.purpose,'guest');assert.equal(result.login_id,started.login_id);assert.equal(result.expires_at,started.expires_at);
+  assert.equal(f.counters.liveViews.at(-1).mode,'full');assert.equal(f.counters.liveViews.at(-1).expiresInMs,started.expires_at-f.now()-5000);
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM cloud_guest_login').get(),before.login);assert.deepEqual(reservation(f),before.budget);assert.deepEqual(lock(f),before.lock);
+  assert.equal(f.counters.acquires,1);assert.equal(f.counters.closes.length,0);assert.equal(f.sessions.size,1);assert.equal(f.counters.claims,0);assert.equal(f.counters.disconnects,2);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_budget_reservations').get().n,1);
+});
+
+test('guest view rejects host IDs, invalid IDs, expired deadlines and lost leases without closing a browser',async()=>{
+  const host=fixture(),startedHost=await host.runner.startLogin(host.env);
+  for(const id of [startedHost.login_id,'not-a-uuid'])await assert.rejects(host.runner.viewGuestLogin(host.env,id),{code:'login-session'});
+  assert.equal(host.counters.connects,1);assert.equal(host.counters.closes.length,0);
+  const expired=fixture(),started=await expired.runner.startGuestLogin(expired.env);expired.advance(240001);
+  await assert.rejects(expired.runner.viewGuestLogin(expired.env,started.login_id),{code:'login-expired'});assert.equal(expired.counters.closes.length,0);assert.equal(expired.sessions.size,1);
+  const lost=fixture(),active=await lost.runner.startGuestLogin(lost.env);lost.sqlite.prepare('UPDATE cloud_runner_lock SET review=1').run();
+  await assert.rejects(lost.runner.viewGuestLogin(lost.env,active.login_id),{code:'runner-lock'});assert.equal(lost.counters.closes.length,0);assert.equal(lost.sessions.size,1);
+});
+
+test('guest save verifies restored desktop state and persists refreshed credentials without logging private data',async()=>{
+  const f=fixture(),started=await f.runner.startGuestLogin(f.env),captured=[];
+  const previous=console.error;console.error=(...args)=>captured.push(args);
+  const refreshed=structuredClone(PUBLIC_STATE);refreshed.cookies.push({name:'fresh',value:'REFRESHED-VERIFIED-GUEST',domain:'.spacecloud.kr',path:'/'});
+  class DesktopGuest extends f.deps.Driver {async verifyGuestLogin(){
+    const created=f.counters.contexts[0];assert.equal(this.context,created.context);assert.deepEqual(created.options.storageState,PUBLIC_STATE);
+    assert.deepEqual(created.options.viewport,{width:1600,height:1100});
+    this.reportReview({phase:'public-progress',step:'month',event:'layout',client_width:1600,inner_height:1100,raw:'PRIVATE-RAW-CONTENT',cookie:'PRIVATE-GUEST-LOGIN-COOKIE',url:'https://example.invalid/?token=PRIVATE-TOKEN'});
+    this.context.setStorageState(refreshed);return {guest_ready:true};
+  }}
+  try{await createRunner({...f.deps,Driver:DesktopGuest}).saveGuestLogin(f.env,started.login_id);}finally{console.error=previous;}
+  assert.deepEqual(await loadPublicState(f.env),refreshed);assert.equal(await loadState(f.env),null);assert.equal(f.counters.acquires,1);assert.equal(f.sessions.size,0);
+  assert.equal(captured.length,1);assert.deepEqual(captured[0],['spacecloud-cloud','guest-login-review',{phase:'public-progress',step:'month',event:'layout',client_width:1600,inner_height:1100}]);
+  assert(!JSON.stringify(captured).includes('PRIVATE'));
 });
 
 test('host and guest login receipts cannot save or cancel each other',async()=>{
