@@ -1263,6 +1263,7 @@ table.table td.strong a { min-width: 44px; }
 .es-sub { margin-top: 6px; font-size: 13px; color: var(--muted); text-align: right; }
 .es-actions { display: grid; gap: 8px; margin-top: 18px; }
 .es-actions .btn { width: 100%; justify-content: center; }
+.es-primary[aria-disabled="true"] { background: var(--grey); color: var(--muted); box-shadow: none; cursor: not-allowed; }
 .es-mini { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 16px; }
 .es-mini .btn { width: auto; padding-left: 0; padding-right: 0; font-size: 13.5px; }
 .es-refund { margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; background: var(--bg); }
@@ -1594,6 +1595,17 @@ table.table td.strong a.rt-calc { display: inline-block; padding: 2px 9px; margi
 .text-link { display: inline-block; padding: 10px 0; margin: -10px 0; }
 table.table td.strong a.rt-calc { position: relative; }
 table.table td.strong a.rt-calc::after { content: ""; position: absolute; inset: -10px -4px; }
+.rt-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; white-space: nowrap; }
+table.table td.strong .rt-actions a.rt-calc { margin: 0; }
+table.table td.strong a.rt-book { display: inline-flex; align-items: center; min-width: 0; padding: 3px 9px; border-radius: 999px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 800; line-height: 1.5; }
+table.table td.strong a.rt-room { display: inline-flex; align-items: center; gap: 8px; }
+.rt-room img { flex: none; width: 64px; height: 48px; border-radius: 7px; object-fit: cover; }
+@media (max-width: 600px) {
+  .rate-table.table-stack td:first-child .cell { flex-wrap: wrap; }
+  .rate-table.table-stack .rt-actions { margin-left: auto; }
+  .rt-room img { width: 48px; height: 36px; }
+  body:has([data-estimator]) .kakao-fab { display: none; }
+}
 .am-pin::after { content: ""; position: absolute; inset: -10px; border-radius: 50%; }
 .empty-note { padding: 22px 24px; border: 1px dashed var(--grey); border-radius: 14px; color: var(--muted); font-size: 15px; background: var(--bg); }
 .empty-note a { display: inline-block; padding: 8px 0; margin: -8px 0; color: var(--blue); font-weight: 700; }

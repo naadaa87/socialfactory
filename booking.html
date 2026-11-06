@@ -23,7 +23,7 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="css/style.css?v=mobile-inputs-20261106">
-<link rel="stylesheet" href="css/booking.css?v=mobile-inputs-20261106">
+<link rel="stylesheet" href="css/booking.css?v=time-grid-20261106">
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebPage", "name": "공간대관 예약 신청 | 소셜팩토리 건대", "description": "소셜팩토리 건대 룸 1~5의 날짜·시간·인원을 선택해 예약을 신청하세요. 스페이스클라우드 일정 확인 후 페이앱 결제, 결제 확인 후 예약이 확정됩니다.", "url": "https://socialfactory.co.kr/booking", "inLanguage": "ko-KR"}</script>
 </head>
 <body>
@@ -54,6 +54,7 @@
 <fieldset class="booking-fieldset"><legend><span class="booking-step">02</span> 이용 일정을 골라 주세요</legend>
 <div class="booking-grid"><label class="booking-field">이용 날짜 <span class="required">필수</span><input type="date" name="date" required aria-describedby="booking-calendar-note"></label><label class="booking-field">이용 인원 <span class="required">필수</span><span class="booking-number"><input type="number" name="people" min="1" max="16" step="1" value="1" inputmode="numeric" required><span>명</span></span><small data-capacity-note>선택한 방 최대 16명 · 인원 추가요금 없음</small></label></div>
 <div class="booking-availability" data-availability-panel aria-busy="false"><p id="booking-calendar-note" data-availability-message role="status">날짜를 선택하면 신청 가능한 시간을 확인합니다.</p><button class="btn-link" type="button" data-retry-availability hidden>일정 다시 확인</button><div class="booking-blocked" data-blocked-times></div></div>
+<div class="booking-time-picker"><p class="booking-time-title" id="booking-start-grid-title">시작 시간 바로 선택</p><p class="booking-hint" id="booking-start-grid-note">빈 시간을 누르면 시작 시간으로 선택됩니다. 회색 시간은 선택할 수 없습니다.</p><div class="booking-time-grid" data-start-time-grid role="group" aria-labelledby="booking-start-grid-title" aria-describedby="booking-start-grid-note"></div></div>
 <div class="booking-grid"><label class="booking-field">시작 시간 <span class="required">필수</span><select name="start_min" required disabled><option value="">날짜를 먼저 선택해 주세요</option></select></label><label class="booking-field">종료 시간 <span class="required">필수</span><select name="end_min" required disabled><option value="">시작 시간을 골라 주세요</option></select></label></div>
 <p class="booking-hint" data-time-step>최소 2시간 · 1회 최대 24시간. 선택 가능한 시간 단위는 일정을 확인한 뒤 표시됩니다. 준비·정리 시간을 포함해 선택해 주세요. 모든 시간은 한국 시간 기준입니다.</p>
 <p class="booking-inline-error" data-schedule-error role="alert" hidden></p>
@@ -154,6 +155,6 @@
 <script src="js/booking-rates.js?v=20261106a"></script>
 <script src="js/site-config.js?v=20261106-sync"></script>
 <script src="js/main.js?v=20261106-sync"></script>
-<script src="js/booking.js?v=20261106-sync"></script>
+<script src="js/booking.js?v=time-grid-20261106"></script>
 </body>
 </html>

@@ -209,6 +209,39 @@
       q.push("msg=" + encodeURIComponent(summaryText(r)));
     }
     if (a) a.href = "/contact?" + q.join("&") + "#inquiry";
+    var actionUrl = a ? a.href : "/contact?purpose=" + purpose + "#inquiry";
+    var actionText = "상담 후 결제 안내받기", shortText = "상담 후 결제", disabled = false;
+    var paymentNote = "독립사무실은 입주 가능 여부와 계약 조건을 상담한 뒤 페이앱 결제를 안내합니다.";
+    if (mode === "cowork") {
+      actionUrl = "/space#cowork-kiosk"; actionText = "현장 키오스크 결제 안내"; shortText = "키오스크 안내";
+      paymentNote = "코워킹은 방문 후 무인 키오스크에서 결제합니다. 이용 시간은 현장 결제 시각부터 시작합니다.";
+    } else if (mode === "room") {
+      var s = readRoom(), booking = new URLSearchParams();
+      if (ROOMS[s.room]) booking.set("room", s.room);
+      if (s.date && iso(s.date) === form.elements.date.value) {
+        booking.set("date", form.elements.date.value);
+        booking.set("start_min", String(s.start * 60));
+        booking.set("end_min", String((s.start + s.hours) * 60));
+      }
+      if (s.people > 0) booking.set("people", String(s.people));
+      if (s.type) {
+        var purposes = {"강연 · 세미나":"seminar","수업 · 교육":"education","회의 · 면접":"meeting","스터디":"study","워크숍 · 팀빌딩":"workshop","상영 · 촬영":"shooting"};
+        booking.set("purpose", purposes[s.type] || "other"); booking.set("purpose_detail", s.type);
+      }
+      var requestedOptions = options().list.map(function (item) { return item.name; });
+      if (requestedOptions.length) booking.set("requests", "추가 요청: " + requestedOptions.join(", ") + ". 가능 여부와 별도 금액 안내를 요청합니다.");
+      actionUrl = "/booking?" + booking.toString();
+      disabled = s.hours < 2;
+      actionText = disabled ? "온라인 예약은 2시간부터 가능합니다" : "이 일정으로 예약·결제하기 →";
+      shortText = disabled ? "최소 2시간" : "예약·결제";
+      paymentNote = disabled ? "이용 시간을 2시간 이상으로 골라 주세요. 온라인 예약은 최소 2시간부터 가능합니다." : "선택한 방·일정·인원은 예약 화면으로 이어집니다. 최신 가능 시간과 대관료를 확인한 뒤 페이앱으로 결제합니다. 추가 장비·다과는 별도 확인 후 안내합니다.";
+    }
+    $$("[data-es-action]").forEach(function (button) {
+      button.textContent = button.hasAttribute("data-es-action-short") ? shortText : actionText;
+      if (disabled) { button.removeAttribute("href"); button.setAttribute("aria-disabled", "true"); }
+      else { button.href = actionUrl; button.removeAttribute("aria-disabled"); }
+    });
+    var paymentNoteEl = $("[data-es-payment-note]"); if (paymentNoteEl) paymentNoteEl.textContent = paymentNote;
     var email = ((CFG.contact || {}).email) || "";
     if (mail) {
       mail.hidden = !email;
