@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { SpacecloudUI,SpacecloudReadiness,TIME_RADIO_NAME,publicCalendarLayout } from '../spacecloud-ui.mjs';
+import {memoFor} from '../safety.mjs';
 
 function targetSet(visibleCount,{hiddenCount=0}={}) {
   const calls=[];
@@ -156,4 +157,32 @@ test('guest login verification reads the actual r5 customer calendar on the Kore
   assert.equal(dates.length,1);assert([expectedBefore,expectedAfter].includes(dates[0]));
   ui.openPublicDate=async()=>{throw Object.assign(new Error('calendar unavailable'),{name:'ReviewRequired'});};
   await assert.rejects(ui.verifyGuestLogin(),{name:'ReviewRequired'});
+});
+
+test('deletion targets the unique nested confirmation rather than both visible ancestor layers',async()=>{
+  const events=[],prompt='예약을 삭제하시겠습니까?';
+  const node=(classes,text='',children=[])=>({classes:new Set(classes.split(' ')),text,children,visible:true});
+  const question=node('',prompt),confirmButton=node('','확인'),inner=node('layer_popup confirm','',[question,confirmButton]);
+  const deleteButton=node('btn_negative','예약 삭제'),outer=node('layer_popup reservation_state _popup4','',[deleteButton,inner]);
+  const descendants=root=>root.children.flatMap(child=>[child,...descendants(child)]);
+  const text=root=>root.text+root.children.map(text).join('');
+  class Locator {
+    constructor(resolve){this.resolve=resolve;}
+    nodes(){return this.resolve();}
+    locator(selector){return locate(()=>this.nodes().flatMap(descendants),selector);}
+    filter({has,hasText}){return new Locator(()=>this.nodes().filter(item=>has?[item,...descendants(item)].some(child=>child.text===has.text):hasText.test(text(item))));}
+    getByText(value){return new Locator(()=>this.nodes().flatMap(descendants).filter(item=>item.text===value));}
+    async waitFor({state}){const found=this.nodes();if(state==='visible'){assert.equal(found.length,1,'strict mode: more than one visible layer');assert(found[0].visible);}else assert(!found.length || found.every(item=>!item.visible));}
+  }
+  function locate(resolve,selector){const classes=[...selector.matchAll(/\.([A-Za-z0-9_-]+)/g)].map(match=>match[1]);return new Locator(()=>resolve().filter(item=>classes.every(name=>item.classes.has(name)) && (!selector.includes(':visible') || item.visible)));}
+  const host={locator(selector){return locate(()=>[outer,...descendants(outer)],selector);},getByText(value){return {text:value};}};
+  const broad=host.locator('.layer_popup:visible').filter({has:host.getByText(prompt)});
+  assert.equal(broad.nodes().length,2);await assert.rejects(broad.waitFor({state:'visible'}),/strict mode/);
+  inner.visible=false;
+  const segment={date:'2026-12-15',start_min:240,end_min:360,marker:'SFWEB:B261215-OWNEDONLY'};
+  const ui=new SpacecloudUI(null,{allowWrites:true});ui.host=host;
+  ui.readOwnedDetail=async(_record,leaveOpen)=>{assert.equal(leaveOpen,true);return {...segment,name:segment.marker,memo:memoFor(segment)};};
+  ui.click=async locator=>{const found=locator.nodes();assert.equal(found.length,1);if(found[0]===deleteButton){events.push('request');inner.visible=true;}else {assert.equal(found[0],confirmButton);events.push('confirm');inner.visible=false;outer.visible=false;}};
+  ui.beforeWrite=async()=>events.push('lease');
+  await ui.removeSegment(segment,{});assert.deepEqual(events,['request','lease','confirm']);
 });

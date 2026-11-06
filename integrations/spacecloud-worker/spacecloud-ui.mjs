@@ -260,7 +260,7 @@ export class SpacecloudUI {
       ||checked.start_min!==segment.start_min ||checked.end_min!==segment.end_min)throw new ReviewRequired('해제할 외부 예약의 정보가 다릅니다.');
     const popup=this.host.locator('.layer_popup.reservation_state._popup4:visible');
     await this.click(popup.locator('a.btn_negative').filter({hasText:/^\s*예약\s*삭제\s*$/}),'자체 외부예약 삭제 요청');
-    const confirm=this.host.locator('.layer_popup:visible').filter({has:this.host.getByText('예약을 삭제하시겠습니까?',{exact:true})});
+    const confirm=this.host.locator('.layer_popup.confirm:visible').filter({has:this.host.getByText('예약을 삭제하시겠습니까?',{exact:true})});
     await confirm.waitFor({state:'visible'});
     await this.beforeWrite();
     await this.click(confirm.getByText('확인',{exact:true}),'자체 외부예약 삭제 확인');
