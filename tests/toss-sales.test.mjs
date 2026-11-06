@@ -169,6 +169,7 @@ test('historical API uses official endpoint, all order states, stable paging and
     count++;const u=new URL(url);assert.equal(u.origin,'https://open-api.tossplace.com');assert.equal(u.pathname,'/api-public/openapi/v1/merchants/42/order/orders');
     assert.equal(u.searchParams.get('page'),'2');assert.equal(u.searchParams.get('size'),'25');assert(u.searchParams.get('orderStates').includes('OPENED'));
     assert.equal(options.headers['x-secret-key'],'secret-private');assert.equal(options.redirect,'manual');
+    assert.equal(options.headers['User-Agent'],'SocialfactorySales/1.0 (+https://socialfactory.co.kr)');
     return Response.json({resultType:'SUCCESS',success:[{merchantId:42,payments:[payment()]}]});
   });
   const d=await(await f.post({action:'fetch',from:'2020-01-01',to:currentDay,page:2})).json();assert.equal(count,1);assert.equal(d.payments.length,1);assert.equal(d.nextPage,null);assert.equal(f.included().length,0);
