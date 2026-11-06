@@ -48,12 +48,12 @@
   </div>
 </header>
 <main id="main" class="parking-buy">
-<section class="page-hero"><div class="container"><div class="crumbs"><a href="/parking">주차 안내</a> / 주차권 구매</div><span class="eyebrow">Parking ticket</span><h1 class="mt-16">입차 전에 구매하고,<br>입차 후 등록을 요청해 주세요.</h1><p class="lead">결제 → 입차 요청 → 운영자 확인 → 할인 적용 완료<br>결제만으로 할인이나 주차면 확보가 완료되지는 않습니다.</p></div></section>
+<section class="page-hero"><div class="container"><div class="crumbs"><a href="/parking">주차 안내</a> / 주차권 구매</div><span class="eyebrow">Parking ticket</span><h1 class="mt-16">입차 전에 구매하고,<br>입차 후 등록을 요청해 주세요.</h1><p class="lead">결제 → 입차 요청 → 실제 입차 확인 → 할인 적용 완료<br>결제만으로 할인이나 주차면 확보가 완료되지는 않습니다.</p></div></section>
 <section class="section"><div class="container pk-layout"><div class="my-card"><h2>주차권 구매</h2><p class="note mt-16" id="pk-operation">구매 가능 여부를 확인하고 있습니다.</p><form id="pk-buy-form" class="mt-24">
 <h3>1. 구매자 정보와 이용일</h3><p class="note mt-16">같은 이용일의 주차권을 최대 10대까지 한 번에 결제할 수 있습니다.</p>
 <div class="pk-grid mt-24"><label class="af-field"><span>이용일 *</span><input name="date" type="date" required></label><label class="af-field"><span>구매자 이름 *</span><input name="name" type="text" autocomplete="name" maxlength="30" required></label><label class="af-field"><span>휴대폰 번호 *</span><input name="phone" type="tel" autocomplete="tel" maxlength="20" placeholder="010-0000-0000" required></label></div>
 <div class="pk-vehicle-heading mt-32"><h3>2. 차량별 주차권</h3><span id="pk-vehicle-count" class="note" aria-live="polite">0/10대</span></div><p class="note mt-16">차량마다 번호를 두 번 입력하고 원하는 주차권을 선택해 주세요.</p><div id="pk-vehicles" class="mt-24"></div><button class="btn btn-outline mt-16" type="button" id="pk-add-vehicle">+ 차량 추가</button>
-<div class="pk-policy mt-24"><h3>등록·취소 안내</h3><p id="pk-registration-description">이용일에 입차한 후 구매 내역의 ‘입차했어요 · 등록 요청’을 눌러 주세요. 운영자가 아마노 입차 기록을 확인하고 수동으로 등록합니다. 등록 완료를 확인하고 출차해 주세요.</p><p id="pk-daily"></p><p>구매 시간 초과분은 현장에서 정산합니다. 차량번호·이용일 정정과 취소는 구매 내역에서 차량별로 문의해 주세요. 통합 결제의 일부 취소는 운영자 확인이 필요합니다. 등록·사용 상태를 확인한 뒤 처리하며, 문의 접수만으로 결제가 취소되지는 않습니다.</p></div>
+<div class="pk-policy mt-24"><h3>등록·취소 안내</h3><p id="pk-registration-description">이용일에 입차한 후 구매 내역의 ‘입차했어요 · 등록 요청’을 눌러 주세요. 실제 입차 기록을 확인한 뒤 주차권을 등록합니다. 등록 완료를 확인하고 출차해 주세요.</p><p id="pk-daily"></p><p>구매 시간 초과분은 현장에서 정산합니다. 차량번호·이용일 정정과 취소는 구매 내역에서 차량별로 문의해 주세요. 통합 결제의 일부 취소는 운영자 확인이 필요합니다. 등록·사용 상태를 확인한 뒤 처리하며, 문의 접수만으로 결제가 취소되지는 않습니다.</p></div>
 <div class="pk-checks mt-24"><label><input type="checkbox" name="agreeTerms" required><span>주차 등록·이용 조건을 확인했습니다. (필수)</span></label><label><input type="checkbox" name="agreeRefund" required><span>취소·정정 처리 안내를 확인했습니다. (필수)</span></label><label><input type="checkbox" name="agreePrivacy" required><span>이름·휴대폰 번호·차량번호·이용일을 결제, 주차 등록, 거래 알림에 사용하는 데 동의합니다. <a href="/privacy">개인정보 처리방침</a> (필수)</span></label><label><input type="checkbox" name="confirmed" required><span>모든 차량의 번호·이용일·권종과 합계 금액을 확인했습니다. (필수)</span></label></div>
 <p class="pk-total mt-24" id="pk-total">차량별 주차권을 선택해 주세요.</p><button class="btn btn-primary mt-16" id="pk-pay" type="submit" disabled>한 번에 결제하기</button><p class="auth-notice mt-16" id="pk-message" role="status" aria-live="polite"></p></form></div>
 <aside class="my-card"><h2>구매 후 이렇게 이용하세요</h2><ol class="pk-steps"><li><b>1. 차량번호와 이용일 확인</b><p>실제 입차할 차량번호 전체를 입력해 주세요.</p></li><li><b>2. 페이앱 결제</b><p>여러 차량의 합계를 한 번에 결제합니다. 차량별 구매 내역과 등록 상태를 확인할 수 있습니다.</p></li><li><b>3. 입차 후 등록 요청</b><p>구매 내역에서 차량별로 입차 요청을 보내 주세요.</p></li><li><b>4. 적용 완료 후 출차</b><p>초과 요금은 주차장 정산기에서 확인해 주세요.</p></li></ol><a class="btn btn-outline mt-24" href="/guest-orders">구매한 주차권 다시 찾기</a><a class="btn btn-kakao mt-16" href="https://pf.kakao.com/_uTiFX/chat" target="_blank" rel="noopener">카카오톡 문의</a></aside></div></section></main>
@@ -136,5 +136,5 @@
 <script src="js/site-config.js?v=3361ee9a-room3-16"></script>
 <script src="js/main.js?v=980aaa85"></script>
 
-<script src="/js/parking-purchase.js?v=20261106-auto"></script></body>
+<script src="/js/parking-purchase.js?v=20261106-24h"></script></body>
 </html>

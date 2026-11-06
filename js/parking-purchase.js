@@ -37,7 +37,6 @@
    if(v.plate!==v.plateConfirm){message('차량 '+(i+1)+': 두 번 입력한 차량번호가 일치하지 않습니다.');cards()[i].querySelector('[data-plate-confirm]').focus();return;}
    if(seen.has(v.plate)){message('같은 차량번호를 두 번 입력했습니다. 차량마다 한 번씩 입력해 주세요.');cards()[i].querySelector('[data-plate]').focus();return;}seen.add(v.plate);
   }
-  const d=new Date(b.date+'T00:00:00Z').getUTCDay();if(d===0||d===6||config.holidays.includes(b.date)){message('주말·공휴일에는 등록하지 않습니다. 이용일을 확인해 주세요.');form.elements.date.focus();return;}
   working=true;const enabled=Array.from(form.querySelectorAll('input,button')).filter(el=>!el.disabled);enabled.forEach(el=>el.disabled=true);message('결제창을 준비하고 있습니다.');
   try{
    const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(b))),fingerprint=Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,'0')).join('');
