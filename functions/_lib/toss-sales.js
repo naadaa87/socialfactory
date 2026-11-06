@@ -121,7 +121,7 @@ export async function preparePayments(env, rawRows) {
     const manual = await env.DB.prepare(`SELECT ${MANUAL_CANDIDATE} AS found FROM (SELECT ? AS amount,? AS paid_at,? AS source_type) t`).bind(p.amount,p.paid_at,p.source_type).first();
     if (matches.length) reason = matches.some(x => x.test_mode) ? '기존 테스트 결제: 매출 제외' : '기존 이용권 결제와 일치: 중복 합산 제외';
     else if(p.review_state==='exclude')reason='관리자 확인으로 합산 제외';
-    else if (manual?.found && p.review_state!=='include') reason = '같은 날 같은 금액의 수기 매출/직접 발급 이용권: 확인 전 합산 보류';
+    else if (manual?.found && p.review_state!=='include') reason = '같은 금액의 수기 매출/직접 발급 이용권: 확인 전 합산 보류';
     rows.push({ ...p, result, reason, duplicate: matches.length > 0,
       counted: !matches.length && p.source_type!=='EXTERNAL' && ['auto','include'].includes(p.review_state) && (!manual?.found || p.review_state==='include') });
   }
