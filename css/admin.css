@@ -12,6 +12,10 @@ body.adm { font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple
 body.lock { overflow: hidden; }
 a { color: inherit; }
 input, select, button, textarea { font: inherit; color: inherit; }
+input, select, textarea { min-width: 0; max-width: 100%; }
+input:is([type="date"], [type="time"], [type="datetime-local"], [type="month"], [type="week"]) { -webkit-appearance: none; appearance: none; }
+input::-webkit-date-and-time-value { min-width: 0; text-align: start; }
+input::-webkit-datetime-edit { min-width: 0; padding: 0; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
 h1, h2, h3 { margin: 0; letter-spacing: -0.02em; }
@@ -39,7 +43,7 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background:
 .btn-sm { padding: 7px 11px; font-size: 13px; border-radius: 9px; }
 .btn-xs { padding: 4px 9px; font-size: 12px; border-radius: 7px; font-weight: 700; }
 .btn:disabled { opacity: .55; cursor: default; }
-.input, .select, .textarea { width: 100%; min-width: 0; border: 1.5px solid var(--line); border-radius: var(--r); padding: 9px 12px; background: #fff; min-height: 40px; }
+.input, .select, .textarea { width: 100%; min-width: 0; max-width: 100%; border: 1.5px solid var(--line); border-radius: var(--r); padding: 9px 12px; background: #fff; min-height: 40px; }
 .textarea { resize: vertical; min-height: 70px; }
 .select { padding-right: 30px; appearance: none; -webkit-appearance: none; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%235B6578' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 11px center; }
 .select-sm { width: auto; min-height: 34px; padding: 6px 30px 6px 10px; font-size: 13px; }
@@ -542,3 +546,9 @@ details.help ol { padding-left: 20px; margin-bottom: 0; }
 :root{--m-payapp_direct:#7652cf}#payapp-sales-panel .f,#pa-import-form{display:grid;gap:8px;max-width:680px}#pa-import-form{gap:12px;margin:16px 0}#pa-import-form button{justify-self:start}#pa-json{width:100%;resize:vertical}#pa-rows{max-height:480px;overflow:auto}#pa-rows table{table-layout:fixed;min-width:1100px}#pa-rows th:first-child{width:22%}#pa-rows th:nth-child(2){width:23%}#pa-rows td{white-space:normal;overflow-wrap:anywhere;vertical-align:top}#pa-rows .acts{margin-top:8px;flex-wrap:wrap}#payapp-sales-panel code{overflow-wrap:anywhere}
 
 :root { --m-office_payapp: #7b61a8; }
+
+.form .f, .pk-admin-grid .f, #toss-sales-panel .f { min-width: 0; }
+@media (max-width: 560px) {
+  .input, .select, .textarea { font-size: 16px; }
+  .ts-toolbar label { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+}
