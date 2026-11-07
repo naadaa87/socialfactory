@@ -9,6 +9,9 @@ import { onRequestGet as getDashboard } from '../functions/api/admin/dashboard.j
 import { onRequestGet as getSettings, onRequestPost as configure } from '../functions/api/admin/spacecloud.js';
 import { calendarReservationId, attachCalendarPayments } from '../functions/_lib/spacecloud-sales.js';
 import { onRequestPost as importHistory } from '../functions/api/admin/spacecloud-history.js';
+import { prepareBookings, applyBookingPayment } from '../functions/_lib/booking.js';
+import { onRequestGet as getBoard } from '../functions/api/admin/reservation-board.js';
+import { onRequestGet as getSales } from '../functions/api/admin/sales.js';
 
 const url = id => `https://api.spacecloud.kr/partner/reservations/ical?product_id=${id}&ical_uid=exampletoken`;
 const event = (uid = 'one', start = '20261024T230000', end = '20261025T010000', extra = '') =>
@@ -480,4 +483,91 @@ test('verified host-added amounts can be registered and edited beside unrelated 
   // Ordinary unverified entries keep the existing same-day ambiguity check.
   assert.equal((await post({space:'r3',date:'2026-10-30',start_min:600,end_min:720,customer_name:'다른 예약',channel:'spacecloud',amount:10000,pay_method:'spacecloud',paid_at:'2026-10-30'})).status,400);
  }finally{globalThis.fetch=original;e.sqlite.close();}
+});
+
+test('own overnight SpaceCloud blocks stay out of schedules and manual sales after refund even while the feed still lists them', async t => {
+  t.mock.timers.enable({ apis:['Date'], now:Date.parse('2026-11-01T00:30:00+09:00') });
+  const e = env({ r1:url(1), r2:url(2) });
+  t.after(() => e.sqlite.close());
+  const code = 'B261031-OWNTEST', marker = 'SFWEB:' + code;
+  const previous = '2026-10-31', today = '2026-11-01';
+  const blockEvent = (uid, start, end) => event(uid,start,end)
+    .replace('SUMMARY:예약 일정','SUMMARY:' + marker)
+    .replace(/URL:[^\r]+\r\n/,'');
+  const first = blockEvent('own-before-midnight','20261031T220000','20261101T000000');
+  const second = blockEvent('own-after-midnight','20261101T000000','20261101T020000');
+  const genuine = event('real-spacecloud','20261101T100000','20261101T120000');
+  const differentPeriod = blockEvent('own-title-different-period','20261101T140000','20261101T160000');
+  const realUrl = 'https://partner.spacecloud.kr/reservation/987654';
+  const realLink = blockEvent('own-title-with-payment-link','20261101T000000','20261101T020000')
+    .replace('END:VEVENT','URL:' + realUrl + '\r\nEND:VEVENT');
+  // An identical title with a different room or time is still a separate event.
+  t.mock.method(globalThis,'fetch',async input => {
+    const product = new URL(input).searchParams.get('product_id');
+    assert(['1','2'].includes(product));
+    return response(product === '1' ? calendar(first,second,genuine,differentPeriod,realLink) : calendar(second));
+  });
+  await prepareBookings(e);
+  e.sqlite.prepare(`INSERT INTO booking_requests
+    (code,submission_id,fingerprint,status,room,date,start_min,end_min,people,customer_name,phone,purpose,amount,consent,notice_version,payment_status,payment_id)
+    VALUES(?,'overnight-fixture','fixture','awaiting_payment','r1',?,1320,1560,2,'김민수','01012345678','meeting',15000,1,'fixture','pending','99')`)
+    .run(code,previous);
+  assert.equal((await applyBookingPayment(e,{ code,id:'99',state:'paid' })).ok,true);
+  e.sqlite.prepare(`INSERT INTO spacecloud_blocks(code,room,date,start_min,end_min,marker,access_token,state,created_at,updated_at)
+    VALUES(?,'r1',?,1320,1560,?,'fixture-token','blocked',?,?)`).run(code,previous,marker,Date.now(),Date.now());
+  const endpoint = (path, body) => new Request('https://test.invalid' + path,
+    { headers, ...(body ? { method:'POST', body:JSON.stringify(body) } : {}) });
+  const get = async (handler, path) => {
+    const result = await handler({ request:endpoint(path), env:e });
+    assert.equal(result.status,200);
+    return result.json();
+  };
+  const post = sourceCode => createReservation({ env:e,
+    request:endpoint('/api/admin/reservations',{ sourceCode,amount:15000,paid_at:today }) });
+  const range = '/api/admin/reservations?from=' + previous + '&to=' + today;
+  const own = await calendarRows(parseCalendar(calendar(first,second)),'r1',Date.now());
+  const before = await get(getReservations,range);
+  assert.equal(before.results.length,5);
+  assert.equal(before.results.filter(row => row.code === code).length,1);
+  assert.equal(before.results.filter(row => row.external && row.space === 'r1').length,3);
+  assert(before.results.some(row => row.source_url === realUrl));
+  const todayOnly = await get(getReservations,'/api/admin/reservations?from=' + today + '&to=' + today + '&space=r1');
+  assert.equal(todayOnly.results.filter(row => row.code === code).length,1);
+  assert(!todayOnly.results.some(row => own.some(block => block.code === row.code)));
+  const searched = await get(getReservations,range + '&q=' + encodeURIComponent(marker));
+  assert.deepEqual(searched.results.filter(row => row.external).map(row => row.space + '/' + row.start_min).sort(),['r1/0','r1/840','r2/0']);
+  const dashboard = await get(getDashboard,'/api/admin/dashboard');
+  assert.equal(dashboard.counts.today,5);
+  assert.equal(dashboard.month.total,15000);
+  const monitor = await get(getBoard,'/api/admin/reservation-board');
+  assert.equal(monitor.reservations.length,5);
+  assert.equal(monitor.reservations.filter(row => row.room === 'r1' && row.continued).length,1);
+  const beforeSales = await get(getSales,'/api/admin/sales?year=2026');
+  assert.equal(beforeSales.total,15000);
+  assert.equal(beforeSales.byChannel.web.amount,15000);
+  assert.equal(beforeSales.unrecordedSpacecloud,4);
+
+  // Confirm release in our ledger while the upstream iCal feed still shows its old copies.
+  assert.equal((await applyBookingPayment(e,{ code,id:'99',state:'refunded',refund_amount:15000 })).ok,true);
+  e.sqlite.prepare("UPDATE spacecloud_blocks SET state='released',cancel_requested=1 WHERE code=?").run(code);
+  await loadSpacecloud(e,{ force:true });
+  for (const row of own) {
+    const rejected = await post(row.code);
+    assert.equal(rejected.status,409);
+    assert.equal((await rejected.json()).error,'booking-payment-linked');
+  }
+  const remaining = await get(getReservations,range + '&status=confirmed');
+  assert.equal(remaining.results.length,4);
+  assert.equal((await get(getDashboard,'/api/admin/dashboard')).counts.today,4);
+  assert.equal((await get(getBoard,'/api/admin/reservation-board')).reservations.length,4);
+  const afterSales = await get(getSales,'/api/admin/sales?year=2026');
+  assert.equal(afterSales.total,0);
+  assert.equal(afterSales.refunds,15000);
+  assert.equal(afterSales.unrecordedSpacecloud,4);
+  const real = remaining.results.find(row => row.space === 'r1' && row.external && row.start_min === 600);
+  assert.equal((await post(real.code)).status,200);
+  const recorded = await get(getSales,'/api/admin/sales?year=2026');
+  assert.equal(recorded.total,15000);
+  assert.equal(recorded.byChannel.spacecloud.amount,15000);
+  assert.equal(recorded.unrecordedSpacecloud,3);
 });

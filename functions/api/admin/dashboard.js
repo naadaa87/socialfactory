@@ -11,7 +11,7 @@ import { adminGate, PAY_METHODS, kstToday, addDaysIso } from "../../_lib/admin.j
 import { ensureTossSales, TOSS_SOURCE, PASS_SALES_SOURCE } from "../../_lib/toss-sales.js";
 import { OFFICE_SALES_FROM } from '../../_lib/booking-payapp.js';
 
-import { loadSpacecloud, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
+import { loadSpacecloudForDisplay, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
 
 const RES = "code, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, pay_method, pay_status, paid_at, refund_amount, memo, inquiry_ref";
 
@@ -27,7 +27,7 @@ export async function onRequestGet({ request, env }) {
   const NET = "MAX(amount - refund_amount, 0)";
 
   // 전날 밤에 시작해 오늘 새벽까지 이어지는 예약도 '오늘'에 함께 보여 줍니다.
-  const external = await loadSpacecloud(env);
+  const external = await loadSpacecloudForDisplay(env);
   const near = await attachCalendarPayments(env, mergeCalendarRows(await all(`SELECT ${RES} FROM reservations WHERE status = 'confirmed' AND date BETWEEN ?1 AND ?2 ORDER BY date, start_min`, addDaysIso(today, -1), in7), filterExternal(external.results, new URLSearchParams({ from: addDaysIso(today, -1), to: in7 })), { info: external.info, sourceRows: external.results }));
   const todayList = near.filter((r) => r.date === today || (r.date === addDaysIso(today, -1) && r.end_min > 1440));
   const tomorrowList = near.filter((r) => r.date === tomorrow);

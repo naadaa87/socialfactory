@@ -15,7 +15,7 @@ import { ensureSpacecloudSales, attachCalendarPayments, calendarReservationId } 
 import { json, clean, formatPhone } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, SPACES, ROOM_KEYS, CHANNELS, kstToday, isIsoDate, addDaysIso, dayIndex, makeResCode, hm } from "../../_lib/admin.js";
 
-import { loadSpacecloud, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
+import { loadSpacecloud, loadSpacecloudForDisplay, websiteHoldCalendarCodes, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
 import { isCalendarLinked } from "../../_lib/spacecloud-links.js";
 
 const COLS = "id, code, created_at, updated_at, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, list_amount, amount_note, pay_method, pay_status, paid_at, refund_amount, refunded_at, cancel_reason, cancelled_at, inquiry_ref, memo";
@@ -77,7 +77,11 @@ export async function onRequestGet({ request, env }) {
   const code = p("code", 20);
   if (code) add("code = ?", code);
   const from = p("from", 10), to = p("to", 10);
-  if (isIsoDate(from)) add("date >= ?", from);
+  if (isIsoDate(from)) {
+    args.push(from);
+    const firstDay = `?${args.length}`;
+    where.push(`(date >= ${firstDay} OR (channel='web' AND status='confirmed' AND date=date(${firstDay},'-1 day') AND end_min>1440))`);
+  }
   if (isIsoDate(to)) add("date <= ?", to);
   const st = p("status", 12);
   if (st === "confirmed" || st === "cancelled") add("status = ?", st);
@@ -89,7 +93,7 @@ export async function onRequestGet({ request, env }) {
   const sql = `SELECT ${COLS} FROM reservations` + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY date ASC, start_min ASC, id ASC LIMIT 3000";
   try {
     const { results } = await env.DB.prepare(sql).bind(...args).all();
-    const external = code ? null : await loadSpacecloud(env, { from: isIsoDate(from) ? from : undefined, to: isIsoDate(to) ? to : undefined });
+    const external = code ? null : await loadSpacecloudForDisplay(env, { from: isIsoDate(from) ? from : undefined, to: isIsoDate(to) ? to : undefined });
     const rows = mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : [],
       { info: external?.info, sourceRows: external?.results || [] });
     return json({ ok: true, today: kstToday(), results: await attachCalendarPayments(env, rows), spacecloud: external && external.info });
@@ -108,6 +112,7 @@ export async function onRequestPost({ request, env }) {
     const external = await loadSpacecloud(env);
     source = external.results.find(x => x.code === sourceCode);
     if (!source) return bad("sourceCode", "외부 일정을 찾지 못했습니다. 일정을 새로고침해 주세요.");
+    if ((await websiteHoldCalendarCodes(env, [source])).has(sourceCode)) return bookingProtection();
     // Legacy iCal hashes can differ from the stable calendar code. Recognize a
     // previously paid copy by its verified slot before creating another ledger row.
     const copies = (await env.DB.prepare(`SELECT ${COLS} FROM reservations

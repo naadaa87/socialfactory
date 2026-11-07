@@ -10,7 +10,7 @@ import { ensureSpacecloudSales, SALES_SOURCE } from "../../_lib/spacecloud-sales
  * - orders=1   : 홈페이지에서 온라인으로 결제한 주문도 '홈페이지 온라인 결제'로 함께 더합니다 (테스트 결제 제외).
  *               토스프론트 · 관리자 직접 발급 이용권(pass_payments)도 '토스프론트 이용권'으로 함께 더합니다 (결제일 기준, 환불 차감).
  */
-import { loadSpacecloud, mergeCalendarRows } from "../../_lib/spacecloud.js";
+import { loadSpacecloudForDisplay, mergeCalendarRows } from "../../_lib/spacecloud.js";
 import { json, clean } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, SPACES, CHANNELS, kstToday } from "../../_lib/admin.js";
 import { ensureTossSales, TOSS_SOURCE, PASS_SALES_SOURCE } from "../../_lib/toss-sales.js";
@@ -135,7 +135,7 @@ export async function onRequestGet({ request, env }) {
   if(withOrders)ys.push(...await all(`SELECT DISTINCT substr(paid_kst,1,4) y ${OFFICE}`));
   const years = Array.from(new Set(ys.map((r) => r.y).filter((y) => /^\d{4}$/.test(y || "")).concat([today.slice(0, 4), year]))).sort().reverse();
 
-  const external = await loadSpacecloud(env);
+  const external = await loadSpacecloudForDisplay(env);
   const recorded = await all(`SELECT code, status, channel, space, date, start_min, end_min FROM reservations WHERE channel = 'spacecloud'`);
   const importedIds = new Set((await all("SELECT reservation_id FROM spacecloud_sales")).map(x => x.reservation_id));
   const missing = mergeCalendarRows(recorded, external.results).filter(x => x.external && x.date.slice(0,4) === year && !importedIds.has((x.source_url || '').split('/').pop()));

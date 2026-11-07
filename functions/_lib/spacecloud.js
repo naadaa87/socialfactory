@@ -6,6 +6,7 @@ import { sha256Hex } from './auth.js';
 import { historicalCalendarRows, rememberFeedEvents } from './spacecloud-history.js';
 import { calendarEventIdentity } from './spacecloud-identity.js';
 import { isCalendarLinked, reconcileCalendarLinks } from './spacecloud-links.js';
+import { bookingSegments } from './booking-spacecloud-sync.js';
 
 const TTL = 5 * 60 * 1000;
 const DAY = 86400000, KST = 9 * 3600000;
@@ -231,6 +232,49 @@ export async function loadSpacecloud(env, { force = false, fetcher = fetch, now 
     return { results: current.concat(history), info: { configured: true, rooms: snapshots.map(x => x.room),
       removed_linked_codes: removed, refresh_minutes: TTL / 60000 } };
   } catch { return { results: [], info: { configured: true, error: '외부 일정을 읽지 못했습니다. 다시 불러와 주세요.', rooms: [] } }; }
+}
+
+/** An external calendar copy must match a hold we registered, including its original interval. */
+export async function websiteHoldCalendarCodes(env, rows) {
+  const candidates = rows.flatMap(row => {
+    const marker = row.external && !row.source_url
+      ? /(?:^|[^A-Za-z0-9_-])(SFWEB:B[A-Za-z0-9_-]{6,40})(?![A-Za-z0-9_-])/.exec(row.customer_name)?.[1]
+      : null;
+    return marker ? [{ row, marker }] : [];
+  });
+  const codes = new Set();
+  if (!candidates.length) return codes;
+  const table = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='spacecloud_blocks'").first();
+  if (!table) return codes;
+
+  const markers = [...new Set(candidates.map(candidate => candidate.marker))];
+  const holds = new Map();
+  for (let i = 0; i < markers.length; i += 90) {
+    const chunk = markers.slice(i, i + 90);
+    const { results } = await env.DB.prepare(`SELECT code,marker,room,date,start_min,end_min FROM spacecloud_blocks
+      WHERE marker IN (${chunk.map(() => '?').join(',')})`).bind(...chunk).all();
+    for (const hold of results || []) {
+      try { holds.set(hold.marker, { room: hold.room, segments: bookingSegments(hold) }); }
+      catch { /* Preserve the feed entry if the saved hold has an invalid interval. */ }
+    }
+  }
+  for (const { row, marker } of candidates) {
+    const hold = holds.get(marker);
+    if (!hold || hold.room !== row.space) continue;
+    const segment = hold.segments.find(part => part.date === row.date);
+    if (!segment) continue;
+    const midnight = Date.parse(segment.date + 'T00:00:00+09:00');
+    if (row.source_start === midnight + segment.start_min * 60000 && row.source_end === midnight + segment.end_min * 60000)
+      codes.add(row.code);
+  }
+  return codes;
+}
+
+// Booking checks keep the complete feed. Confirmed schedules display the website's original reservation.
+export async function loadSpacecloudForDisplay(env, options) {
+  const external = await loadSpacecloud(env, options);
+  const copies = await websiteHoldCalendarCodes(env, external.results);
+  return { ...external, results: external.results.filter(row => !copies.has(row.code)) };
 }
 
 export function filterExternal(rows, params) {
