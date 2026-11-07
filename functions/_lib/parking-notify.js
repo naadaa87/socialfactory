@@ -1,10 +1,10 @@
 import {PARKING_TEMPLATES} from './parking-templates.js';
 import {ensureParking,parkingOrder,parkingSettings,operationText,TICKETS} from './parking.js';
-import {approvedWebsiteTemplate,sendAligo} from './aligo.js';
+import {approvedWebsiteTemplate,sendAligo,renderAligoMessage} from './aligo.js';
 import {orderToken} from './shop.js';
 import {kstNow} from './admin.js';
 export async function parkingTemplateStatus(env){const rows=await Promise.all(Object.entries(PARKING_TEMPLATES).map(async([kind,t])=>({kind,name:t.title,code:env[t.env]||t.code,approved:!!(env[t.env]||t.code)&&await approvedWebsiteTemplate(env,t)})));return rows;}
-export function parkingMessage(t,vars){const fill=s=>String(s).replace(/#\{([^}]+)\}/g,(_,k)=>{if(vars[k]===undefined)throw Error('parking-variable');return vars[k]});const buttons={button:t.buttons.button.map(b=>Object.fromEntries(Object.entries(b).map(([k,v])=>[k,fill(v)])))};const text=fill(t.text);return {title:t.title,text,buttons,fallbackText:text+'\n\n'+buttons.button.map(b=>b.name+': '+b.linkMo).join('\n')};}
+export const parkingMessage=renderAligoMessage;
 export async function runParkingQueue(env,{limit=20}={}){
  if(!env.DB)return {sent:0};await ensureParking(env);
  // 재접수 여부를 알 수 없는 전송은 자동 재시도하지 않습니다.

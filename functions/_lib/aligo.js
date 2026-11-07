@@ -103,3 +103,16 @@ export async function approvedWebsiteTemplate(env,template){
  }catch{}
  if(approvalCache.size>32)approvalCache.clear();approvalCache.set(key,{ok,until:now+300000});return ok;
 }
+
+
+export function renderAligoMessage(template, values) {
+  const fill = text => String(text).replace(/#\{([^}]+)\}/g, (_, key) => {
+    if (values[key] === undefined) throw new Error('Missing AlimTalk template value');
+    return values[key];
+  });
+  const buttons = {button:template.buttons.button.map(button =>
+    Object.fromEntries(Object.entries(button).map(([key,value]) => [key,fill(value)])))};
+  const text = fill(template.text);
+  return {title:template.title,text,buttons,
+    fallbackText:text+'\n\n'+buttons.button.map(button=>button.name+': '+button.linkMo).join('\n')};
+}

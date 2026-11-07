@@ -11,13 +11,20 @@
   function url(value){try{var u=new URL(value),canonical=new URL((window.SF_CONFIG || {}).siteUrl || location.origin).origin;return u.protocol==='https:' && (((u.origin===location.origin || u.origin===canonical) && u.pathname==='/booking-status') || u.hostname==='payapp.kr' || u.hostname.endsWith('.payapp.kr'))?u.href:'';}catch(e){return '';}}
   function paymentLink(value){var u=url(value);return u?'<div class="acts"><a class="btn btn-light btn-sm" href="'+esc(u)+'" target="_blank" rel="noopener noreferrer">결제 링크 열기</a><button class="btn btn-light btn-sm" type="button" data-copy-payment="'+esc(u)+'">링크 복사</button></div>':'';}
   function hm(min){return (min>=1440?'익일 ':'')+String(Math.floor(min%1440/60)).padStart(2,'0')+':'+String(min%60).padStart(2,'0');}
+  function notificationStatus(notices){
+    var kinds={confirmed:'예약 확정',cancelled:'예약 취소',partial:'부분환불',review:'결제 확인 필요'};
+    var states={queued:'발송 대기',sending:'전송 중',accepted:'발송사 접수',failed:'접수 실패',unknown:'전송 결과 확인 필요',skipped:'발송 종료',test:'시험 요청'};
+    return (notices || []).map(function(n){
+      return '<p class="small muted">'+esc(kinds[n.kind])+' 알림 · '+esc(n.recipient==='customer'?'고객 알림톡':'운영자 문자')+' · 끝번호 '+esc(n.last4)+' · '+esc(states[n.state] || n.state)+'</p>';
+    }).join('');
+  }
   function showRows(){
     $('#booking-request-list').innerHTML=rows.length?rows.map(function(r){
       var pending=r.status==='requested',canCancel=(pending || r.status==='awaiting_payment') && ['creating','paid','paid_verifying','review','refund_pending','cancelling','releasing'].indexOf(r.payment_status)===-1,syncState=r.sync_state || (r.sync && r.sync.state) || '';
       var automatic=syncEnabled?'<p class="small muted">스페이스클라우드: '+esc(syncLabels[syncState] || '자동 일정 확인 준비 중')+'</p>':'';
       var approval=pending?(syncEnabled?(!syncState?'<div class="acts"><button type="button" class="btn btn-primary btn-sm" data-booking-action="approve" data-code="'+esc(r.code)+'" '+(!ready || !syncReady?'disabled':'')+'>일정 확인 · 결제 준비</button></div>':''):'<label><input type="checkbox" data-external-check="'+esc(r.code)+'"> 외부 채널 일정을 확인하고 해당 시간을 판매 중지했습니다.</label><div class="acts"><button type="button" class="btn btn-primary btn-sm" data-booking-action="approve" data-code="'+esc(r.code)+'" '+(!ready?'disabled':'')+'>승인 · 페이앱 링크 발급</button></div>'):'';
       return '<details class="card mt"><summary><b>'+esc(r.code)+' · '+esc(r.customer_name)+'</b> — '+esc(r.date)+' '+esc(hm(r.start_min))+'–'+esc(hm(r.end_min))+' · '+esc(r.room.replace('r',''))+'번룸 · '+esc(labels[r.status] || r.status)+'</summary><div class="mt"><p>'+esc(r.phone)+' · '+esc(r.company || '개인')+' · '+esc(r.people)+'명 · '+A.won(r.amount)+'</p><p>활용 목적: '+esc(purposes[r.purpose] || r.purpose)+' '+esc(r.purpose_detail || '')+'</p><p>기타 요청: '+esc(r.requests || '없음')+'</p><p class="small muted">결제 상태: '+esc(labels[r.payment_status] || r.payment_status || '미결제')+(r.expires_at?' · 신청 확보 기한: '+esc(r.expires_at):'')+'</p>'+
-        automatic+approval+
+        automatic+notificationStatus(r.notifications)+approval+
         paymentLink(r.payment_url)+(canCancel?'<div class="acts"><button class="btn btn-light btn-sm" type="button" data-booking-action="cancel" data-code="'+esc(r.code)+'">'+(syncEnabled?'신청 취소 · 확보 시간 해제':'신청 취소 · 미결제 링크 닫기')+'</button></div>':'')+'</div></details>';
     }).join(''):A.emptyMsg('접수된 예약 신청이 없습니다.');
   }
@@ -35,6 +42,17 @@
       $('#office-invoice-list').innerHTML=(payments.results || []).map(function(p){return '<div class="card mt"><b>'+esc(p.label)+'</b><p>'+esc(p.name || '')+' · '+A.won(p.amount)+' · '+esc(p.status==='requested'?'결제 대기':labels[p.status] || p.status)+'</p>'+paymentLink(p.pay_url)+(['requested','pending','failed'].includes(p.status)?'<button type="button" class="btn btn-light btn-sm" data-office-cancel="'+esc(p.code)+'">미결제 청구 취소</button>':'')+'</div>';}).join('') || A.emptyMsg('독립사무실 청구 내역이 없습니다.');
     }).catch(function(e){$('#booking-request-list').textContent=(e.data && e.data.message) || e.message;err(e);});
   }
+  $('#booking-test-sms')?.addEventListener('click',function(event){
+    var button=event.currentTarget,message=$('#booking-test-sms-status');
+    button.disabled=true;message.textContent='운영자 번호의 문자 연결을 확인하고 있습니다.';
+    api('/api/admin/booking-requests',{method:'POST',body:{action:'test-operator-sms'}}).then(function(result){
+      var states={accepted:'발송사 접수',failed:'접수 실패',unknown:'전송 결과 확인 필요',sending:'전송 중'};
+      message.textContent=result.configured?result.results.map(function(row){
+        return '끝번호 '+row.last4+' · '+(states[row.state] || row.state);
+      }).join(' / '):'운영자 두 번호를 먼저 설정해 주세요.';
+    }).catch(function(error){message.textContent='문자 시험 결과를 확인하지 못했습니다.';err(error);})
+      .finally(function(){button.disabled=false;});
+  });
   $('#booking-admin-reload').addEventListener('click',load);
   $('#view-booking').addEventListener('click',function(event){
     var copy=event.target.closest('[data-copy-payment]');

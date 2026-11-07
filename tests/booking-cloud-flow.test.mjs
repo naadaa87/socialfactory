@@ -290,3 +290,77 @@ test('a verification job created before payment cannot confirm it even when the 
   const freshVerification=await nextJob(env);assert.equal(freshVerification.action,'verify');await done(env,freshVerification);
   assert.equal((await getBooking(env,code)).status,'confirmed');
 }));
+
+test('booking notices wait for confirmation and approved copy, deduplicate concurrent jobs, and reflect refund outcomes', async t=>{
+  const {runBookingNotifications}=await import('../functions/_lib/booking-notify.js');
+  const {BOOKING_TEMPLATES}=await import('../functions/_lib/booking-templates.js');
+  const {ensurePayappSchema}=await import('../functions/_lib/booking-payapp.js');
+  const {kstTimestamp}=await import('../functions/_lib/booking.js');
+  const e=Object.assign(fixture(),{
+    BOOKING_NOTIFY_START:kstTimestamp(Date.now()-60000),
+    BOOKING_NOTIFY_STAFF:'01011112222,01033334444',
+    BOOKING_NOTIFY_CUSTOMER:'1',BOOKING_NOTIFY_LIVE:'1',ALIGO_API_KEY:'fake-key',
+    ALIGO_USER_ID:'fake-user',ALIGO_SENDER_KEY:'fake-sender-key',ALIGO_SENDER:'021234567'
+  });
+  await prepareBookings(e);
+  await ensurePayappSchema(e);
+  const code='B261107-A1B2C3D4E5';
+  const date=addDaysIso(kstToday(),12);
+  e.sqlite.prepare(`INSERT INTO booking_requests (code,submission_id,fingerprint,status,room,date,start_min,end_min,people,customer_name,phone,purpose,amount,consent,notice_version,payment_status,payment_id,paid_at,updated_at)
+    VALUES (?,?,'example','awaiting_payment','r1',?,1380,1500,8,'테스트','010-2222-3333','meeting',40000,1,'test','paid_verifying','5',?,?)`)
+    .run(code,code,date,kstTimestamp(),kstTimestamp());
+  e.sqlite.prepare(`INSERT INTO booking_payapp_requests (code,kind,label,amount,token,mul_no,status,paid_at)
+    VALUES (?,'room','test',40000,'test-link-token','5','paid',?)`).run(code,kstTimestamp());
+
+  const sends=[];
+  let mismatch=true;
+  let uncertain=false;
+  t.mock.method(globalThis,'fetch',async (url,options)=>{
+    const path=new URL(url).pathname;
+    const form=options.body;
+    if(path.includes('/template/list/')){
+      const template=Object.values(BOOKING_TEMPLATES).find(value=>value.code===form.get('tpl_code'));
+      return Response.json({code:0,list:[{templtCode:template.code,inspStatus:'APR',status:'A',
+        templtContent:mismatch?'wrong text':template.text,buttons:template.buttons.button}]});
+    }
+    sends.push({path,form});
+    if(path.includes('alimtalk'))return Response.json({code:0,info:{mid:100+sends.length,scnt:1,fcnt:0}});
+    if(uncertain && form.get('receiver')==='01011112222')throw Error('timed out');
+    return Response.json({result_code:1,msg_id:100+sends.length,success_cnt:1,error_cnt:0});
+  });
+  await runBookingNotifications(e);
+  assert.equal(sends.length,0);
+  e.sqlite.exec("UPDATE booking_requests SET status='confirmed',payment_status='paid'");
+  await Promise.all([runBookingNotifications(e),runBookingNotifications(e)]);
+  assert.equal(sends.length,2);
+  assert.deepEqual(sends.map(item=>item.form.get('receiver')).sort(),['01011112222','01033334444']);
+  assert.match(sends[0].form.get('msg'),/23:00~익일 01:00/);
+  assert.match(sends[0].form.get('msg'),/40,000원/);
+  assert.doesNotMatch(sends[0].form.get('msg'),/test-link-token|010-2222-3333/);
+  assert.equal(e.sqlite.prepare("SELECT state FROM booking_notifications WHERE recipient='customer'").get().state,'queued');
+
+  mismatch=false;
+  // Another approved template has an independent approval cache key.
+  e.sqlite.exec("UPDATE booking_requests SET payment_status='refund_pending',refund_amount=10000");
+  e.sqlite.exec("UPDATE booking_payapp_requests SET status='partial_refund',refund_amount=10000");
+  uncertain=true;
+  await runBookingNotifications(e);
+  await runBookingNotifications(e);
+  assert.equal(sends.length,5);
+  const partial=sends.find(item=>item.form.get('tpl_code')===BOOKING_TEMPLATES.partial.code).form;
+  assert.equal(partial.get('receiver_1'),'01022223333');
+  assert.equal(partial.get('failover'),'Y');
+  assert.match(partial.get('fmessage_1'),/test-link-token/);
+  assert.match(partial.get('message_1'),/예약은 유지됩니다/);
+  assert.match(partial.get('message_1'),/10,000원/);
+  assert.equal(e.sqlite.prepare("SELECT state FROM booking_notifications WHERE kind='partial' AND recipient='staff0'").get().state,'unknown');
+
+  e.sqlite.exec("UPDATE booking_requests SET status='cancelled',payment_status='refunded',refund_amount=40000");
+  e.sqlite.exec("UPDATE booking_payapp_requests SET status='refunded',refund_amount=40000");
+  await runBookingNotifications(e);
+  assert.equal(sends.length,8);
+  const cancelled=sends.find(item=>item.form.get('tpl_code')===BOOKING_TEMPLATES.cancelled.code).form;
+  assert.match(cancelled.get('message_1'),/예약이 취소되었습니다/);
+  assert.match(cancelled.get('message_1'),/40,000원/);
+  assert.equal(e.sqlite.prepare("SELECT state FROM booking_notifications WHERE kind='confirmed' AND recipient='customer'").get().state,'skipped');
+});

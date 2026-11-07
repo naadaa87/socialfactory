@@ -486,6 +486,10 @@
         <p id="booking-cloud-message" class="small" role="status" aria-live="polite">비밀번호와 인증번호는 새 로그인 화면에 직접 입력하며, 채팅에 보내지 마세요.</p>
       </div>
       <div class="card"><h2 class="ch"><span>공간대관 신청</span></h2><p class="small muted">스페이스클라우드 시간 확보와 결제 상태를 함께 확인합니다. 취소·환불이 확인된 예약만 해당 예약이 확보한 시간을 해제합니다. 처리 결과가 불확실한 건은 결제를 보류하고 확인할 때까지 시간을 유지합니다.</p><div id="booking-request-list" aria-live="polite"></div></div>
+      <div class="card mt"><h2 class="ch"><span>공간대관 알림</span></h2>
+        <div class="acts"><button class="btn btn-light btn-sm" type="button" id="booking-test-sms">운영자 문자 수신 시험</button><a class="btn btn-light btn-sm" href="https://smartsms.aligo.in/shop/result_list.html" target="_blank" rel="noopener noreferrer">알리고 전송 결과</a></div>
+        <p class="small" id="booking-test-sms-status" role="status"></p>
+      </div>
       <div class="card mt"><h2 class="ch"><span>독립사무실 상담 후 청구</span></h2>
         <form id="office-invoice-form" class="form">
           <div class="f"><label for="office-inquiry">상담 접수 내역</label><select class="input" id="office-inquiry" name="inquiry_id" required><option value="">불러오는 중</option></select></div>
@@ -662,7 +666,7 @@
 <script src="/js/booking-rates.js?v=customer-audit-20261106"></script>
 <script src="/js/site-config.js?v=customer-audit-20261106"></script>
 <script src="/js/admin.js?v=payapp-sales20261106"></script>
-<script src="/js/admin-bookings.js?v=20261106-sync"></script>
+<script src="/js/admin-bookings.js?v=booking-notices-1"></script>
 <script src="/js/admin-booking-cloud.js?v=20261107-public-availability"></script>
 <script src="/js/admin-toss-sales.js?v=20261106-sort"></script>
 <script src="/js/admin-payapp-sales.js?v=20261106"></script>

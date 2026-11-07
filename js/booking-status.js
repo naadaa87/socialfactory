@@ -25,6 +25,7 @@
   }
   function show(j){
     latest=j;detail.replaceChildren();item('접수·청구번호',j.code);item('결제 항목',j.label || '소셜팩토리 공간대관');item('청구금액',Number(j.amount).toLocaleString('ko-KR')+'원');detail.hidden=false;
+    if(j.refund_amount>0)item('환불금액',Number(j.refund_amount).toLocaleString('ko-KR')+'원');
     var paid=j.status==='paid',confirmed=j.booking && j.booking.status==='confirmed',sync=j.sync || {};
     var paidVerifying=j.status==='paid_verifying' || (j.booking && j.booking.payment_status==='paid_verifying');
     var terminal=paid || paidVerifying || ['cancelled','refunded','failed','review','partial_refund','sync_review','sync_conflict'].indexOf(j.status)!==-1 || ['review','conflict','released'].indexOf(sync.state)!==-1 || (j.booking && j.booking.status==='payment_review');
@@ -49,6 +50,8 @@
       title.textContent='선택한 시간에 다른 예약이 있습니다';message.textContent=sync.message || '결제는 진행할 수 없습니다. 다른 일정을 선택하거나 담당자에게 문의해 주세요.';
     }else if(j.status==='sync_review' || sync.state==='review'){
       title.textContent='담당자가 예약 일정을 확인하고 있습니다';message.textContent=sync.message || '일정 확보 여부를 확인하고 있습니다. 추가 신청이나 결제 없이 접수번호로 문의해 주세요.';
+    }else if(j.status==='partial_refund' && confirmed){
+      title.textContent='부분환불이 처리되었습니다';message.textContent='아래 일정의 예약은 유지됩니다. 실제 환급 시점은 결제수단에 따라 다를 수 있습니다.';
     }else if(j.status==='review' || j.status==='partial_refund' || (j.booking && j.booking.status==='payment_review')){
       title.textContent='담당자가 결제 상태를 확인하고 있습니다';message.textContent='추가 결제 없이 담당자에게 접수번호를 알려 주세요.';
     }else if(j.status==='failed'){

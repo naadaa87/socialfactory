@@ -39,7 +39,7 @@ export async function onRequestGet({request,env}) {
   const canCancel=!!(booking && block && ['requested','awaiting_payment'].includes(booking.status)
     && !['creating','paid','paid_verifying','cancelling','review','refund_pending'].includes(booking.payment_status) && !['review','released','releasing','conflict'].includes(block.state));
   return json({ok:true,code,kind:row?.kind || 'room',label:row?.label || `소셜팩토리 ${booking.room.replace('r','')}번룸 ${booking.date}`,
-    amount:row?.amount ?? booking.amount,status,paid_at:row?.paid_at || null,
+    amount:row?.amount ?? booking.amount,refund_amount:row?.refund_amount || 0,status,paid_at:row?.paid_at || null,
     booking:booking ? {room:booking.room,date:booking.date,start_min:booking.start_min,end_min:booking.end_min,people:booking.people,status:booking.status,payment_status:booking.payment_status} : null,
     sync:publicSync(block),can_start_payment:eligible,can_pay:eligible && fresh,can_cancel:canCancel});
 }

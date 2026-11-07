@@ -1,9 +1,10 @@
-import { json,clean } from '../../_lib/auth.js';
+import { json,clean,sameOrigin } from '../../_lib/auth.js';
 import { adminGate,kstNow } from '../../_lib/admin.js';
 import { prepareBookings,BOOKING_COLUMNS,BOOKING_STATUSES,getBooking,externalBookingConflict,isBookingConflict } from '../../_lib/booking.js';
 import { createBookingPayment,cancelBookingPayment,payappConfig } from '../../_lib/booking-payapp.js';
 import { syncEnabled,getSync } from '../../_lib/booking-spacecloud-sync.js';
 import { startSynchronizedBooking,cancelSynchronizedBooking } from '../../_lib/booking-checkout.js';
+import { ensureBookingNotifications,testBookingOperatorSms } from '../../_lib/booking-notify.js';
 import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
 
 export async function onRequestGet({request,env}) {
@@ -14,8 +15,17 @@ export async function onRequestGet({request,env}) {
     const where = BOOKING_STATUSES.includes(status) ? ' WHERE status=?1' : '';
     const statement = env.DB.prepare(`SELECT ${BOOKING_COLUMNS} FROM booking_requests${where} ORDER BY created_at DESC,id DESC LIMIT 500`);
     const {results} = await (where ? statement.bind(status) : statement).all();
+    await ensureBookingNotifications(env);
+    const {results:notices}=await env.DB.prepare(`SELECT n.code,n.kind,n.recipient,n.last4,n.state FROM booking_notifications n
+      WHERE n.code IN (SELECT value FROM json_each(?)) AND n.version=(SELECT MAX(i.version) FROM booking_notifications i
+        WHERE i.code=n.code AND i.kind=n.kind AND i.recipient=n.recipient)`).bind(JSON.stringify((results || []).map(item=>item.code))).all();
+    const byCode=new Map();
+    for(const {code,...notice} of notices) {
+      if(!byCode.has(code))byCode.set(code,[]);
+      byCode.get(code).push(notice);
+    }
     const enriched=await Promise.all((results || []).map(async item=>{
-      const sync=await getSync(env,item.code);return {...item,sync_state:sync?.state || null};
+      const sync=await getSync(env,item.code);return {...item,sync_state:sync?.state || null,notifications:byCode.get(item.code) || []};
     }));
     return json({ok:true,results:enriched,payapp:{ready:payappConfig(env).ready},sync:{enabled:syncEnabled(env),ready:syncEnabled(env) && String(env.SPACECLOUD_WORKER_TOKEN || '').length>=32}});
   } catch (error) {
@@ -29,6 +39,10 @@ export async function onRequestPatch({request,env,waitUntil}) {
   let body; try { body = await request.json(); } catch { return json({ok:false,error:'bad-json'},400); }
   const code = clean(body?.code,30), action = clean(body?.action,20);
   try {
+    if(action==='test-operator-sms') {
+      if(!sameOrigin(request))return json({ok:false,error:'origin'},403);
+      return json(await testBookingOperatorSms(env));
+    }
     await prepareBookings(env);
     const booking = await getBooking(env,code);
     if (!booking) return json({ok:false,error:'not-found',message:'신청을 찾을 수 없습니다.'},404);
