@@ -1,7 +1,7 @@
 import { json } from '../../_lib/auth.js';
 import { adminGate, isIsoDate } from '../../_lib/admin.js';
 import { loadSpacecloud } from '../../_lib/spacecloud.js';
-import { calendarReservationId, ensureSpacecloudSales, SAME_DAY_REVIEW } from '../../_lib/spacecloud-sales.js';
+import { calendarManualSources, calendarReservationId, ensureSpacecloudSales, SAME_DAY_REVIEW } from '../../_lib/spacecloud-sales.js';
 
 const validMoney = n => Number.isSafeInteger(n) && n >= 0 && n <= 100000000;
 const sameSlot = (a, b) => a.space === b.space && a.date === b.date
@@ -17,13 +17,13 @@ export async function onRequestPost({request,env}) {
     return json({ok:false,message:'한 번에 1~5,000건을 가져올 수 있습니다.'},400);
   await ensureSpacecloudSales(env);
   const external = await loadSpacecloud(env);
-  const manual = (await env.DB.prepare("SELECT code,date,space,start_min,end_min,amount,refund_amount,paid_at FROM reservations WHERE channel='spacecloud'").all()).results || [];
+  const manual = (await env.DB.prepare("SELECT code,channel,date,space,start_min,end_min,customer_name,amount,refund_amount,paid_at FROM reservations WHERE channel='spacecloud'").all()).results || [];
   const imported = (await env.DB.prepare('SELECT * FROM spacecloud_sales').all()).results || [];
   const byId = new Map(imported.map(x=>[x.reservation_id,x]));
   const linkedCodes = new Set(imported.map(x=>x.linked_code).filter(Boolean));
   const relinked = (await env.DB.prepare('SELECT original_code FROM reservation_payment_relinks').all()).results || [];
   const supersededCodes = new Set(relinked.map(x=>x.original_code));
-  const calendarByCode = new Map(external.results.map(e=>[e.code,e]));
+  const manualSources = calendarManualSources(manual, external.results);
   const calendarById = new Map();
   for (const event of external.results) {
     const id = calendarReservationId(event.source_url);
@@ -41,7 +41,7 @@ export async function onRequestPost({request,env}) {
     const matches=(calendarById.get(r.reservation_id) || []).filter(e=>e.date>=r.use_date && e.date<=r.end_date);
     if(matches.length) r.space=matches[0].space;
     const codes=new Set(matches.map(e=>e.code));
-    const linked=manual.filter(m=>codes.has(m.code));
+    const linked=manual.filter(m=>codes.has(manualSources.get(m.code)?.code));
     // Calendar hashes already saved manually are recognized even after the feed no longer contains them only via the saved import link.
     const prev=byId.get(r.reservation_id);
     if(prev) { r.linked_code=prev.linked_code; r.space=prev.space; }
@@ -56,7 +56,7 @@ export async function onRequestPost({request,env}) {
     if (!reason && !prev && manual.some(m => {
       if (m.date < r.use_date || m.date > r.end_date || m.code === r.linked_code
           || linkedCodes.has(m.code)) return false;
-      const source = calendarByCode.get(m.code);
+      const source = manualSources.get(m.code);
       const knownSupersededSlot = supersededCodes.has(m.code) && /^r[1-5]$/.test(m.space)
         && m.start_min < m.end_min;
       const separateBooking = r.use_date === r.end_date && matches.length > 0

@@ -424,15 +424,27 @@ test('automatic collection accepts a verified payment beside a separate same-day
     method:'POST',headers,body:JSON.stringify({sourceCode:manual.code,amount:55000,paid_at:'2026-11-01'})
   })});
   assert.equal(create.status,200);
+  const legacyCode = 'SC2-0000000000000000';
+  e.sqlite.prepare('UPDATE reservations SET code=? WHERE code=?').run(legacyCode,manual.code);
   e.sqlite.exec(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status,paid_at)
     VALUES('OLD','cancelled','r1','2026-11-08',600,780,'기존 세미나','spacecloud',40000,'spacecloud','paid','2026-11-01')`);
-  e.sqlite.prepare('INSERT INTO reservation_payment_relinks(original_code,replacement_code) VALUES(?,?)').run('OLD',manual.code);
+  e.sqlite.prepare('INSERT INTO reservation_payment_relinks(original_code,replacement_code) VALUES(?,?)').run('OLD',legacyCode);
   const row = {reservation_id:'987',venue:'소셜팩토리 건대 (초특가)',use_date:'2026-11-08',
     end_date:'2026-11-08',paid_at:'2026-11-08',amount:100000,refund_amount:0};
   const collect = rows => sync({env:e,request:new Request('https://example.test/api/spacecloud-sync',{
     method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
     body:JSON.stringify({action:'sync',complete:true,observed_at:Date.now(),rows})
   })});
+  const salesSummary = async () => (await getSales({env:e,request:new Request(
+    'https://example.test/?year=2026',{headers})})).json();
+  e.sqlite.exec(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status,paid_at)
+    VALUES('UNVERIFIED','confirmed','r3','2026-11-08',1020,1320,'수기 일정','spacecloud',50000,'spacecloud','paid','2026-11-08')`);
+  const before = await salesSummary();
+  assert.equal(before.unrecordedSpacecloud,0); // The manual slot masks it on the reservation list.
+  assert.deepEqual(before.spacecloudPaymentGaps,{count:1,rows:[
+    {reservation_id:'987',date:'2026-11-08',space:'r3',date_conflict:false}
+  ]});
+  e.sqlite.prepare("DELETE FROM reservations WHERE code='UNVERIFIED'").run();
   e.sqlite.prepare(`INSERT INTO spacecloud_sync_audit(reservation_id,observed_at,after_refund,action,reason)
     VALUES(?,?,0,'review',?)`).run(row.reservation_id,Date.now()-60000,'같은 이용일의 기존 스페이스클라우드 매출 확인 필요');
   const run = await (await collect([row])).json();
@@ -446,7 +458,8 @@ test('automatic collection accepts a verified payment beside a separate same-day
   const reservations = await (await getReservations({env:e,request:new Request(
     'https://example.test/?from=2026-11-08&to=2026-11-08',{headers})})).json();
   assert.equal(reservations.results.find(r=>r.external && r.space==='r3').payment.amount,100000);
-  const sales = await (await getSales({env:e,request:new Request('https://example.test/?year=2026',{headers})})).json();
+  const sales = await salesSummary();
+  assert.deepEqual(sales.spacecloudPaymentGaps,{count:0,rows:[]});
   assert.equal(sales.total,155000);
   assert.equal(sales.n,2);
 });
