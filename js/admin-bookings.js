@@ -15,8 +15,7 @@
     partial:'부분환불',review:'결제 확인 필요',paid_delay:'결제 후 확정 지연',sync_issue:'연동 확인 필요',sync_outage:'대관 연동 장애'};
   var noticeStates={queued:'발송 대기',sending:'전송 중',accepted:'발송사 접수',failed:'접수 실패',unknown:'전송 결과 확인 필요',skipped:'발송 종료',test:'시험 요청'};
   function noticeRecipient(n){
-    if(n.recipient!=='customer')return '운영자 문자';
-    return ['received','payment_ready','unpaid_expired'].indexOf(n.kind)!==-1?'고객 문자':'고객 알림톡';
+    return n.recipient==='customer'?'고객 알림톡':'운영자 문자';
   }
   function notificationStatus(notices){
     return (notices || []).map(function(n){
@@ -26,11 +25,12 @@
   function showNoticeSettings(settings){
     var status=$('#booking-notice-settings');
     if(!status || !settings)return;
-    if(!settings.started || !settings.smsReady){
-      status.textContent='문자 발송 준비 중 · 시작 시각과 알리고 문자 연결을 확인해 주세요.';
+    if(!settings.started){
+      status.textContent='알림 발송 준비 중 · 시작 시각을 확인해 주세요.';
       return;
     }
-    status.textContent=(settings.live?'실발송':'시험 모드')+' · 고객 '+(settings.customer?'켜짐':'꺼짐')+' · 운영자 '+(settings.staffReady?settings.staffCount+'명 준비':'수신번호 또는 문자 시험 확인 필요');
+    var customer=!settings.customer?'꺼짐':settings.lifecycleTemplatesConfigured<3?'켜짐 · 신규 템플릿 연결 '+settings.lifecycleTemplatesConfigured+'/3':'켜짐';
+    status.textContent=(settings.live?'실발송':'시험 모드')+' · 고객 알림톡 '+customer+' · 운영자 문자 '+(settings.staffReady && settings.smsReady?settings.staffCount+'명 준비':'수신번호 또는 문자 시험 확인 필요');
   }
   function showRecentNotifications(notices){
     var list=$('#booking-recent-notices');
@@ -84,7 +84,7 @@
     var b=event.target.closest('[data-booking-action]');
     if(b){var code=b.dataset.code,action=b.dataset.bookingAction,check=Array.from(document.querySelectorAll('[data-external-check]')).find(function(c){return c.dataset.externalCheck===code;});
       if(action==='approve' && !syncEnabled && (!check || !check.checked)){A.toast('외부 일정 확인과 판매 중지를 체크해 주세요.');return;}
-      b.disabled=true;api('/api/admin/booking-requests',{method:'PATCH',body:{code:code,action:action,external_checked:!!(check && check.checked)}}).then(function(){A.toast(action==='approve'?(syncEnabled?'일정 확인 후 결제 링크를 준비합니다.':'승인했습니다. 공간대관 알림에서 결제 링크 문자 상태를 확인할 수 있습니다.'):(syncEnabled?'신청 취소와 외부 시간 해제를 처리합니다.':'신청을 취소했습니다.'));return load();}).catch(err).finally(function(){b.disabled=false;});return;
+      b.disabled=true;api('/api/admin/booking-requests',{method:'PATCH',body:{code:code,action:action,external_checked:!!(check && check.checked)}}).then(function(){A.toast(action==='approve'?(syncEnabled?'일정 확인 후 결제 링크를 준비합니다.':'승인했습니다. 공간대관 알림에서 결제 안내 알림톡 상태를 확인할 수 있습니다.'):(syncEnabled?'신청 취소와 외부 시간 해제를 처리합니다.':'신청을 취소했습니다.'));return load();}).catch(err).finally(function(){b.disabled=false;});return;
     }
     b=event.target.closest('[data-office-cancel]');if(b){b.disabled=true;api('/api/admin/booking-payapp',{method:'POST',body:{action:'cancel',code:b.dataset.officeCancel}}).then(load).catch(err).finally(function(){b.disabled=false;});}
   });

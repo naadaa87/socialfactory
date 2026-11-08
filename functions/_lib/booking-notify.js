@@ -1,4 +1,4 @@
-import {approvedWebsiteTemplate,sendAligo} from './aligo.js';
+import {approvedWebsiteTemplate,renderAligoMessage,sendAligo} from './aligo.js';
 import {phoneDigits} from './auth.js';
 import {guestSmsConfig,sendAligoSms} from './guest-sms.js';
 import {prepareBookings,kstTimestamp} from './booking.js';
@@ -6,7 +6,6 @@ import {validPayappUrl} from './booking-payapp.js';
 import {bookingPaymentDeadline,bookingPaymentOpen} from './booking-checkout.js';
 import {assertCloudAdmission} from './booking-cloud-admission.js';
 import {BOOKING_TEMPLATES} from './booking-templates.js';
-import {renderAligoMessage} from './aligo.js';
 
 const channelLabels = {confirmed:'확정',cancelled:'취소',partial:'부분환불',review:'확인필요'};
 const phonePattern = /^01[016789]\d{7,8}$/;
@@ -22,12 +21,11 @@ const paidNotices = `
   FROM booking_requests b JOIN booking_payapp_requests p ON p.code=b.code AND p.kind='room'
   WHERE b.payment_id=p.mul_no AND p.paid_at IS NOT NULL
 `;
-const statusOrigin = 'https://socialfactory.co.kr';
 const systemCode = 'spacecloud-system';
-const customerSmsKinds = ['received','payment_ready','unpaid_expired'];
+const customerLifecycleKinds = ['received','payment_ready','unpaid_expired'];
 const staffUrgentKinds = ['review','paid_delay','sync_issue','sync_outage'];
 const listSql = values => values.map(value=>"'"+value+"'").join(',');
-const customerSmsSql = listSql(customerSmsKinds);
+const customerLifecycleSql = listSql(customerLifecycleKinds);
 const staffUrgentSql = listSql(staffUrgentKinds);
 const paidDelayMs = 120000;
 const syncDelayMs = 300000;
@@ -36,7 +34,7 @@ const syncDelayMs = 300000;
 const bookingEvents = `
   WITH candidates AS (
     SELECT b.*,p.token,p.pay_url,p.mul_no,p.status AS provider_status,p.paid_at AS provider_paid_at,
-      s.code AS sync_code,s.state AS sync_state,s.access_token,s.cancel_requested,s.updated_at AS sync_updated_at,
+      s.code AS sync_code,s.state AS sync_state,s.cancel_requested,s.updated_at AS sync_updated_at,
       checks.after_ms AS verification_started_at
     FROM booking_requests b
     LEFT JOIN booking_payapp_requests p ON p.code=b.code AND p.kind='room'
@@ -46,7 +44,7 @@ const bookingEvents = `
     SELECT code,notice,CASE WHEN notice='partial' THEN refund_amount ELSE 0 END AS version,event_at,checkout_token,pay_url
       FROM (${paidNotices}) WHERE notice IS NOT NULL
     UNION ALL
-    SELECT code,'received',0,created_at,access_token,NULL FROM candidates
+    SELECT code,'received',0,created_at,NULL,NULL FROM candidates
       WHERE status IN ('requested','awaiting_payment') AND payment_status IN ('unpaid','sync_pending','creating','pending')
         AND (sync_state IS NULL OR sync_state IN ('pending','blocking','blocked'))
     UNION ALL
@@ -57,7 +55,7 @@ const bookingEvents = `
         AND (payment_expires_at IS NULL OR payment_expires_at>${kst})
         AND datetime(date,'+'||start_min||' minutes')>${kst}
     UNION ALL
-    SELECT code,'unpaid_expired',0,updated_at,COALESCE(token,access_token),NULL FROM candidates
+    SELECT code,'unpaid_expired',0,updated_at,NULL,NULL FROM candidates
       WHERE status='expired' AND paid_at IS NULL AND provider_paid_at IS NULL
         AND (provider_status IS NULL OR provider_status='cancelled')
         AND (sync_code IS NULL OR sync_state='released')
@@ -114,6 +112,7 @@ export async function bookingNotificationSettings(env) {
     live:env.BOOKING_NOTIFY_LIVE==='1',
     smsReady:guestSmsConfig(env).configured,
     customer,
+    lifecycleTemplatesConfigured:customerLifecycleKinds.filter(kind=>String(env[BOOKING_TEMPLATES[kind].env] || '').trim()).length,
     staffReady:await bookingStaffReady(env,staff),
     staffCount:staff.length
   };
@@ -142,36 +141,30 @@ function slotTime(minutes) {
 
 const won = amount => Number(amount).toLocaleString('ko-KR');
 
-export function bookingNoticeMessage(booking, kind) {
-  const space = booking.room.slice(1)+'번룸';
-  const time = slotTime(booking.start_min)+'~'+slotTime(booking.end_min);
-  if(kind==='review')return {sms:`[소셜팩토리] 결제 확인필요 ${booking.code} ${won(booking.amount)}원`};
-  const template=BOOKING_TEMPLATES[kind];
-  const shortDate=booking.date.slice(5).replace('-','/');
-  const amount=won(kind==='confirmed'?booking.amount:booking.refund_amount);
-  const sms=`[소셜팩토리] ${space} ${shortDate} ${time} ${channelLabels[kind]} ${amount}원 ${booking.code}`;
-  const message=renderAligoMessage(template,{
-    예약번호:booking.code,조회키:booking.checkout_token,공간:space,
-    이용일시:booking.date+' '+time,인원:booking.people,
-    결제금액:won(booking.amount),환불금액:won(booking.refund_amount),
+function customerNotice(env, booking, kind, template) {
+  return renderAligoMessage(template,{
+    예약번호:booking.code,
+    조회키:booking.checkout_token,
+    공간:booking.room.slice(1)+'번룸',
+    이용일시:booking.date+' '+slotTime(booking.start_min)+'~'+slotTime(booking.end_min),
+    인원:booking.people,
+    결제금액:won(booking.amount),
+    결제기한:kind==='payment_ready' ? kstTimestamp(bookingPaymentDeadline(env,booking,!!booking.sync_code)).slice(0,16) : undefined,
+    환불금액:won(booking.refund_amount),
     남은금액:won(Math.max(0,booking.amount-booking.refund_amount))
   });
-  // The direct SMS is kept short. AlimTalk fallback includes the protected booking link.
-  return {sms,template,message};
 }
 
-function smsNotice(env, booking, kind) {
-  if(kind==='sync_outage')return '[소셜팩토리] 대관 연동 장애. 관리자 예약 메뉴에서 클라우드 상태를 확인해 주세요.';
-  if(kind==='paid_delay')return `[소셜팩토리] 결제 후 예약 확정 지연 ${booking.code}. 예약 상태를 확인해 주세요.`;
-  if(kind==='sync_issue')return `[소셜팩토리] 대관 연동 확인 필요 ${booking.code}. 관리자 예약 메뉴를 확인해 주세요.`;
-  const heading = `[소셜팩토리 건대] ${booking.code}`;
-  const detail = `${booking.room.slice(1)}번룸 · ${booking.date} ${slotTime(booking.start_min)}~${slotTime(booking.end_min)}`;
-  const link = booking.checkout_token
-    ? statusOrigin+'/booking-status?'+new URLSearchParams({code:booking.code,t:booking.checkout_token}) : '';
-  if(kind==='received')return [heading,detail,'공간대관 신청이 접수되었습니다. 결제와 일정 확인 후 예약이 확정됩니다.',link].filter(Boolean).join('\n');
-  const deadline = kind==='payment_ready' ? kstTimestamp(bookingPaymentDeadline(env,booking,!!booking.sync_code)).slice(0,16) : '';
-  if(kind==='payment_ready')return [heading,detail,`결제가 가능합니다. 아래에서 예약 내용과 결제금액 ${won(booking.amount)}원을 확인해 주세요. 이미 결제했다면 다시 결제하지 마세요.`,'결제 기한: '+deadline,link].join('\n');
-  return [heading,detail,'결제가 확인되지 않아 예약 신청이 만료되었습니다. 이용을 원하시면 다시 신청해 주세요.',statusOrigin+'/booking'].join('\n');
+function staffNotice(booking, kind) {
+  if(kind==='sync_outage')return {text:'[소셜팩토리] 대관 연동 장애. 관리자 예약 메뉴에서 클라우드 상태를 확인해 주세요.',long:true};
+  if(kind==='paid_delay')return {text:`[소셜팩토리] 결제 후 예약 확정 지연 ${booking.code}. 예약 상태를 확인해 주세요.`,long:true};
+  if(kind==='sync_issue')return {text:`[소셜팩토리] 대관 연동 확인 필요 ${booking.code}. 관리자 예약 메뉴를 확인해 주세요.`,long:true};
+  if(kind==='review')return {text:`[소셜팩토리] 결제 확인필요 ${booking.code} ${won(booking.amount)}원`};
+  const space = booking.room.slice(1)+'번룸';
+  const time = slotTime(booking.start_min)+'~'+slotTime(booking.end_min);
+  const shortDate=booking.date.slice(5).replace('-','/');
+  const amount=won(kind==='confirmed'?booking.amount:booking.refund_amount);
+  return {text:`[소셜팩토리] ${space} ${shortDate} ${time} ${channelLabels[kind]} ${amount}원 ${booking.code}`};
 }
 
 export async function runBookingNotifications(env,{limit=15,code=null,checkIntegration=false,integrationFailed=false}={}) {
@@ -199,7 +192,7 @@ export async function runBookingNotifications(env,{limit=15,code=null,checkInteg
       WHERE e.event_at>=?3 AND e.event_at>=datetime('now','+9 hours','-1 day')
         AND (?4 IS NULL OR e.code=?4)
         AND (CASE WHEN ?1='customer' THEN e.notice NOT IN (${staffUrgentSql})
-          ELSE e.notice NOT IN (${customerSmsSql}) END)`)
+          ELSE e.notice NOT IN (${customerLifecycleSql}) END)`)
       .bind(key,phone?.slice(-4)||'',start,code).run();
   }
   await env.DB.prepare(`UPDATE booking_notifications SET state='unknown',updated_at=${kst}
@@ -213,18 +206,18 @@ export async function runBookingNotifications(env,{limit=15,code=null,checkInteg
     ))`).bind(code).run();
 
   const {results}=await env.DB.prepare(`SELECT DISTINCT kind FROM booking_notifications
-    WHERE state='queued' AND recipient='customer' AND kind NOT IN (${customerSmsSql}) AND (?1 IS NULL OR code=?1)`).bind(code).all();
+    WHERE state='queued' AND recipient='customer' AND (?1 IS NULL OR code=?1)`).bind(code).all();
   const approvals=new Set();
   if(customer)await Promise.all(results.map(async ({kind})=>{
     const template=BOOKING_TEMPLATES[kind];
     if(template && (env[template.env] || template.code) && await approvedWebsiteTemplate(env,template))approvals.add(kind);
   }));
-  const allowedKinds=JSON.stringify([...approvals,...customerSmsKinds]);
+  const allowedKinds=JSON.stringify([...approvals]);
   const activeRecipients=JSON.stringify(targets.map(target=>target.key));
   const {results:jobs}=await env.DB.prepare(`SELECT * FROM booking_notifications WHERE state='queued'
     AND (?1 IS NULL OR code=?1) AND recipient IN (SELECT value FROM json_each(?2))
     AND (recipient<>'customer' OR kind IN (SELECT value FROM json_each(?3)))
-    ORDER BY CASE WHEN kind IN (${staffUrgentSql}) THEN 0 WHEN kind IN (${customerSmsSql}) THEN 1 ELSE 2 END,
+    ORDER BY CASE WHEN kind IN (${staffUrgentSql}) THEN 0 WHEN kind IN (${customerLifecycleSql}) THEN 1 ELSE 2 END,
       created_at,CASE kind WHEN 'received' THEN 0 WHEN 'payment_ready' THEN 1 ELSE 2 END,recipient
     LIMIT ?4`).bind(code,activeRecipients,allowedKinds,limit).all();
   const out={enabled:true,accepted:0,test:0,failed:0,unknown:0,waiting:results.length-approvals.size};
@@ -248,17 +241,17 @@ export async function runBookingNotifications(env,{limit=15,code=null,checkInteg
       await update('skipped');
       return;
     }
-    const isAlimtalk=isCustomer && !customerSmsKinds.includes(job.kind);
     let result;
     try {
-      if(customerSmsKinds.includes(job.kind) || staffUrgentKinds.includes(job.kind) && job.kind!=='review') {
-        result=await sendAligoSms(env,phone,smsNotice(env,booking,job.kind),{test,long:true});
+      if(isCustomer) {
+        const template=BOOKING_TEMPLATES[job.kind];
+        result=await sendAligo(sendEnv,{phone},customerNotice(env,booking,job.kind,template),template);
       } else {
-        const {sms,template,message}=bookingNoticeMessage(booking,job.kind);
-        result=isAlimtalk?await sendAligo(sendEnv,{phone},message,template):await sendAligoSms(env,phone,sms,{test});
+        const {text,long}=staffNotice(booking,job.kind);
+        result=await sendAligoSms(env,phone,text,{test,long});
       }
     } catch(error) {
-      const failure=isAlimtalk?error.retryable!==false:error.confirmedFailure===true;
+      const failure=isCustomer?error.retryable!==false:error.confirmedFailure===true;
       const state=failure?'failed':'unknown';
       await update(state);
       out[state]++;

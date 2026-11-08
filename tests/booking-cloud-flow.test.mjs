@@ -16,6 +16,7 @@ import { onRequestPost as feedback } from '../functions/api/booking/payapp-feedb
 import { onRequestPatch as updateBooking,onRequestGet as listBookings } from '../functions/api/admin/booking-requests.js';
 import { runBookingNotifications } from '../functions/_lib/booking-notify.js';
 import { kstTimestamp } from '../functions/_lib/booking.js';
+import { BOOKING_TEMPLATES } from '../functions/_lib/booking-templates.js';
 
 const ORIGIN='https://example.test';
 function fixture() {
@@ -54,7 +55,7 @@ async function notify(env,code,state,extra={}) {
 }
 const requestCheckout=(env,code,t)=>checkout({request:post('/api/booking/payment-status',{code,t,consent:true}),env});
 const readyCloudStatus=()=>({ok:true,enabled:true,allow_writes:true,login_saved:true,public_login_saved:true,runner:{busy:false,review:false},budget:{utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),daily_limit_ms:2700000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
-async function withProvider(run,{mode='success',cloudStatus,sms}={}) {
+async function withProvider(run,{mode='success',cloudStatus,sms,alimtalk,unapproved=false}={}) {
   const previous=globalThis.fetch,calls=[];
   globalThis.fetch=async(url,options)=>{
     if(String(url)==='https://runner.example.workers.dev/status'){
@@ -64,6 +65,17 @@ async function withProvider(run,{mode='success',cloudStatus,sms}={}) {
     if(String(url)==='https://runner.example.workers.dev/run'){
       assert.equal(options?.method,'POST');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-worker-token-more-than-thirty-two-characters');
       return Response.json({ok:true,scheduled:true},{status:202});
+    }
+    if(alimtalk && String(url).includes('/template/list/')) {
+      const code=options.body.get('tpl_code');
+      const kind=Object.keys(BOOKING_TEMPLATES).find(key=>'mock-'+key===code || code==='mock-unapproved-receipt' && key==='received');
+      const template=BOOKING_TEMPLATES[kind];
+      return Response.json({code:0,list:template?[{templtCode:code,inspStatus:unapproved?'REQ':'APR',
+        status:'A',templtContent:template.text,buttons:template.buttons.button}]:[]});
+    }
+    if(alimtalk && String(url).includes('/alimtalk/send/')) {
+      alimtalk.push(new URLSearchParams(options.body));
+      return Response.json({code:0,info:{mid:alimtalk.length,scnt:1,fcnt:0}});
     }
     if(sms && String(url)==='https://apis.aligo.in/send/') {
       sms.push(new URLSearchParams(options.body));
@@ -377,45 +389,51 @@ function enableLifecycleNotices(env) {
   return Object.assign(env,{
     BOOKING_NOTIFY_START:kstTimestamp(Date.now()-60000),
     BOOKING_NOTIFY_CUSTOMER:'1',BOOKING_NOTIFY_LIVE:'1',BOOKING_NOTIFY_STAFF:'01011112222,01033334444',
-    ALIGO_SMS_API_KEY:'mock-sms-key',ALIGO_SMS_USER_ID:'mock-user',ALIGO_SMS_SENDER:'021234567'
+    ALIGO_API_KEY:'mock-api-key',ALIGO_USER_ID:'mock-user',ALIGO_SENDER:'021234567',
+    ALIGO_SENDER_KEY:'mock-booking-sender',
+    BOOKING_ALIMTALK_RECEIVED:'mock-received',BOOKING_ALIMTALK_PAYMENT_READY:'mock-payment_ready',
+    BOOKING_ALIMTALK_UNPAID_EXPIRED:'mock-unpaid_expired'
   });
 }
 
 test('customer gets one receipt, a verified payment link, then expiry only after the worker proves release',async()=>{
-  const sms=[];
+  const sms=[],alimtalk=[];
   await withProvider(async calls=>{
     const env=enableLifecycleNotices(fixture());
     const {data,input}=await create(env);
-    assert.equal(sms.length,1);
-    assert.equal(sms[0].get('receiver'),'01012345678');
-    assert.match(sms[0].get('msg'),/신청이 접수되었습니다/);
-    assert.match(sms[0].get('msg'),new RegExp(tokenFrom(data)));
+    assert.equal(alimtalk.length,1);
+    assert.equal(alimtalk[0].get('receiver_1'),'01012345678');
+    assert.match(alimtalk[0].get('message_1'),/신청이 접수되었습니다/);
+    assert.doesNotMatch(alimtalk[0].get('fmessage_1'),new RegExp(tokenFrom(data)));
     assert.equal((await create(env,input)).data.duplicate,true);
-    assert.equal(sms.length,1);
+    assert.equal(alimtalk.length,1);
 
     await done(env,await nextJob(env));
-    assert.equal(sms.length,2);
+    assert.equal(alimtalk.length,2);
     const payment=paymentRow(env,data.code);
-    assert.equal(sms[1].get('msg_type'),'LMS');
-    assert.match(sms[1].get('msg'),/결제 기한:/);
-    assert.match(sms[1].get('msg'),new RegExp(payment.token));
-    assert.doesNotMatch(sms[1].get('msg'),/payapp\.kr/);
+    assert.equal(alimtalk[1].get('failover'),'Y');
+    assert.match(alimtalk[1].get('message_1'),/결제 기한:/);
+    const button=JSON.parse(alimtalk[1].get('button_1')).button[0];
+    assert.equal(new URL(button.linkMo).searchParams.get('t'),payment.token);
+    assert.match(alimtalk[1].get('fmessage_1'),new RegExp(payment.token));
+    assert.equal(sms.length,0);
+    assert.doesNotMatch(alimtalk[1].get('message_1'),/payapp\.kr/);
 
     env.sqlite.prepare("UPDATE booking_requests SET approved_at=datetime('now','+9 hours','-20 minutes') WHERE code=?").run(data.code);
     assert.equal((await requestCheckout(env,data.code,tokenFrom(data))).status,409);
     const release=await nextJob(env);
     assert.equal(release.action,'release');
     assert.deepEqual(calls.map(form=>form.get('cmd')),['payrequest','paycancel']);
-    assert.equal(sms.length,2);
+    assert.equal(alimtalk.length,2);
     const result=await done(env,release,{proof:receipt(release,{verified_released:true,verified_blocked:false})});
     assert.equal(result.status,200);
-    assert.equal(sms.length,3);
-    assert.match(sms[2].get('msg'),/미납|결제가 확인되지 않아/);
+    assert.equal(alimtalk.length,3);
+    assert.match(alimtalk[2].get('message_1'),/미납|결제가 확인되지 않아/);
     assert.equal((await getBooking(env,data.code)).status,'expired');
     const status=await paymentStatus({env,request:new Request(ORIGIN+data.status_url)});
     assert.equal((await status.json()).status,'expired');
     assert.equal((await done(env,release)).status,200);
-    assert.equal(sms.length,3);
+    assert.equal(alimtalk.length,3);
 
     const response=await listBookings({env,request:new Request(ORIGIN+'/api/admin/booking-requests',{
       headers:{authorization:'Bearer '+env.ADMIN_KEY}
@@ -424,7 +442,7 @@ test('customer gets one receipt, a verified payment link, then expiry only after
     assert.deepEqual(admin.results[0].notifications.map(item=>item.kind).sort(),['payment_ready','received','unpaid_expired']);
     assert.equal(admin.recentNotifications.every(item=>item.state==='accepted' && item.last4==='5678'),true);
     assert.doesNotMatch(JSON.stringify(admin.recentNotifications),new RegExp(payment.token));
-  },{sms});
+  },{sms,alimtalk});
 });
 
 test('paid verification sends staff a single delay notice, then alerts immediately on an explicit sync failure',async()=>{
@@ -452,23 +470,23 @@ test('paid verification sends staff a single delay notice, then alerts immediate
     assert.match(staffMessages()[2].get('msg'),/연동 확인 필요/);
     assert.equal((await done(env,verification,{status:'review'})).status,200);
     assert.equal(staffMessages().length,4);
-    assert.equal(sms.filter(form=>form.get('receiver')==='01012345678').length,2);
+    assert.equal(sms.filter(form=>form.get('receiver')==='01012345678').length,0);
   },{sms});
 });
 
 test('manual approval sends the customer a payment link and an expired link is closed by ready-only provider cancellation',async()=>{
-  const sms=[];
+  const alimtalk=[];
   await withProvider(async calls=>{
     const env=enableLifecycleNotices(fixture());
     env.SPACECLOUD_SYNC_ENABLED='false';
     const {data}=await create(env);
-    assert.equal(sms.length,1);
-    assert.doesNotMatch(sms[0].get('msg'),/booking-status/);
+    assert.equal(alimtalk.length,1);
+    assert.doesNotMatch(alimtalk[0].get('message_1'),/booking-status/);
     const approved=await updateBooking({env,request:post('/api/admin/booking-requests',{
       action:'approve',code:data.code,external_checked:true
     },env.ADMIN_KEY)});
     assert.equal(approved.status,200);
-    assert.equal(sms.length,2);
+    assert.equal(alimtalk.length,2);
     const {token}=paymentRow(env,data.code);
     assert.equal((await requestCheckout(env,data.code,token)).status,200);
     env.sqlite.prepare("UPDATE booking_requests SET payment_expires_at=NULL,expires_at=datetime('now','+9 hours','-1 minute') WHERE code=?").run(data.code);
@@ -481,9 +499,9 @@ test('manual approval sends the customer a payment link and an expired link is c
     await runBookingNotifications(env,{code:data.code});
     assert.equal(calls[1].get('cancelmode'),'ready');
     assert.equal((await getBooking(env,data.code)).status,'expired');
-    assert.equal(sms.length,3);
-    assert.match(sms[2].get('msg'),/만료되었습니다/);
-  },{sms});
+    assert.equal(alimtalk.length,3);
+    assert.match(alimtalk[2].get('message_1'),/만료되었습니다/);
+  },{alimtalk});
 });
 
 test('cloud readiness failures produce one staff incident notice until health recovers',async()=>{
@@ -503,4 +521,17 @@ test('cloud readiness failures produce one staff incident notice until health re
     assert.equal(sms.length,4);
     assert.equal(env.sqlite.prepare("SELECT COUNT(*) n FROM booking_notifications WHERE kind='sync_outage' AND state='accepted'").get().n,4);
   },{sms,cloudStatus(data){data.login_saved=cloudReady;}});
+});
+
+test('unapproved customer templates remain queued without sending an SMS',async()=>{
+  const sms=[],alimtalk=[];
+  await withProvider(async()=>{
+    const env=enableLifecycleNotices(fixture());
+    env.BOOKING_ALIMTALK_RECEIVED='mock-unapproved-receipt';
+    const {data}=await create(env);
+    const notice=env.sqlite.prepare("SELECT state FROM booking_notifications WHERE code=? AND kind='received'").get(data.code);
+    assert.equal(notice.state,'queued');
+    assert.equal(sms.length,0);
+    assert.equal(alimtalk.length,0);
+  },{sms,alimtalk,unapproved:true});
 });
