@@ -1,6 +1,6 @@
 import { ensurePayapp, netOrderAmount } from "../../_lib/payapp.js";
 import {ensurePayappSales,payappSource,payappOnlySummary} from '../../_lib/payapp-sales.js';
-import { ensureSpacecloudSales, SALES_SOURCE } from "../../_lib/spacecloud-sales.js";
+import { calendarPaymentGaps, calendarReservationId, ensureSpacecloudSales, SALES_SOURCE } from "../../_lib/spacecloud-sales.js";
 /**
  * GET /api/admin/sales?year=2026&basis=use|paid&orders=1 — 매출 집계 (관리자)
  *
@@ -136,14 +136,16 @@ export async function onRequestGet({ request, env }) {
   const years = Array.from(new Set(ys.map((r) => r.y).filter((y) => /^\d{4}$/.test(y || "")).concat([today.slice(0, 4), year]))).sort().reverse();
 
   const external = await loadSpacecloudForDisplay(env);
-  const recorded = await all(`SELECT code, status, channel, space, date, start_min, end_min FROM reservations WHERE channel = 'spacecloud'`);
-  const importedIds = new Set((await all("SELECT reservation_id FROM spacecloud_sales")).map(x => x.reservation_id));
-  const missing = mergeCalendarRows(recorded, external.results).filter(x => x.external && x.date.slice(0,4) === year && !importedIds.has((x.source_url || '').split('/').pop()));
+  const recorded = await all(`SELECT code, status, channel, space, date, start_min, end_min, customer_name, pay_status FROM reservations WHERE channel = 'spacecloud'`);
+  const imported = await all("SELECT reservation_id, use_date, end_date, linked_code FROM spacecloud_sales");
+  const importedIds = new Set(imported.map(x => x.reservation_id));
+  const missing = mergeCalendarRows(recorded, external.results).filter(x => x.external && x.date.slice(0,4) === year && !importedIds.has(calendarReservationId(x.source_url)));
   return json({
     ok: true, today, year, basis, withOrders, years,
     methods: methods.map((k) => ({ key: k, label: k==='office_payapp'?'독립사무실 페이앱':k==='payapp_direct'?'페이앱 직접 결제':k === 'toss_terminal' ? '토스 일반 단말기' : k === "orders" ? "홈페이지 온라인 결제" : k === "kiosk" ? "토스프론트 이용권" : PAY_METHODS[k] })),
     months, byMethod, countBy, total, n, refunds,
     bySpace, byChannel, channelTotal: total, unrecordedSpacecloud: missing.length, spacecloud: external.info,
+    spacecloudPaymentGaps: calendarPaymentGaps(external.results, recorded, imported, year),
     allTime: { total: (Number(resAll.s) || 0) + (Number(ordAll.s) || 0) + (Number(kioskAll.s) || 0)+(Number(terminalAll.s)||0)+(Number(payappAll.s)||0)+(Number(officeAll.s)||0), n: (Number(resAll.n) || 0) + (Number(ordAll.n) || 0) + (Number(kioskAll.n) || 0)+(Number(terminalAll.n)||0)+(Number(payappAll.n)||0)+(Number(officeAll.n)||0) },
     unpaid: { n: Number(unpaid.n) || 0, amount: Number(unpaid.s) || 0 },
     thisMonth: await monthTotal(thisYm), lastMonth: await monthTotal(lastYm)
