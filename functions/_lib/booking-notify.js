@@ -112,7 +112,10 @@ export async function bookingNotificationSettings(env) {
     live:env.BOOKING_NOTIFY_LIVE==='1',
     smsReady:guestSmsConfig(env).configured,
     customer,
-    lifecycleTemplatesConfigured:customerLifecycleKinds.filter(kind=>String(env[BOOKING_TEMPLATES[kind].env] || '').trim()).length,
+    lifecycleTemplatesConfigured:customerLifecycleKinds.filter(kind=>{
+      const template=BOOKING_TEMPLATES[kind];
+      return String(env[template.env] || template.code || '').trim();
+    }).length,
     staffReady:await bookingStaffReady(env,staff),
     staffCount:staff.length
   };
