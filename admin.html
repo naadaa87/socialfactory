@@ -223,7 +223,13 @@
         <div class="ts-toolbar mt-s"><button class="btn btn-light btn-sm" type="button" id="ts-prev" disabled>이전 페이지</button><span id="ts-page" class="small"></span><button class="btn btn-light btn-sm" type="button" id="ts-next" disabled>다음 페이지</button></div>
       </div>
       <div class="card mt"><h2>스페이스클라우드 자동 매출 동기화</h2>
-        <p class="small muted">연결된 PC의 크롬에서 15분마다 수집합니다. 매출은 로그인한 모든 관리자에게 동일하게 표시됩니다. PC 절전·크롬 종료·호스트센터 로그인 만료 시 수집이 멈춥니다.</p>
+        <p class="small muted">클라우드에서 정산 예정·완료 내역을 확인합니다. 호스트 로그인이 만료되면 예약 신청 화면의 클라우드 예약 연동에서 다시 연결해 주세요.</p>
+        <div class="small">
+          <p id="sc-cloud-sales-status" role="status">클라우드 결제 수집 상태 확인 중…</p>
+          <p id="sc-cloud-sales-times" class="muted"></p>
+          <p id="sc-cloud-sales-counts"></p>
+        </div>
+        <p class="small muted mt-s">PC 크롬 수집 (보조 연결)</p>
         <p id="sc-auto-status" role="status">연결 상태 확인 중…</p><p id="sc-auto-times" class="small muted"></p><p id="sc-auto-counts" class="small"></p>
         <div id="sc-payment-gaps" class="small mt-s" hidden></div>
         <button id="sc-auto-pair" class="btn btn-primary" type="button">크롬 연결 코드 발급</button>
@@ -672,7 +678,7 @@
 <script src="/js/admin-toss-sales.js?v=20261106-sort"></script>
 <script src="/js/admin-payapp-sales.js?v=20261106"></script>
 <script src="js/spacecloud-import.js?v=paid20261024"></script>
-<script src="js/spacecloud-auto.js?v=20261025-2"></script>
+<script src="js/spacecloud-auto.js?v=20261108-cloud"></script>
 <script src="js/spacecloud-history.js?v=20261025-1"></script>
 <script src="/toss-front-plugin/ui.js?v=20261030-product-discount"></script>
 <script src="/js/admin-kiosk-ui.js?v=749a2de995"></script>
