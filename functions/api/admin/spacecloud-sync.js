@@ -1,6 +1,7 @@
 import {json} from '../../_lib/auth.js';
 import {adminGate} from '../../_lib/admin.js';
 import {ensureSync,createCode} from '../../_lib/spacecloud-sync.js';
+import {cloudSalesSummary} from '../../_lib/spacecloud-cloud-sales.js';
 import {SAME_DAY_REVIEW} from '../../_lib/spacecloud-sales.js';
 export async function onRequestGet({request,env}){
  const deny=await adminGate(request,env);if(deny)return deny;await ensureSync(env);
@@ -9,7 +10,7 @@ export async function onRequestGet({request,env}){
    WHERE a.action='review' AND (a.reason<>?1 OR NOT EXISTS(
      SELECT 1 FROM spacecloud_sales s WHERE s.reservation_id=a.reservation_id))
    ORDER BY a.id DESC LIMIT 20`).bind(SAME_DAY_REVIEW).all()).results;
- return json({ok:true,device:device||null,review:review||[],now:Date.now()});
+ return json({ok:true,device:device||null,cloud:await cloudSalesSummary(env),review:review||[],now:Date.now()});
 }
 export async function onRequestPost({request,env}){
  const deny=await adminGate(request,env);if(deny)return deny;let b;try{b=await request.json();}catch{return json({ok:false},400);}

@@ -658,3 +658,26 @@ test('the login deadline starts before its remote acquisition',async()=>{
   await assert.rejects(runner.startLogin(f.env),{code:'login-expired'});
   assert.equal(reservation(f).state,'review');assert.equal(reservation(f).charged_ms,360000);assert.equal(lock(f).review,1);
 });
+
+test('scheduled payment collection uses the saved server login and the existing budget without a reservation lease',async()=>{
+  const f=await ready(fixture({SPACECLOUD_CLOUD_SALES:'true',PUBLIC_AVAILABILITY_MODE:'public-api-v1'}));
+  f.setJob(null);
+  const plan={from:'2026-10-01',to:'2026-11-06',observed_at:CLOCK},rows=[{reservation_id:'1234',amount:10000}];
+  const calls=[];
+  const runner=createRunner({...f.deps,
+    async requestPayments(config,body){
+      calls.push(body);assert.equal(config.origin,'https://site.example');
+      return body.action==='begin'?{ok:true,plan}:{ok:true,counts:{added:1}};
+    },
+    async collectPayments(context,received,live){assert.deepEqual(received,plan);live();return rows;}
+  });
+  await runner.scheduled(f.env,CLOCK);
+  assert.deepEqual(calls,[{action:'begin',retry:false},{action:'sync',complete:true,observed_at:CLOCK,rows}]);
+  assert.equal(f.counters.launches,1);
+  assert.equal(f.counters.maintenance,1);
+  assert.equal(f.counters.claims,1); // Separate website reservation poll returned no job.
+  assert.equal(f.counters.completions.length,0);
+  assert.equal(f.counters.driverInitializations,0);
+  assert.equal(f.counters.closes.length,1);
+  assert.equal(lock(f).token,null);
+});
