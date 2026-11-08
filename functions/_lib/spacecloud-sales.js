@@ -1,3 +1,5 @@
+export const SAME_DAY_REVIEW = '같은 이용일의 기존 스페이스클라우드 매출 확인 필요';
+
 // Settlement imports are financial records, separate from room occupancy.
 export async function ensureSpacecloudSales(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS spacecloud_sales (
