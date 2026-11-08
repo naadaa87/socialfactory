@@ -1,10 +1,10 @@
 import { json,clean,sameOrigin } from '../../_lib/auth.js';
 import { adminGate,kstNow } from '../../_lib/admin.js';
 import { prepareBookings,BOOKING_COLUMNS,BOOKING_STATUSES,getBooking,externalBookingConflict,isBookingConflict } from '../../_lib/booking.js';
-import { createBookingPayment,cancelBookingPayment,payappConfig } from '../../_lib/booking-payapp.js';
+import { createBookingPayment,payappConfig } from '../../_lib/booking-payapp.js';
 import { syncEnabled,getSync } from '../../_lib/booking-spacecloud-sync.js';
-import { startSynchronizedBooking,cancelSynchronizedBooking } from '../../_lib/booking-checkout.js';
-import { ensureBookingNotifications,testBookingOperatorSms } from '../../_lib/booking-notify.js';
+import { startSynchronizedBooking,cancelBookingRequest } from '../../_lib/booking-checkout.js';
+import { bookingNotificationSettings,ensureBookingNotifications,scheduleBookingNotices,testBookingOperatorSms } from '../../_lib/booking-notify.js';
 import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
 
 export async function onRequestGet({request,env}) {
@@ -16,7 +16,7 @@ export async function onRequestGet({request,env}) {
     const statement = env.DB.prepare(`SELECT ${BOOKING_COLUMNS} FROM booking_requests${where} ORDER BY created_at DESC,id DESC LIMIT 500`);
     const {results} = await (where ? statement.bind(status) : statement).all();
     await ensureBookingNotifications(env);
-    const {results:notices}=await env.DB.prepare(`SELECT n.code,n.kind,n.recipient,n.last4,n.state FROM booking_notifications n
+    const {results:notices}=await env.DB.prepare(`SELECT n.code,n.kind,n.recipient,n.last4,n.state,n.updated_at FROM booking_notifications n
       WHERE n.code IN (SELECT value FROM json_each(?)) AND n.version=(SELECT MAX(i.version) FROM booking_notifications i
         WHERE i.code=n.code AND i.kind=n.kind AND i.recipient=n.recipient)`).bind(JSON.stringify((results || []).map(item=>item.code))).all();
     const byCode=new Map();
@@ -24,10 +24,11 @@ export async function onRequestGet({request,env}) {
       if(!byCode.has(code))byCode.set(code,[]);
       byCode.get(code).push(notice);
     }
+    const {results:recentNotifications}=await env.DB.prepare('SELECT code,kind,recipient,last4,state,updated_at FROM booking_notifications WHERE code<>? ORDER BY updated_at DESC,created_at DESC LIMIT 40').bind('operator-test').all();
     const enriched=await Promise.all((results || []).map(async item=>{
       const sync=await getSync(env,item.code);return {...item,sync_state:sync?.state || null,notifications:byCode.get(item.code) || []};
     }));
-    return json({ok:true,results:enriched,payapp:{ready:payappConfig(env).ready},sync:{enabled:syncEnabled(env),ready:syncEnabled(env) && String(env.SPACECLOUD_WORKER_TOKEN || '').length>=32}});
+    return json({ok:true,results:enriched,recentNotifications,notificationSettings:await bookingNotificationSettings(env),payapp:{ready:payappConfig(env).ready},sync:{enabled:syncEnabled(env),ready:syncEnabled(env) && String(env.SPACECLOUD_WORKER_TOKEN || '').length>=32}});
   } catch (error) {
     console.error('admin-bookings-get',error?.message);
     return json({ok:false,error:'db-error',message:'예약 신청을 불러오지 못했습니다.'},500);
@@ -61,7 +62,7 @@ export async function onRequestPatch({request,env,waitUntil}) {
       if (Date.parse(booking.date+'T00:00:00+09:00') + booking.start_min * 60000 <= Date.now()) return json({ok:false,error:'past',message:'이용 시작시간이 지난 신청은 승인할 수 없습니다.'},409);
       if (await externalBookingConflict(env,booking)) return json({ok:false,error:'conflict',message:'외부 일정과 겹칩니다. 예약 시간을 다시 확인해 주세요.'},409);
       const transition = await env.DB.prepare(`UPDATE booking_requests SET status='awaiting_payment',payment_status='creating',approved_at=?2,
-        external_checked_at=?2,updated_at=?2 WHERE code=?1 AND status='requested' AND expires_at > ?2`).bind(code,kstNow()).run();
+        external_checked_at=?2,payment_expires_at=expires_at,updated_at=?2 WHERE code=?1 AND status='requested' AND expires_at > ?2`).bind(code,kstNow()).run();
       if (!Number(transition?.meta?.changes)) return json({ok:false,error:'state',message:'신청 상태가 변경되었습니다. 목록을 새로고침해 주세요.'},409);
       try {
         const payment = await createBookingPayment(env,{booking:await getBooking(env,code),request});
@@ -76,7 +77,7 @@ export async function onRequestPatch({request,env,waitUntil}) {
     }
     if (action === 'cancel') {
       if(await getSync(env,code)) {
-        await cancelSynchronizedBooking(env,booking);
+        await cancelBookingRequest(env,booking);
         await wakeCloudRunner(env,{waitUntil});
         return json({ok:true,item:{...await getBooking(env,code),sync_state:(await getSync(env,code)).state},pending:true});
       }
@@ -84,10 +85,11 @@ export async function onRequestPatch({request,env,waitUntil}) {
       if (booking.status === 'confirmed' || booking.status === 'payment_review') return json({ok:false,error:'payment-review',message:'결제·환불 내역을 먼저 확인해야 합니다. 페이앱 판매자 화면에서 확인해 주세요.'},409);
       if (booking.status === 'awaiting_payment') {
         if (booking.payment_status === 'creating') return json({ok:false,error:'payment-creating',message:'결제요청 생성 중입니다. 잠시 후 다시 확인해 주세요.'},409);
-        await cancelBookingPayment(env,{booking,request});
+        await cancelBookingRequest(env,booking,{reason:clean(body.reason,500)});
+      } else {
+        await env.DB.prepare(`UPDATE booking_requests SET status='cancelled',memo=?2,updated_at=?3
+          WHERE code=?1 AND status='requested'`).bind(code,clean(body.reason,500),kstNow()).run();
       }
-      await env.DB.prepare(`UPDATE booking_requests SET status='cancelled',payment_status=CASE WHEN payment_status='unpaid' THEN 'unpaid' ELSE 'cancelled' END,
-        memo=?2,updated_at=?3 WHERE code=?1 AND status IN ('requested','awaiting_payment')`).bind(code,clean(body.reason,500),kstNow()).run();
       return json({ok:true,item:await getBooking(env,code)});
     }
     return json({ok:false,error:'invalid',message:'지원하지 않는 작업입니다.'},400);
@@ -95,6 +97,8 @@ export async function onRequestPatch({request,env,waitUntil}) {
     if (isBookingConflict(error)) return json({ok:false,error:'conflict',message:'같은 시간에 다른 예약이 있습니다. 일정을 다시 확인해 주세요.'},409);
     console.error('admin-bookings-change',error?.code || error?.message);
     return json({ok:false,error:clean(error?.code,60) || 'db-error',message:clean(error?.message,200) || '신청을 변경하지 못했습니다.'},Number(error?.status) || 500);
+  } finally {
+    if(code)await scheduleBookingNotices(env,waitUntil,{code});
   }
 }
 

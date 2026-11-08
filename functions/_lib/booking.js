@@ -10,7 +10,7 @@ export const BOOKING_RATES = globalThis.SF_BOOKING_RATES;
 export const BOOKING_NOTICE = '2026-11-06';
 export const BOOKING_PURPOSES = ['meeting','education','seminar','study','workshop','shooting','other'];
 export const BOOKING_STATUSES = ['requested','awaiting_payment','confirmed','cancelled','expired','payment_review'];
-export const BOOKING_COLUMNS = 'code, created_at, updated_at, status, room, date, start_min, end_min, people, customer_name, phone, email, company, purpose, purpose_detail, requests, amount, expires_at, approved_at, external_checked_at, payment_status, payment_id, payment_url, paid_at, refund_amount, memo';
+export const BOOKING_COLUMNS = 'code, created_at, updated_at, status, room, date, start_min, end_min, people, customer_name, phone, email, company, purpose, purpose_detail, requests, amount, expires_at, payment_expires_at, approved_at, external_checked_at, payment_status, payment_id, payment_url, paid_at, refund_amount, memo';
 export const isBookingConflict = error => /booking-conflict/.test(String(error?.message || error));
 export const kstTimestamp = (now = Date.now()) => new Date(now + 9 * 3600000).toISOString().slice(0,19).replace('T',' ');
 const paidTimestamp = value => {
@@ -141,7 +141,7 @@ export async function applyBookingPayment(env, { code,id,state,paid_at,refund_am
   const time = kstTimestamp(), paidTime = paidTimestamp(paid_at);
   if (state === 'paid') {
     if (booking.status === 'confirmed' && ['paid','refund_pending'].includes(booking.payment_status)) return { ok:true,already:true };
-    if (booking.status !== 'awaiting_payment') {
+    if (booking.status !== 'awaiting_payment' || ['cancelling','releasing'].includes(booking.payment_status)) {
       return paymentReview(env,{code,id,paidTime,time,memo:'취소·만료 후 결제 통보: 일정과 환불 확인 필요'});
     }
     const block=await getSync(env,code);
@@ -196,7 +196,10 @@ export async function applyBookingPayment(env, { code,id,state,paid_at,refund_am
         pay_status=CASE WHEN ?3 > 0 THEN 'refunded' ELSE pay_status END,refund_amount=?3,
         refunded_at=CASE WHEN ?3 > 0 THEN ?4 ELSE refunded_at END,
         cancelled_at=CASE WHEN ?2 THEN ?4 ELSE cancelled_at END,updated_at=?4 WHERE code=?1`).bind(code,full ? 1 : 0,refund,time),
-      env.DB.prepare(`UPDATE booking_requests SET status=CASE WHEN ?2 THEN 'cancelled' ELSE status END,
+      env.DB.prepare(`UPDATE booking_requests SET status=CASE
+          WHEN ?2 AND ?5=0 AND paid_at IS NULL AND (status='expired' OR (expiry_requested_at IS NOT NULL AND NOT EXISTS
+            (SELECT 1 FROM spacecloud_blocks WHERE code=?1))) THEN 'expired'
+          WHEN ?2 THEN 'cancelled' ELSE status END,
         payment_status=?3,payment_id=?4,refund_amount=?5,updated_at=?6 WHERE code=?1`)
         .bind(code,full ? 1 : 0,refund > 0 ? 'refunded' : 'cancelled',String(id),refund,time)
     ]);

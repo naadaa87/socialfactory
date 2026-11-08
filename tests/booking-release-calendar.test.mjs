@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { prepareBookings,bookingAvailability,getBooking } from '../functions/_lib/booking.js';
 import { ensurePayappSchema } from '../functions/_lib/booking-payapp.js';
 import { enqueueSync,claimSyncJob,finishSyncJob,getSync } from '../functions/_lib/booking-spacecloud-sync.js';
-import { cancelSynchronizedBooking } from '../functions/_lib/booking-checkout.js';
+import { cancelBookingRequest } from '../functions/_lib/booking-checkout.js';
 import { loadSpacecloud } from '../functions/_lib/spacecloud.js';
 import { onRequestPost as complete } from '../functions/api/internal/spacecloud-sync.js';
 
@@ -41,7 +41,7 @@ for(const failedFeed of [false,true])test(failedFeed?'release keeps the last cac
   };t.after(()=>{globalThis.fetch=previousFetch;});
   await loadSpacecloud(env,{force:true});
   const before=await bookingAvailability(env,'r5',date);assert.deepEqual(before.blocked,[{start_min:600,end_min:720},{start_min:840,end_min:960}]);assert.equal(feedCalls,1);
-  await cancelSynchronizedBooking(env,await getBooking(env,code));assert.deepEqual(providerCalls,['paycancel']);
+  await cancelBookingRequest(env,await getBooking(env,code));assert.deepEqual(providerCalls,['paycancel']);
   const release=await claimSyncJob(env);assert.equal(release.action,'release');upstreamOwn=false;
   const response=await complete({env,request:new Request('https://release.example/api/internal/spacecloud-sync',{method:'POST',headers:{authorization:'Bearer '+env.SPACECLOUD_WORKER_TOKEN,'content-type':'application/json'},body:JSON.stringify({action:'complete',job_id:release.id,lease_token:release.lease_token,status:'succeeded',receipt:receipt(release)})})});
   assert.equal(response.status,200);assert.equal((await response.json()).state,'released');assert.equal(feedCalls,2,'completion must fetch the real upstream despite the fresh five-minute cache');
