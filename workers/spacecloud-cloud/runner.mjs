@@ -384,6 +384,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       const origin=request.headers.get('origin');if(origin && origin!==url.origin)return response({ok:false,error:'origin'},403);
       try {
         if(url.pathname==='/status' && request.method==='GET')return response(await status(env));
+        if(url.pathname==='/sales/status' && request.method==='GET')return response(await requestPayments(queueConfig(env),{action:'status'}));
         if(url.pathname==='/login/provider' && request.method==='GET')return response(await providerStatus(env));
         if(request.method!=='POST')return response({ok:false,error:'method'},405);
         let body={};const text=await request.text();if(text.length>4096)return response({ok:false,error:'too-large'},413);if(text)body=JSON.parse(text);
