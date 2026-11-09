@@ -1,6 +1,6 @@
 import { json } from '../../_lib/auth.js';
 import { workerAuthorized } from '../../_lib/booking-spacecloud-sync.js';
-import { beginCloudSales, cloudSalesState, finishCloudSales } from '../../_lib/spacecloud-cloud-sales.js';
+import { beginCloudSales, cloudSalesState, cloudSalesSummary, finishCloudSales } from '../../_lib/spacecloud-cloud-sales.js';
 import { ensureSync } from '../../_lib/spacecloud-sync.js';
 import { syncSnapshot } from '../spacecloud-sync.js';
 
@@ -20,13 +20,15 @@ export async function onRequestPost({request,env}) {
     if(text.length>2000000)return json({ok:false,error:'too-large'},413);
     b=JSON.parse(text);
   }catch{return json({ok:false,error:'bad-json'},400);}
+  if(b?.action==='status')return json({ok:true,cloud:await cloudSalesSummary(env)});
   if(b?.action==='begin')return json({ok:true,plan:await beginCloudSales(env,{retry:b.retry===true})});
   if(!['sync','error'].includes(b?.action))return json({ok:false,error:'invalid-action'},400);
   const state=await cloudSalesState(env);
   if(state.status!=='running' || !Number.isSafeInteger(b.observed_at) || b.observed_at!==state.last_attempt)
     return json({ok:false,error:'stale-attempt'},409);
   if(b.action==='error'){
-    const message=Object.hasOwn(failures,b.error)?failures[b.error]:'클라우드 결제 수집을 완료하지 못했습니다. 같은 기간을 다시 확인합니다.';
+    const code=typeof b.error==='string' && b.error.startsWith('host-')?'host-layout':b.error;
+    const message=Object.hasOwn(failures,code)?failures[code]:'클라우드 결제 수집을 완료하지 못했습니다. 같은 기간을 다시 확인합니다.';
     await finishCloudSales(env,state,'error',message);
     return json({ok:true});
   }
