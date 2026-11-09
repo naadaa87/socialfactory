@@ -25,6 +25,15 @@ test('surrounding month/year days and padded fields cannot select the wrong date
   const january={year:2027,month:1,days:[day('2026-12-31',[4,5]),day('2027-01-01')]};
   assert.deepEqual(parsePublicAvailability(january,{room:'r1',date:'2027-01-01'}).hours,Array(24).fill(true));
 });
+test('closed dates before the requested day may omit times while the requested day still requires all hours',()=>{
+  const data=month(),earlier=data.days[0],selected=data.days[1];
+  earlier.available=false;
+  delete earlier.times;
+  assert.deepEqual(parsePublicAvailability(data,scope).hours,Array(24).fill(true));
+  selected.available=false;
+  delete selected.times;
+  assert.throws(()=>parsePublicAvailability(data,scope),{name:'ReviewRequired'});
+});
 test('missing, duplicate, impossible or out-of-range date identities are rejected',()=>{
   const mutations=[
     data=>{data.month='11';},data=>{data.year='2025';},data=>{data.days.splice(1,1);},data=>{data.days.push(structuredClone(data.days[1]));},

@@ -38,7 +38,10 @@ export function parsePublicAvailability(data,{room,date}) {
     const identity=String(year).padStart(4,'0')+'-'+String(month).padStart(2,'0')+'-'+String(number).padStart(2,'0');
     const parsed=dateParts(identity);
     if(parsed.time<monthStart-6*86400000 || parsed.time>nextMonth.getTime()+6*86400000 || identities.has(identity)
-      || typeof day.available!=='boolean' || !Array.isArray(day.times))throw fail('달력 날짜가 중복되거나 범위를 벗어났습니다.');
+      || typeof day.available!=='boolean')throw fail('달력 날짜가 중복되거나 범위를 벗어났습니다.');
+    // SpaceCloud omits hourly data on closed dates before the requested day.
+    if(!Array.isArray(day.times) && !(identity<date && day.available===false && day.times===undefined))
+      throw fail('시간별 예약 가능 정보를 확인하지 못했습니다.');
     identities.add(identity);if(identity===date)selected=day;
   }
   if(!selected || selected.times.length!==24)throw fail('이용일의 24시간 정보를 모두 확인하지 못했습니다.');
