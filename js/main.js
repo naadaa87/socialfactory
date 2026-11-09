@@ -259,11 +259,13 @@
     var selPeople = $("select[name=people]", picker);
     var selUse = $("select[name=use]", picker);
     var result = $("[data-picker-result]", picker);
-    var original = cards.slice();
+    var more = $("[data-picker-more]", list.parentNode);
+    var alternatives = $("[data-picker-alternatives]", more);
     var apply = function () {
       var p = selPeople ? parseInt(selPeople.value, 10) : 0;
       var u = selUse ? selUse.value : "";
-      var matched = [];
+      var active = !!(p || u);
+      var matched = [], other = [];
       cards.forEach(function (c) {
         var min = parseInt(c.getAttribute("data-min"), 10) || 0;
         var max = parseInt(c.getAttribute("data-max"), 10) || 999;
@@ -272,13 +274,15 @@
         if (p) ok = ok && p <= max && p >= Math.max(1, min - 10);
         if (u) ok = ok && uses.indexOf(u) >= 0;
         var strong = ok && (!p || (p >= min && p <= max));
-        c.classList.toggle("is-match", ok && (!!p || !!u));
-        c.classList.toggle("is-strong", strong && (!!p || !!u));
-        c.classList.toggle("is-dim", !ok && (!!p || !!u));
-        if (ok) matched.push(c);
+        c.classList.toggle("is-strong", strong && active);
+        (ok ? matched : other).push(c);
       });
-      var order = (p || u) ? matched.concat(cards.filter(function (c) { return matched.indexOf(c) < 0; })) : original;
-      order.forEach(function (c) { list.appendChild(c); });
+      matched.forEach(function (c) { list.appendChild(c); });
+      other.forEach(function (c) { alternatives.appendChild(c); });
+      list.hidden = !matched.length;
+      list.classList.toggle("picker-matches", active);
+      more.hidden = !other.length;
+      more.open = false;
       if (result) {
         if (!p && !u) result.textContent = "인원이나 진행 방식을 고르면 맞는 룸을 앞으로 모아 보여 드립니다.";
         else if (!matched.length && p > 48) {
@@ -287,7 +291,12 @@
             (mega && mega.url ? " 한 공간에 모두 모여야 한다면 같은 건물 2층의 190평 대형 행사장 <a href=\"" + famEsc(mega.url) + "\" target=\"_blank\" rel=\"noopener\">" + famEsc(mega.name || "메가스팟") + "</a>(최대 200명)을 확인해 보세요." : " 일자 · 시간 · 인원 · 모임 유형을 문의로 남겨 주세요.");
         }
         else if (!matched.length) result.textContent = "조건에 맞는 룸이 없습니다. 인원을 나누어 진행하거나 문의 폼에 조건을 남겨 주세요.";
-        else result.textContent = "조건에 맞는 룸 " + matched.length + "개를 앞으로 모았습니다. 최대 인원은 배치에 따라 달라질 수 있으니 상세에서 사진과 배치를 확인해 주세요.";
+        else {
+          var criteria = [];
+          if (p) criteria.push(selPeople.selectedOptions[0].textContent);
+          if (u) criteria.push(selUse.selectedOptions[0].textContent);
+          result.textContent = criteria.join(" · ") + "에 맞는 방 " + matched.length + "개";
+        }
       }
     };
     [selPeople, selUse].forEach(function (s) { if (s) s.addEventListener("change", apply); });
@@ -541,7 +550,7 @@
   if (chips.length) {
     var scenes = $$(".scenes .scene");
     var moreBtn = $("[data-scenes-more]");
-    var LIMIT = 12, expanded = false, currentF = "all";
+    var LIMIT = 6, expanded = false, currentF = "all";
     var applyF = function () {
       var shown = 0;
       scenes.forEach(function (s) {

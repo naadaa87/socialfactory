@@ -29,7 +29,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="css/style.css?v=select-spacing-20261107">
+  <link rel="stylesheet" href="css/style.css?v=public-flow-20261109">
   <script type="application/ld+json" id="sf-ldjson">{"@context": "https://schema.org", "@graph": [{"@type": "WebPage", "@id": "https://socialfactory.co.kr/pricing#webpage", "url": "https://socialfactory.co.kr/pricing", "name": "건대 세미나실 대관 요금 · 예상 금액 계산 | 소셜팩토리 건대", "description": "소셜팩토리 건대 룸 대관은 시간당 10,000~45,000원입니다(부가세 포함, 인원 추가 요금 없음). 날짜와 시간, 옵션을 골라 예상 금액을 바로 계산하고 PDF로 저장할 수 있습니다. 코워킹 이용권, 독립사무실 월 이용료, 취소·환불 기준도 안내합니다.", "inLanguage": "ko-KR", "isPartOf": {"@id": "https://socialfactory.co.kr/#website"}, "about": {"@id": "https://socialfactory.co.kr/#place"}}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "홈", "item": "https://socialfactory.co.kr/"}, {"@type": "ListItem", "position": 2, "name": "이용 요금", "item": "https://socialfactory.co.kr/pricing"}]}]}</script>
   </head>
 <body>
@@ -176,13 +176,13 @@
           </div>
         </form>
         <aside class="est-summary" id="est-summary" aria-label="예상 금액">
-          <div class="es-head"><span class="eyebrow">Estimate</span><h3>예상 금액</h3></div>
+          <div class="es-head"><h3>예상 금액</h3></div>
           <dl class="es-info" data-es-info></dl>
           <ul class="es-lines" data-es-lines></ul>
           <div class="es-total"><span>합계</span><strong data-es-total>—</strong></div>
           <p class="es-sub" data-es-sub></p>
-          <div class="es-actions">
-            <a class="btn btn-primary es-primary" href="/booking" data-es-action>이 일정으로 예약·결제하기 →</a>
+          <div class="es-actions" data-es-actions hidden>
+            <a class="btn btn-primary es-primary" href="/booking" data-es-action>이 방의 예약 가능 시간 확인</a>
             <a class="btn btn-kakao" href="#" target="_blank" rel="noopener" data-es-kakao><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg>카카오톡으로 이 내용 보내기</a>
             <a class="btn btn-outline" href="/contact?purpose=rental" data-es-inquiry>이 내용으로 문의 폼 작성</a>
             <button class="btn btn-outline" type="button" data-es-print>PDF 저장 · 인쇄</button>
@@ -192,11 +192,11 @@
             </div>
           </div>
           <details class="es-refund" data-es-refund-wrap><summary>이 날짜 기준 취소 · 환불</summary><ul data-es-refund></ul></details>
-          <p class="es-note" data-es-payment-note>예약 가능한 시간을 확인한 뒤 페이앱 결제로 이어집니다. 추가 장비·다과는 별도 확인 후 안내합니다.</p>
+          <p class="es-note" data-es-payment-note hidden>예약 가능한 시간을 확인한 뒤 페이앱 결제로 이어집니다. 추가 장비·다과는 별도 확인 후 안내합니다.</p>
           <p class="es-toast" data-es-toast role="status" aria-live="polite" hidden></p>
         </aside>
       </div>
-      <div class="est-bar" data-es-bar><span>예상 합계 <strong data-es-bar-total>—</strong></span><span class="eb-act"><a class="btn btn-kakao btn-sm eb-kk" href="#" target="_blank" rel="noopener" data-es-kakao aria-label="카카오톡으로 이 내용 보내기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span>보내기</span></a><a class="btn btn-primary btn-sm es-primary" href="/booking" data-es-action data-es-action-short>예약·결제</a></span></div>
+      <div class="est-bar" data-es-bar><span>예상 합계 <strong data-es-bar-total>—</strong></span><span class="eb-act"><a class="btn btn-kakao btn-sm eb-kk" href="#" target="_blank" rel="noopener" data-es-kakao aria-label="카카오톡으로 이 내용 보내기"><svg class="kk" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.6c-5.3 0-9.6 3.4-9.6 7.6 0 2.7 1.8 5.1 4.5 6.4l-.95 3.5c-.08.3.25.55.52.38l4.15-2.75c.45.05.91.07 1.38.07 5.3 0 9.6-3.4 9.6-7.6S17.3 3.6 12 3.6z"/></svg><span>보내기</span></a><a class="btn btn-primary btn-sm es-primary" href="/booking" data-es-action data-es-action-short>예약 가능 시간 확인</a></span></div>
     </div>
     <div class="mt-48">
       <div class="consult reveal">
@@ -541,6 +541,6 @@
 <script src="/js/booking-rates.js?v=customer-audit-20261106"></script>
 <script src="js/site-config.js?v=customer-audit-20261106"></script>
 <script src="js/main.js?v=customer-audit-20261106"></script>
-<script src="js/estimate.js?v=customer-audit-20261106"></script>
+<script src="js/estimate.js?v=public-flow-20261109"></script>
 </body>
 </html>

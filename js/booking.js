@@ -32,6 +32,7 @@
   var busy = false, finished = false, submission = null;
   var initialTimePreference = null;
   var startGrid = $("[data-start-time-grid]"), timeButtons = [];
+  var inlineTotal = $("[data-inline-total]");
   var submit = $("[data-submit]"), scheduleError = $("[data-schedule-error]"), submitError = $("[data-submit-error]");
   var room = function () { return (form.querySelector("[name=room]:checked") || {}).value || "r3"; };
   var capacity = function () { return +((pricing.rooms || {})[room()] || {}).max || { r1: 36, r2: 40, r3: 16, r4: 48, r5: 30 }[room()]; };
@@ -118,6 +119,8 @@
     $("[data-summary-duration]").textContent = validTimes ? (s.end - s.start) / 60 + "시간" : "—";
     var amount = validTimes ? quote(pricing, room(), val("date"), s.start, s.end) : null;
     $("[data-summary-amount]").textContent = amount === null ? "—" : money(amount);
+    var inlineText = amount === null ? "" : (s.end - s.start) / 60 + "시간 · 예상 대관료 " + money(amount);
+    if (inlineTotal.textContent !== inlineText) inlineTotal.textContent = inlineText;
     var problem = scheduleProblem();
     submit.disabled = busy || finished || !!problem;
   };
@@ -196,6 +199,8 @@
     } finally { clearTimeout(timer); if (serial === availability.serial) { availability.loading = false; $("[data-availability-panel]").setAttribute("aria-busy", "false"); renderSummary(); } }
   };
   var syncRoom = function () {
+    $("[data-selected-room]").textContent = roomNames[room()];
+    $("[data-selected-capacity]").textContent = "최대 " + capacity() + "명";
     fields.people.max = capacity(); $("[data-capacity-note]").textContent = "선택한 방 최대 " + capacity() + "명 · 인원 추가요금 없음";
     if (+val("people") > capacity()) setError(scheduleError, roomNames[room()] + "은 최대 " + capacity() + "명입니다. 인원을 확인해 주세요.");
     loadAvailability();
@@ -252,7 +257,11 @@
   fields.purpose.addEventListener("change", function () { var other = val("purpose") === "other"; fields.purpose_detail.required = other; $("[data-purpose-detail-note]").textContent = other ? "기타 선택 시 필수" : "선택"; });
   $("[data-retry-availability]").addEventListener("click", loadAvailability);
   var params = new URLSearchParams(window.location.search), initialRoom = params.get("room");
-  if (roomNames[initialRoom]) { var radio = form.querySelector('[name="room"][value="' + initialRoom + '"]'); if (radio) radio.checked = true; }
+  var initialRoomInput = $$("[name=room]").find(function (input) { return input.value === initialRoom; });
+  if (initialRoomInput) {
+    initialRoomInput.checked = true;
+    $("[data-room-picker]").open = false;
+  }
   syncDateBounds(kstNow());
   var initialDate = params.get("date"); if (dateIsReal(initialDate) && initialDate >= fields.date.min && initialDate <= fields.date.max) fields.date.value = initialDate;
   var initialPeople = params.get("people");
