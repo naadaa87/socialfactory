@@ -79,7 +79,10 @@
 .booking-time:not(:disabled):not(.is-selected):hover { border-color: var(--blue); background: var(--blue-25); }
 .booking-time:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .booking-time.is-selected { border-color: var(--blue); background: var(--blue); color: #fff; }
-.booking-time:disabled { opacity: 1; border-color: #dce1e8; background: #edf0f4; color: #697586; cursor: not-allowed; box-shadow: none; }
+.booking-time[hidden], .booking-next-times[hidden] { display: none; }
+.booking-next-times { margin-top: 12px; }
+.booking-next-times summary { color: var(--blue); font-size: 13px; font-weight: 700; cursor: pointer; }
+.booking-time:disabled:not(.is-selected) { opacity: 1; border-color: #dce1e8; background: #edf0f4; color: #697586; cursor: not-allowed; box-shadow: none; }
 .booking-field select option:disabled { color: #697586; background: #edf0f4; }
 @media (max-width: 600px) {
   .booking-time-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
