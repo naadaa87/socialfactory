@@ -404,36 +404,40 @@ test('customer gets one receipt, a verified payment link, then expiry only after
     assert.equal(alimtalk.length,1);
     assert.equal(alimtalk[0].get('receiver_1'),'01012345678');
     assert.match(alimtalk[0].get('message_1'),/신청이 접수되었습니다/);
+    assert.equal(alimtalk[0].get('failover'),'Y');
     assert.doesNotMatch(alimtalk[0].get('fmessage_1'),new RegExp(tokenFrom(data)));
     assert.equal((await create(env,input)).data.duplicate,true);
     assert.equal(alimtalk.length,1);
 
     await done(env,await nextJob(env));
-    assert.equal(alimtalk.length,2);
+    assert.equal(alimtalk.length,1);
+    assert.equal(sms.length,1);
     const payment=paymentRow(env,data.code);
-    assert.equal(alimtalk[1].get('failover'),'Y');
-    assert.match(alimtalk[1].get('message_1'),/결제 기한:/);
-    const button=JSON.parse(alimtalk[1].get('button_1')).button[0];
-    assert.equal(new URL(button.linkMo).searchParams.get('t'),payment.token);
-    assert.match(alimtalk[1].get('fmessage_1'),new RegExp(payment.token));
-    assert.equal(sms.length,0);
-    assert.doesNotMatch(alimtalk[1].get('message_1'),/payapp\.kr/);
+    assert.equal(sms[0].get('msg_type'),'LMS');
+    assert.equal(sms[0].get('receiver'),'01012345678');
+    const message=sms[0].get('msg');
+    assert.match(message,/결제 기한:/);
+    const link=message.match(/https:\/\/socialfactory\.co\.kr\/booking-status\?[^\s]+/)[0];
+    assert.equal(new URL(link).searchParams.get('t'),payment.token);
+    assert.doesNotMatch(message,/payapp\.kr/);
 
     env.sqlite.prepare("UPDATE booking_requests SET approved_at=datetime('now','+9 hours','-20 minutes') WHERE code=?").run(data.code);
     assert.equal((await requestCheckout(env,data.code,tokenFrom(data))).status,409);
     const release=await nextJob(env);
     assert.equal(release.action,'release');
     assert.deepEqual(calls.map(form=>form.get('cmd')),['payrequest','paycancel']);
-    assert.equal(alimtalk.length,2);
+    assert.equal(alimtalk.length,1);
+    assert.equal(sms.length,1);
     const result=await done(env,release,{proof:receipt(release,{verified_released:true,verified_blocked:false})});
     assert.equal(result.status,200);
-    assert.equal(alimtalk.length,3);
-    assert.match(alimtalk[2].get('message_1'),/미납|결제가 확인되지 않아/);
+    assert.equal(alimtalk.length,2);
+    assert.match(alimtalk[1].get('message_1'),/미납|결제가 확인되지 않아/);
+    assert.equal(alimtalk[1].get('failover'),'Y');
     assert.equal((await getBooking(env,data.code)).status,'expired');
     const status=await paymentStatus({env,request:new Request(ORIGIN+data.status_url)});
     assert.equal((await status.json()).status,'expired');
     assert.equal((await done(env,release)).status,200);
-    assert.equal(alimtalk.length,3);
+    assert.equal(alimtalk.length,2);
 
     const response=await listBookings({env,request:new Request(ORIGIN+'/api/admin/booking-requests',{
       headers:{authorization:'Bearer '+env.ADMIN_KEY}
@@ -470,12 +474,12 @@ test('paid verification sends staff a single delay notice, then alerts immediate
     assert.match(staffMessages()[2].get('msg'),/연동 확인 필요/);
     assert.equal((await done(env,verification,{status:'review'})).status,200);
     assert.equal(staffMessages().length,4);
-    assert.equal(sms.filter(form=>form.get('receiver')==='01012345678').length,0);
+    assert.equal(sms.filter(form=>form.get('receiver')==='01012345678').length,1);
   },{sms});
 });
 
 test('manual approval sends the customer a payment link and an expired link is closed by ready-only provider cancellation',async()=>{
-  const alimtalk=[];
+  const sms=[],alimtalk=[];
   await withProvider(async calls=>{
     const env=enableLifecycleNotices(fixture());
     env.SPACECLOUD_SYNC_ENABLED='false';
@@ -486,7 +490,9 @@ test('manual approval sends the customer a payment link and an expired link is c
       action:'approve',code:data.code,external_checked:true
     },env.ADMIN_KEY)});
     assert.equal(approved.status,200);
-    assert.equal(alimtalk.length,2);
+    assert.equal(alimtalk.length,1);
+    assert.equal(sms.length,1);
+    assert.match(sms[0].get('msg'),/결제 기한:/);
     const {token}=paymentRow(env,data.code);
     assert.equal((await requestCheckout(env,data.code,token)).status,200);
     env.sqlite.prepare("UPDATE booking_requests SET payment_expires_at=NULL,expires_at=datetime('now','+9 hours','-1 minute') WHERE code=?").run(data.code);
@@ -499,9 +505,9 @@ test('manual approval sends the customer a payment link and an expired link is c
     await runBookingNotifications(env,{code:data.code});
     assert.equal(calls[1].get('cancelmode'),'ready');
     assert.equal((await getBooking(env,data.code)).status,'expired');
-    assert.equal(alimtalk.length,3);
-    assert.match(alimtalk[2].get('message_1'),/만료되었습니다/);
-  },{alimtalk});
+    assert.equal(alimtalk.length,2);
+    assert.match(alimtalk[1].get('message_1'),/만료되었습니다/);
+  },{sms,alimtalk});
 });
 
 test('cloud readiness failures produce one staff incident notice until health recovers',async()=>{

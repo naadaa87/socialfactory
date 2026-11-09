@@ -22,7 +22,8 @@ const paidNotices = `
   WHERE b.payment_id=p.mul_no AND p.paid_at IS NOT NULL
 `;
 const systemCode = 'spacecloud-system';
-const customerLifecycleKinds = ['received','payment_ready','unpaid_expired'];
+const paymentSmsKind = 'payment_ready'; // UN_4770 requires additional Kakao review.
+const customerLifecycleKinds = ['received',paymentSmsKind,'unpaid_expired'];
 const staffUrgentKinds = ['review','paid_delay','sync_issue','sync_outage'];
 const listSql = values => values.map(value=>"'"+value+"'").join(',');
 const customerLifecycleSql = listSql(customerLifecycleKinds);
@@ -113,6 +114,7 @@ export async function bookingNotificationSettings(env) {
     smsReady:guestSmsConfig(env).configured,
     customer,
     lifecycleTemplatesConfigured:customerLifecycleKinds.filter(kind=>{
+      if(kind===paymentSmsKind)return false;
       const template=BOOKING_TEMPLATES[kind];
       return String(env[template.env] || template.code || '').trim();
     }).length,
@@ -209,13 +211,13 @@ export async function runBookingNotifications(env,{limit=15,code=null,checkInteg
     ))`).bind(code).run();
 
   const {results}=await env.DB.prepare(`SELECT DISTINCT kind FROM booking_notifications
-    WHERE state='queued' AND recipient='customer' AND (?1 IS NULL OR code=?1)`).bind(code).all();
+    WHERE state='queued' AND recipient='customer' AND (?1 IS NULL OR code=?1) AND kind<>?2`).bind(code,paymentSmsKind).all();
   const approvals=new Set();
   if(customer)await Promise.all(results.map(async ({kind})=>{
     const template=BOOKING_TEMPLATES[kind];
     if(template && (env[template.env] || template.code) && await approvedWebsiteTemplate(env,template))approvals.add(kind);
   }));
-  const allowedKinds=JSON.stringify([...approvals]);
+  const allowedKinds=JSON.stringify([...approvals,paymentSmsKind]);
   const activeRecipients=JSON.stringify(targets.map(target=>target.key));
   const {results:jobs}=await env.DB.prepare(`SELECT * FROM booking_notifications WHERE state='queued'
     AND (?1 IS NULL OR code=?1) AND recipient IN (SELECT value FROM json_each(?2))
@@ -244,17 +246,21 @@ export async function runBookingNotifications(env,{limit=15,code=null,checkInteg
       await update('skipped');
       return;
     }
+    const isAlimtalk=isCustomer && job.kind!==paymentSmsKind;
     let result;
     try {
       if(isCustomer) {
         const template=BOOKING_TEMPLATES[job.kind];
-        result=await sendAligo(sendEnv,{phone},customerNotice(env,booking,job.kind,template),template);
+        const message=customerNotice(env,booking,job.kind,template);
+        result=isAlimtalk
+          ? await sendAligo(sendEnv,{phone},message,template)
+          : await sendAligoSms(env,phone,message.fallbackText,{test,long:true});
       } else {
         const {text,long}=staffNotice(booking,job.kind);
         result=await sendAligoSms(env,phone,text,{test,long});
       }
     } catch(error) {
-      const failure=isCustomer?error.retryable!==false:error.confirmedFailure===true;
+      const failure=isAlimtalk?error.retryable!==false:error.confirmedFailure===true;
       const state=failure?'failed':'unknown';
       await update(state);
       out[state]++;
