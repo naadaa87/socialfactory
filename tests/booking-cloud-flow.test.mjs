@@ -6,12 +6,17 @@ import { sha256Hex } from '../functions/_lib/auth.js';
 import { kstToday,addDaysIso } from '../functions/_lib/admin.js';
 import { getBooking,prepareBookings,applyBookingPayment } from '../functions/_lib/booking.js';
 import { getSync,finishSyncJob } from '../functions/_lib/booking-spacecloud-sync.js';
-import { cancelSynchronizedBooking,onSyncCompleted } from '../functions/_lib/booking-checkout.js';
+import { cancelBookingRequest,onSyncCompleted,sweepUnpaidBookings } from '../functions/_lib/booking-checkout.js';
 import { onRequestPost as submit } from '../functions/api/booking/requests.js';
 import { onRequestGet as pollWorker,onRequestPost as completeWorker } from '../functions/api/internal/spacecloud-sync.js';
 import { onRequestGet as paymentStatus,onRequestPost as checkout } from '../functions/api/booking/payment-status.js';
 import { onRequestPost as cancel } from '../functions/api/booking/cancel.js';
 import { onRequestPost as feedback } from '../functions/api/booking/payapp-feedback.js';
+
+import { onRequestPatch as updateBooking,onRequestGet as listBookings } from '../functions/api/admin/booking-requests.js';
+import { runBookingNotifications } from '../functions/_lib/booking-notify.js';
+import { kstTimestamp } from '../functions/_lib/booking.js';
+import { BOOKING_TEMPLATES } from '../functions/_lib/booking-templates.js';
 
 const ORIGIN='https://example.test';
 function fixture() {
@@ -50,7 +55,7 @@ async function notify(env,code,state,extra={}) {
 }
 const requestCheckout=(env,code,t)=>checkout({request:post('/api/booking/payment-status',{code,t,consent:true}),env});
 const readyCloudStatus=()=>({ok:true,enabled:true,allow_writes:true,login_saved:true,public_login_saved:true,runner:{busy:false,review:false},budget:{utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),daily_limit_ms:2700000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
-async function withProvider(run,{mode='success',cloudStatus}={}) {
+async function withProvider(run,{mode='success',cloudStatus,sms,alimtalk,unapproved=false}={}) {
   const previous=globalThis.fetch,calls=[];
   globalThis.fetch=async(url,options)=>{
     if(String(url)==='https://runner.example.workers.dev/status'){
@@ -60,6 +65,21 @@ async function withProvider(run,{mode='success',cloudStatus}={}) {
     if(String(url)==='https://runner.example.workers.dev/run'){
       assert.equal(options?.method,'POST');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-worker-token-more-than-thirty-two-characters');
       return Response.json({ok:true,scheduled:true},{status:202});
+    }
+    if(alimtalk && String(url).includes('/template/list/')) {
+      const code=options.body.get('tpl_code');
+      const kind=Object.keys(BOOKING_TEMPLATES).find(key=>'mock-'+key===code || code==='mock-unapproved-receipt' && key==='received');
+      const template=BOOKING_TEMPLATES[kind];
+      return Response.json({code:0,list:template?[{templtCode:code,inspStatus:unapproved?'REQ':'APR',
+        status:'A',templtContent:template.text,buttons:template.buttons.button}]:[]});
+    }
+    if(alimtalk && String(url).includes('/alimtalk/send/')) {
+      alimtalk.push(new URLSearchParams(options.body));
+      return Response.json({code:0,info:{mid:alimtalk.length,scnt:1,fcnt:0}});
+    }
+    if(sms && String(url)==='https://apis.aligo.in/send/') {
+      sms.push(new URLSearchParams(options.body));
+      return Response.json({result_code:1,msg_id:sms.length,success_cnt:1,error_cnt:0});
     }
     assert.equal(url,'https://api.payapp.kr/oapi/v2');const form=new URLSearchParams(options.body);calls.push(form);
     if(mode==='unknown')throw new Error('network interruption');
@@ -201,7 +221,7 @@ test('cancellation claims its state before a concurrent provider issuance can ap
     }
     return statement;
   };
-  const cancellation=cancelSynchronizedBooking(env,stale);
+  const cancellation=cancelBookingRequest(env,stale);
   await paused;
   try {await onSyncCompleted(env,code);}finally{resume();}
   await cancellation;
@@ -224,7 +244,7 @@ test('unpaid timeout cancels the provider request before a worker can release th
   const release=await nextJob(env);assert.equal(release.action,'release');
   assert.deepEqual(calls.map(form=>form.get('cmd')),['payrequest','paycancel']);
   assert.equal(paymentRow(env,code).status,'cancelled');assert.equal((await getBooking(env,code)).status,'awaiting_payment');
-  await done(env,release,{proof:receipt(release,{verified_released:true})});assert.equal((await getBooking(env,code)).status,'cancelled');
+  await done(env,release,{proof:receipt(release,{verified_released:true})});assert.equal((await getBooking(env,code)).status,'expired');
 }));
 
 test('late paid callback cannot confirm or release a room after cancellation wins the database race',async()=>withProvider(async()=>{
@@ -238,7 +258,7 @@ test('late paid callback cannot confirm or release a room after cancellation win
     return originalBatch.call(this,statements);
   };
   const callback=applyBookingPayment(env,{code,id:paymentRow(env,code).mul_no,state:'paid',paid_at:stamp(),external_verified:true});await paused;
-  try {await cancelSynchronizedBooking(env,await getBooking(env,code));}finally{resume();}
+  try {await cancelBookingRequest(env,await getBooking(env,code));}finally{resume();}
   assert.equal((await callback).ok,true);
   assert.equal((await getBooking(env,code)).status,'payment_review');
   assert.equal((await getSync(env,code)).state,'review');
@@ -363,4 +383,161 @@ test('booking notices wait for confirmation and approved copy, deduplicate concu
   assert.match(cancelled.get('message_1'),/예약이 취소되었습니다/);
   assert.match(cancelled.get('message_1'),/40,000원/);
   assert.equal(e.sqlite.prepare("SELECT state FROM booking_notifications WHERE kind='confirmed' AND recipient='customer'").get().state,'skipped');
+});
+
+function enableLifecycleNotices(env) {
+  return Object.assign(env,{
+    BOOKING_NOTIFY_START:kstTimestamp(Date.now()-60000),
+    BOOKING_NOTIFY_CUSTOMER:'1',BOOKING_NOTIFY_LIVE:'1',BOOKING_NOTIFY_STAFF:'01011112222,01033334444',
+    ALIGO_API_KEY:'mock-api-key',ALIGO_USER_ID:'mock-user',ALIGO_SENDER:'021234567',
+    ALIGO_SENDER_KEY:'mock-booking-sender',
+    BOOKING_ALIMTALK_RECEIVED:'mock-received',BOOKING_ALIMTALK_PAYMENT_READY:'mock-payment_ready',
+    BOOKING_ALIMTALK_UNPAID_EXPIRED:'mock-unpaid_expired'
+  });
+}
+
+test('customer gets one receipt, a verified payment link, then expiry only after the worker proves release',async()=>{
+  const sms=[],alimtalk=[];
+  await withProvider(async calls=>{
+    const env=enableLifecycleNotices(fixture());
+    const {data,input}=await create(env);
+    assert.equal(alimtalk.length,1);
+    assert.equal(alimtalk[0].get('receiver_1'),'01012345678');
+    assert.match(alimtalk[0].get('message_1'),/신청이 접수되었습니다/);
+    assert.equal(alimtalk[0].get('failover'),'Y');
+    assert.doesNotMatch(alimtalk[0].get('fmessage_1'),new RegExp(tokenFrom(data)));
+    assert.equal((await create(env,input)).data.duplicate,true);
+    assert.equal(alimtalk.length,1);
+
+    await done(env,await nextJob(env));
+    assert.equal(alimtalk.length,1);
+    assert.equal(sms.length,1);
+    const payment=paymentRow(env,data.code);
+    assert.equal(sms[0].get('msg_type'),'LMS');
+    assert.equal(sms[0].get('receiver'),'01012345678');
+    const message=sms[0].get('msg');
+    assert.match(message,/결제 기한:/);
+    const link=message.match(/https:\/\/socialfactory\.co\.kr\/booking-status\?[^\s]+/)[0];
+    assert.equal(new URL(link).searchParams.get('t'),payment.token);
+    assert.doesNotMatch(message,/payapp\.kr/);
+
+    env.sqlite.prepare("UPDATE booking_requests SET approved_at=datetime('now','+9 hours','-20 minutes') WHERE code=?").run(data.code);
+    assert.equal((await requestCheckout(env,data.code,tokenFrom(data))).status,409);
+    const release=await nextJob(env);
+    assert.equal(release.action,'release');
+    assert.deepEqual(calls.map(form=>form.get('cmd')),['payrequest','paycancel']);
+    assert.equal(alimtalk.length,1);
+    assert.equal(sms.length,1);
+    const result=await done(env,release,{proof:receipt(release,{verified_released:true,verified_blocked:false})});
+    assert.equal(result.status,200);
+    assert.equal(alimtalk.length,2);
+    assert.match(alimtalk[1].get('message_1'),/미납|결제가 확인되지 않아/);
+    assert.equal(alimtalk[1].get('failover'),'Y');
+    assert.equal((await getBooking(env,data.code)).status,'expired');
+    const status=await paymentStatus({env,request:new Request(ORIGIN+data.status_url)});
+    assert.equal((await status.json()).status,'expired');
+    assert.equal((await done(env,release)).status,200);
+    assert.equal(alimtalk.length,2);
+
+    const response=await listBookings({env,request:new Request(ORIGIN+'/api/admin/booking-requests',{
+      headers:{authorization:'Bearer '+env.ADMIN_KEY}
+    })});
+    const admin=await response.json();
+    assert.deepEqual(admin.results[0].notifications.map(item=>item.kind).sort(),['payment_ready','received','unpaid_expired']);
+    assert.equal(admin.recentNotifications.every(item=>item.state==='accepted' && item.last4==='5678'),true);
+    assert.doesNotMatch(JSON.stringify(admin.recentNotifications),new RegExp(payment.token));
+  },{sms,alimtalk});
+});
+
+test('paid verification sends staff a single delay notice, then alerts immediately on an explicit sync failure',async()=>{
+  const sms=[];
+  await withProvider(async()=>{
+    const env=enableLifecycleNotices(fixture());
+    const {data}=await create(env);
+    await done(env,await nextJob(env));
+    assert.equal(await (await notify(env,data.code,'4')).text(),'SUCCESS');
+    assert.equal(sms.filter(form=>form.get('receiver')!=='01012345678').length,0);
+
+    env.sqlite.prepare('UPDATE spacecloud_payment_checks SET after_ms=? WHERE code=?').run(Date.now()-121000,data.code);
+    const maintenance=()=>completeWorker({env,request:post('/api/internal/spacecloud-sync',{action:'maintenance'},env.SPACECLOUD_WORKER_TOKEN)});
+    assert.equal((await maintenance()).status,200);
+    assert.equal((await maintenance()).status,200);
+    const staffMessages=()=>sms.filter(form=>form.get('receiver')!=='01012345678');
+    assert.equal(staffMessages().length,2);
+    for(const message of staffMessages()) {
+      assert.match(message.get('msg'),/예약 확정 지연/);
+      assert.doesNotMatch(message.get('msg'),/01012345678|booking-status/);
+    }
+    const verification=await nextJob(env);
+    assert.equal((await done(env,verification,{status:'review'})).status,200);
+    assert.equal(staffMessages().length,4);
+    assert.match(staffMessages()[2].get('msg'),/연동 확인 필요/);
+    assert.equal((await done(env,verification,{status:'review'})).status,200);
+    assert.equal(staffMessages().length,4);
+    assert.equal(sms.filter(form=>form.get('receiver')==='01012345678').length,1);
+  },{sms});
+});
+
+test('manual approval sends the customer a payment link and an expired link is closed by ready-only provider cancellation',async()=>{
+  const sms=[],alimtalk=[];
+  await withProvider(async calls=>{
+    const env=enableLifecycleNotices(fixture());
+    env.SPACECLOUD_SYNC_ENABLED='false';
+    const {data}=await create(env);
+    assert.equal(alimtalk.length,1);
+    assert.doesNotMatch(alimtalk[0].get('message_1'),/booking-status/);
+    const approved=await updateBooking({env,request:post('/api/admin/booking-requests',{
+      action:'approve',code:data.code,external_checked:true
+    },env.ADMIN_KEY)});
+    assert.equal(approved.status,200);
+    assert.equal(alimtalk.length,1);
+    assert.equal(sms.length,1);
+    assert.match(sms[0].get('msg'),/결제 기한:/);
+    const {token}=paymentRow(env,data.code);
+    assert.equal((await requestCheckout(env,data.code,token)).status,200);
+    env.sqlite.prepare("UPDATE booking_requests SET payment_expires_at=NULL,expires_at=datetime('now','+9 hours','-1 minute') WHERE code=?").run(data.code);
+    await sweepUnpaidBookings(env);
+    assert.equal(calls.length,1);
+    assert.equal((await requestCheckout(env,data.code,token)).status,200);
+    env.sqlite.prepare("UPDATE booking_requests SET payment_expires_at=expires_at WHERE code=?").run(data.code);
+    assert.equal((await requestCheckout(env,data.code,token)).status,409);
+    await sweepUnpaidBookings(env);
+    await runBookingNotifications(env,{code:data.code});
+    assert.equal(calls[1].get('cancelmode'),'ready');
+    assert.equal((await getBooking(env,data.code)).status,'expired');
+    assert.equal(alimtalk.length,2);
+    assert.match(alimtalk[1].get('message_1'),/만료되었습니다/);
+  },{sms,alimtalk});
+});
+
+test('cloud readiness failures produce one staff incident notice until health recovers',async()=>{
+  const sms=[];
+  let cloudReady=false;
+  await withProvider(async()=>{
+    const env=enableLifecycleNotices(fixture());
+    assert.equal((await create(env)).response.status,503);
+    assert.equal((await create(env)).response.status,503);
+    await runBookingNotifications(env,{checkIntegration:true});
+    assert.equal(sms.length,2);
+    assert(sms.every(form=>form.get('msg').includes('대관 연동 장애')));
+    cloudReady=true;
+    await runBookingNotifications(env,{checkIntegration:true});
+    cloudReady=false;
+    await runBookingNotifications(env,{checkIntegration:true});
+    assert.equal(sms.length,4);
+    assert.equal(env.sqlite.prepare("SELECT COUNT(*) n FROM booking_notifications WHERE kind='sync_outage' AND state='accepted'").get().n,4);
+  },{sms,cloudStatus(data){data.login_saved=cloudReady;}});
+});
+
+test('unapproved customer templates remain queued without sending an SMS',async()=>{
+  const sms=[],alimtalk=[];
+  await withProvider(async()=>{
+    const env=enableLifecycleNotices(fixture());
+    env.BOOKING_ALIMTALK_RECEIVED='mock-unapproved-receipt';
+    const {data}=await create(env);
+    const notice=env.sqlite.prepare("SELECT state FROM booking_notifications WHERE code=? AND kind='received'").get(data.code);
+    assert.equal(notice.state,'queued');
+    assert.equal(sms.length,0);
+    assert.equal(alimtalk.length,0);
+  },{sms,alimtalk,unapproved:true});
 });

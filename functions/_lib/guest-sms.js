@@ -10,11 +10,11 @@ export async function sendGuestSms(env,phone,code,{test=false}={}){
  if(!/^\d{6}$/.test(code))throw Object.assign(new Error('sms-config'),{confirmedFailure:true});
  return sendAligoSms(env,phone,'[소셜팩토리] 인증번호 '+code+' (5분 이내 입력)',{test});
 }
-export async function sendAligoSms(env,phone,message,{test=false}={}){
+export async function sendAligoSms(env,phone,message,{test=false,long=false}={}){
  const c=guestSmsConfig(env);
  const bytes=[...message].reduce((count,char)=>count+(char.charCodeAt(0)<128?1:2),0);
- if(!c.configured || !/^01[016789]\d{7,8}$/.test(phone) || !message || bytes>90)throw Object.assign(new Error('sms-config'),{confirmedFailure:true});
- const form=new URLSearchParams({key:c.key,user_id:c.user,sender:c.sender,receiver:phone,msg:message,msg_type:'SMS',testmode_yn:test?'Y':'N'});
+ if(!c.configured || !/^01[016789]\d{7,8}$/.test(phone) || !message || bytes>(long?2000:90))throw Object.assign(new Error('sms-config'),{confirmedFailure:true});
+ const form=new URLSearchParams({key:c.key,user_id:c.user,sender:c.sender,receiver:phone,msg:message,msg_type:long?'LMS':'SMS',testmode_yn:test?'Y':'N'});
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),10000);
  try{
   let r,data;try{r=await fetch(c.url,{method:'POST',redirect:'manual',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8',...(c.url===RELAY?{Authorization:'Bearer '+c.secret}:{})},body:form,signal:ctrl.signal});data=await r.json()}catch{throw new Error('sms-unconfirmed')}

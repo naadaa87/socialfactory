@@ -28,7 +28,7 @@
     if(j.refund_amount>0)item('환불금액',Number(j.refund_amount).toLocaleString('ko-KR')+'원');
     var paid=j.status==='paid',confirmed=j.booking && j.booking.status==='confirmed',sync=j.sync || {};
     var paidVerifying=j.status==='paid_verifying' || (j.booking && j.booking.payment_status==='paid_verifying');
-    var terminal=paid || paidVerifying || ['cancelled','refunded','failed','review','partial_refund','sync_review','sync_conflict'].indexOf(j.status)!==-1 || ['review','conflict','released'].indexOf(sync.state)!==-1 || (j.booking && j.booking.status==='payment_review');
+    var terminal=paid || paidVerifying || ['cancelled','refunded','expired','failed','review','partial_refund','sync_review','sync_conflict'].indexOf(j.status)!==-1 || ['review','conflict','released'].indexOf(sync.state)!==-1 || (j.booking && j.booking.status==='payment_review');
     if(terminal)checkoutRequested=false;
     form.hidden=terminal || !(j.can_pay || j.can_start_payment || checkoutRequested);
     cancel.hidden=paidVerifying || !j.can_cancel;
@@ -44,6 +44,8 @@
       title.textContent='결제가 확인되었습니다. 최종 일정을 확인하고 있습니다';message.textContent='스페이스클라우드의 최신 일정을 확인한 뒤 예약 확정을 안내합니다. 추가 결제 없이 잠시 기다려 주세요.';poll();
     }else if(j.status==='releasing' || sync.state==='releasing'){
       title.textContent='예약 신청 취소를 처리하고 있습니다';message.textContent=sync.message || '결제 내역을 확인하고 확보했던 시간을 해제하고 있습니다. 완료될 때까지 잠시 기다려 주세요.';poll();
+    }else if(j.status==='expired'){
+      title.textContent='미결제로 예약 신청이 만료되었습니다';message.textContent='이용을 원하시면 예약 페이지에서 다시 신청해 주세요.';
     }else if(j.status==='cancelled' || j.status==='refunded'){
       title.textContent=j.status==='refunded'?'결제 취소가 확인되었습니다':'예약·결제요청이 취소되었습니다';message.textContent='변경이나 재예약은 담당자에게 문의해 주세요. 환불 입금 시점은 결제수단에 따라 다를 수 있습니다.';
     }else if(j.status==='sync_conflict' || sync.state==='conflict'){

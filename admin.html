@@ -494,8 +494,11 @@
       </div>
       <div class="card"><h2 class="ch"><span>공간대관 신청</span></h2><p class="small muted">스페이스클라우드 시간 확보와 결제 상태를 함께 확인합니다. 취소·환불이 확인된 예약만 해당 예약이 확보한 시간을 해제합니다. 처리 결과가 불확실한 건은 결제를 보류하고 확인할 때까지 시간을 유지합니다.</p><div id="booking-request-list" aria-live="polite"></div></div>
       <div class="card mt"><h2 class="ch"><span>공간대관 알림</span></h2>
+        <p class="small" id="booking-notice-settings" role="status"></p>
         <div class="acts"><button class="btn btn-light btn-sm" type="button" id="booking-test-sms">운영자 문자 수신 시험</button><a class="btn btn-light btn-sm" href="https://smartsms.aligo.in/shop/result_list.html" target="_blank" rel="noopener noreferrer">알리고 전송 결과</a></div>
         <p class="small" id="booking-test-sms-status" role="status"></p>
+        <p class="small muted">최근 알림 40건입니다. 발송사 접수 이후의 실제 도착 여부는 알리고 전송 결과에서 확인할 수 있습니다.</p>
+        <div class="table-wrap"><table class="table"><thead><tr><th>시각</th><th>예약</th><th>알림</th><th>수신자</th><th>상태</th></tr></thead><tbody id="booking-recent-notices"></tbody></table></div>
       </div>
       <div class="card mt"><h2 class="ch"><span>독립사무실 상담 후 청구</span></h2>
         <form id="office-invoice-form" class="form">
@@ -673,7 +676,7 @@
 <script src="/js/booking-rates.js?v=customer-audit-20261106"></script>
 <script src="/js/site-config.js?v=customer-audit-20261106"></script>
 <script src="/js/admin.js?v=spacecloud-payments20261108"></script>
-<script src="/js/admin-bookings.js?v=booking-notices-1"></script>
+<script src="/js/admin-bookings.js?v=booking-payment-sms-20261109"></script>
 <script src="/js/admin-booking-cloud.js?v=20261107-public-availability"></script>
 <script src="/js/admin-toss-sales.js?v=20261106-sort"></script>
 <script src="/js/admin-payapp-sales.js?v=20261106"></script>

@@ -15,7 +15,7 @@ export const BOOKING_SCHEMA = [
     consent INTEGER NOT NULL, notice_version TEXT NOT NULL, ip_hash TEXT,
     expires_at TEXT, approved_at TEXT, external_checked_at TEXT,
     payment_status TEXT NOT NULL DEFAULT 'unpaid', payment_id TEXT, payment_url TEXT,
-    paid_at TEXT, refund_amount INTEGER NOT NULL DEFAULT 0, memo TEXT,
+    paid_at TEXT, payment_expires_at TEXT, expiry_requested_at TEXT, refund_amount INTEGER NOT NULL DEFAULT 0, memo TEXT,
     CHECK(start_min >= 0 AND start_min < 1440 AND start_min % 30 = 0),
     CHECK(end_min > start_min AND end_min - start_min BETWEEN 120 AND 1440 AND end_min % 30 = 0),
     CHECK(people > 0 AND amount >= 0)
@@ -46,7 +46,15 @@ const prepared = new WeakMap();
 export async function ensureBookingSchema(env) {
   if (!env.DB) throw new Error('no-db');
   if (!prepared.has(env.DB)) {
-    const task = env.DB.batch(BOOKING_SCHEMA.map(sql => env.DB.prepare(sql)));
+    const task = (async () => {
+      await env.DB.batch(BOOKING_SCHEMA.map(sql => env.DB.prepare(sql)));
+      const {results} = await env.DB.prepare('PRAGMA table_info(booking_requests)').all();
+      for (const name of ['payment_expires_at','expiry_requested_at']) {
+        if (results.some(column => column.name === name)) continue;
+        try { await env.DB.prepare('ALTER TABLE booking_requests ADD COLUMN '+name+' TEXT').run(); }
+        catch (error) { if (!/duplicate column/i.test(error.message)) throw error; }
+      }
+    })();
     prepared.set(env.DB, task);
     task.catch(() => prepared.delete(env.DB));
   }

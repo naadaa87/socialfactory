@@ -6,6 +6,8 @@ import { payappConfig } from '../../_lib/booking-payapp.js';
 import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
 import { assertCloudAdmission } from '../../_lib/booking-cloud-admission.js';
 
+import { scheduleBookingNotices } from '../../_lib/booking-notify.js';
+
 const success = (booking,duplicate = false,sync = null) => json({ok:true,code:booking.code,status:booking.status,amount:booking.amount,duplicate,
   ...(sync ? {status_url:syncStatusUrl(sync),sync:{state:sync.state}} : {}),
   expires_at:booking.expires_at,message:booking.status === 'requested'
@@ -36,6 +38,7 @@ export async function onRequestPost({request,env,waitUntil}) {
       let booking=await getBooking(env,previous.code),sync=syncEnabled(env) ? await getSync(env,previous.code) : null;
       if(syncEnabled(env) && !sync && (booking.status==='requested' || (booking.status==='awaiting_payment' && booking.payment_status==='sync_pending'))) {sync=await startSynchronizedBooking(env,booking);booking=await getBooking(env,previous.code);}
       if(sync && ['pending','blocking'].includes(sync.state))await wakeCloudRunner(env,{waitUntil});
+      await scheduleBookingNotices(env,waitUntil,{code:booking.code});
       return success(booking,true,sync);
     }
     const ip = await ipHashOf(request,env);
@@ -58,6 +61,7 @@ export async function onRequestPost({request,env,waitUntil}) {
             value.purpose,value.purpose_detail,value.requests,amount,ip,expires).run();
         const sync=syncEnabled(env) ? await startSynchronizedBooking(env,await getBooking(env,code)) : null;
         if(sync)await wakeCloudRunner(env,{waitUntil});
+        await scheduleBookingNotices(env,waitUntil,{code});
         return success(await getBooking(env,code),false,sync);
       } catch (error) {
         if (isBookingConflict(error)) return json({ok:false,error:'conflict',field:'start_min',message:'선택한 시간에 예약 또는 검토 중인 신청이 있습니다. 다른 시간을 골라 주세요.'},409);
@@ -72,7 +76,10 @@ export async function onRequestPost({request,env,waitUntil}) {
     }
     throw new Error('booking-code-collision');
   } catch (error) {
-    if(error?.code==='cloud-admission-unavailable')return json({ok:false,error:error.code,message:error.message},503);
+    if(error?.code==='cloud-admission-unavailable') {
+      await scheduleBookingNotices(env,waitUntil,{integrationFailed:true});
+      return json({ok:false,error:error.code,message:error.message},503);
+    }
     console.error('booking-request',error?.message);
     return json({ok:false,error:'unavailable',message:'신청을 저장하지 못했습니다. 잠시 후 다시 시도하거나 카카오톡으로 문의해 주세요.'},503);
   }

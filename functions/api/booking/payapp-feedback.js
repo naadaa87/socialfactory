@@ -3,9 +3,12 @@ import { applyBookingPayment } from '../../_lib/booking.js';
 import { releaseAfterPayment } from '../../_lib/booking-checkout.js';
 import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
 
+import { scheduleBookingNotices } from '../../_lib/booking-notify.js';
+
 const reply=(text,status=200)=>new Response(text,{status,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
 export async function onRequestPost({request,env,waitUntil}) {
   if(Number(request.headers.get('content-length') || 0)>65536) return reply('INVALID',413);
+  let bookingCode;
   try {
     const body=await request.text();
     if(body.length>65536) return reply('INVALID',413);
@@ -17,6 +20,7 @@ export async function onRequestPost({request,env,waitUntil}) {
     if(event.state==='pending' && ['paid','cancelled','refunded','partial_refund'].includes(row.status)) return reply('SUCCESS');
     if(event.state==='paid' && ['refunded','partial_refund'].includes(row.status)) return reply('SUCCESS');
     if(event.state==='refund_pending' && row.status==='refunded') return reply('SUCCESS');
+    if(row.kind==='room')bookingCode=row.code;
     await accumulateRefund(env,notification);
     let result={ok:true};
     if(row.kind==='room') result=await applyBookingPayment(env,event);
@@ -29,5 +33,7 @@ export async function onRequestPost({request,env,waitUntil}) {
   } catch(error) {
     console.error('payapp-feedback',error.code || 'processing-error');
     return reply('RETRY',error.status || 503);
+  } finally {
+    if(bookingCode)await scheduleBookingNotices(env,waitUntil,{code:bookingCode});
   }
 }
