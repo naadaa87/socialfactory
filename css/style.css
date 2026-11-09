@@ -2037,7 +2037,6 @@ table.table td.strong a.rt-room { display: inline-flex; align-items: center; gap
 .nav-links .nav-cta a.btn-kakao { color: var(--kakao-ink); background: var(--kakao); border-color: var(--kakao); }
 .nav-links .nav-cta a.btn-kakao:hover { color: var(--kakao-ink); background: var(--kakao-hover); border-color: var(--kakao-hover); }
 .nav-kakao { display: none; }
-.nav-links a.nav-guest { color: var(--blue); font-weight: 700; }
 @media (min-width: 1281px) {
   .nav.container { max-width: 1280px; }
   .nav { gap: 16px; }
