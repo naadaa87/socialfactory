@@ -606,7 +606,9 @@
     }).catch(function (e) { if (!guard(e)) toast(e.message); }).then(function () { button.disabled = false; });
   });
   setInterval(function () {
-    if (!app.hidden && !document.hidden && ["dash", "board", "list"].indexOf(CUR) >= 0) reloadCurrent();
+    if (app.hidden || document.hidden) return;
+    if (CUR === "sales") loadSales();
+    else if (["dash", "board", "list"].indexOf(CUR) >= 0) reloadCurrent();
   }, 5 * 60 * 1000);
 
   /* =================== 예약 현황 (일간 시간표 · 월간 달력) =================== */
@@ -826,8 +828,28 @@
       return '<div class="bar" style="--c:' + (x.c || "var(--blue)") + '"><span class="k"><span>' + esc(x.k) + '</span></span><span class="tr"><i style="width:' + (x.v ? Math.max(2, x.v / max * 100) : 0).toFixed(1) + '%"></i></span><span class="v"><b>' + won(x.v) + "</b><small>" + esc(x.s || "") + (total ? (x.s ? " · " : "") + (x.v / total * 100).toFixed(1) + "%" : "") + "</small></span></div>";
     }).join("") || emptyMsg("자료가 없습니다.");
   }
+  function drawSpacecloudPaymentGaps(d) {
+    var box = $("#sc-payment-gaps"), gaps = d.spacecloudPaymentGaps;
+    box.hidden = !gaps;
+    if (!gaps) return;
+    var info = d.spacecloud || {};
+    var partial = !info.configured || info.error || (info.rooms || []).some(function (r) { return r.error || r.stale; });
+    box.classList.toggle("alert", !!gaps.count || !!partial);
+    box.innerHTML = '<p><strong>' + esc(d.year) + '년 스페이스클라우드 결제 미연결 ' + num(gaps.count)
+      + '건</strong> · 이용일 기준</p>'
+      + (partial ? '<p>일부 예약 캘린더를 확인할 수 없어 확인 가능한 일정만 집계했습니다.</p>' : '')
+      + (gaps.count ? '<ul>' + gaps.rows.map(function (row) {
+        var id = esc(row.reservation_id);
+        return '<li>' + esc(row.date) + ' · ' + esc(SPL[row.space] || row.space)
+          + ' · <a href="https://partner.spacecloud.kr/reservation/' + id
+          + '" target="_blank" rel="noopener noreferrer">예약 ' + id + '</a>'
+          + (row.date_conflict ? ' · 결제 기록과 이용일이 다릅니다.' : '') + '</li>';
+      }).join('') + '</ul>' : '')
+      + (gaps.count > gaps.rows.length ? '<p>최근 ' + num(gaps.rows.length) + '건을 표시합니다.</p>' : '');
+  }
   function drawSales() {
     var d = SL.data, ms = d.methods || [], cur = todayIso().slice(0, 7);
+    drawSpacecloudPaymentGaps(d);
     $("#sl-year").innerHTML = (d.years || [d.year]).map(function (y) { return '<option value="' + y + '"' + (y === d.year ? " selected" : "") + ">" + y + "년</option>"; }).join("");
     $("#sl-year-label").textContent = d.year + "년 · " + (d.basis === "paid" ? "결제일" : "이용일") + " 기준";
     $('#sl-table-help').textContent=d.provider==='payapp'?'페이앱 거래번호로 확인된 결제 · 결제일 기준':'월을 누르면 그 달의 예약 목록이 열립니다';

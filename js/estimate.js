@@ -92,6 +92,13 @@
 
   /* ---------- 결과 그리기 ---------- */
   var info = $("[data-es-info]"), lines = $("[data-es-lines]"), totalEl = $("[data-es-total]"), sub = $("[data-es-sub]");
+  var bar = $("[data-es-bar]"), sum = $("#est-summary"), note = $("[data-es-payment-note]");
+  var formVisible = false, sumVisible = false;
+  var syncBar = function () {
+    var on = !!last && formVisible && !sumVisible;
+    bar.classList.toggle("is-on", on);
+    document.body.classList.toggle("est-bar-on", on);
+  };
   var barTotal = $("[data-es-bar-total]"), refundWrap = $("[data-es-refund-wrap]"), refundList = $("[data-es-refund]");
   var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
   var dl = function (rows) { return rows.map(function (r) { return "<div><dt>" + esc(r[0]) + "</dt><dd>" + esc(r[1]) + "</dd></div>"; }).join(""); };
@@ -108,11 +115,14 @@
     totalEl.textContent = r ? r.totalText : "—";
     if (barTotal) barTotal.textContent = r ? r.totalText : "—";
     sub.textContent = r ? (r.sub || "") : "룸과 날짜를 고르면 바로 계산됩니다.";
+    $("[data-es-actions]").hidden = !r;
+    note.hidden = !r;
     if (refundWrap) {
       refundWrap.hidden = !(r && r.refund);
       if (r && r.refund) refundList.innerHTML = li(r.refund.map(function (x) { return [x.when, x.rate ? x.rate + "% 환불" : "환불 불가"]; }));
     }
     updateLinks();
+    syncBar();
   };
 
   var renderRoom = function () {
@@ -126,7 +136,11 @@
       s = readRoom();
     }
     var c = calcRoom(s);
-    if (!c) { if (whenEl) whenEl.textContent = s.date ? "" : "이용 날짜를 고르면 요일과 요금이 표시됩니다."; return null; }
+    if (!c) {
+      if (whenEl) whenEl.textContent = s.date ? "" : "이용 날짜를 고르면 요일과 요금이 표시됩니다.";
+      if (warn) warn.hidden = true;
+      return null;
+    }
     var tag = (s.date.getDay() === 0 || s.date.getDay() === 6) ? "주말" : (HOL[iso(s.date)] || s.holiday) ? "공휴일" : "평일";
     var endTxt = (iso(c.endDay) !== iso(s.date) ? md(c.endDay) + " " : "") + pad(c.endHour) + ":00";
     var whenTxt = md(s.date) + " " + pad(s.start) + ":00 ~ " + endTxt;
@@ -198,6 +212,7 @@
   };
   var updateLinks = function () {
     var r = last;
+    $("[data-es-kakao]", bar).hidden = !!r && r.kind === "room";
     var a = $("[data-es-inquiry]"), mail = $("[data-es-mail]");
     var purpose = !r ? "rental" : r.kind === "room" ? "rental" : r.kind === "cowork" ? "coworking" : "office";
     var q = ["purpose=" + purpose];
@@ -231,17 +246,19 @@
       var requestedOptions = options().list.map(function (item) { return item.name; });
       if (requestedOptions.length) booking.set("requests", "추가 요청: " + requestedOptions.join(", ") + ". 가능 여부와 별도 금액 안내를 요청합니다.");
       actionUrl = "/booking?" + booking.toString();
-      disabled = s.hours < 2;
-      actionText = disabled ? "온라인 예약은 2시간부터 가능합니다" : "이 일정으로 예약·결제하기 →";
-      shortText = disabled ? "최소 2시간" : "예약·결제";
-      paymentNote = disabled ? "이용 시간을 2시간 이상으로 골라 주세요. 온라인 예약은 최소 2시간부터 가능합니다." : "선택한 방·일정·인원은 예약 화면으로 이어집니다. 최신 가능 시간과 대관료를 확인한 뒤 페이앱으로 결제합니다. 추가 장비·다과는 별도 확인 후 안내합니다.";
+      disabled = s.hours < 2 || !form.elements.date.validity.valid;
+      actionText = shortText = "예약 가능 시간 확인";
+      if (s.hours < 2) { actionText = "온라인 예약은 2시간부터 가능합니다"; shortText = "최소 2시간"; }
+      paymentNote = "선택한 방과 일정은 예약 화면으로 이어집니다. 가능한 시간과 대관료를 다시 확인해 주세요. 추가 장비·다과는 별도로 안내합니다.";
+      if (!form.elements.date.validity.valid) paymentNote = "오늘부터 365일 이내의 날짜를 골라 주세요.";
+      else if (s.hours < 2) paymentNote = "대관은 최소 2시간입니다. 이용 시간을 다시 골라 주세요.";
     }
     $$("[data-es-action]").forEach(function (button) {
       button.textContent = button.hasAttribute("data-es-action-short") ? shortText : actionText;
       if (disabled) { button.removeAttribute("href"); button.setAttribute("aria-disabled", "true"); }
       else { button.href = actionUrl; button.removeAttribute("aria-disabled"); }
     });
-    var paymentNoteEl = $("[data-es-payment-note]"); if (paymentNoteEl) paymentNoteEl.textContent = paymentNote;
+    note.textContent = paymentNote;
     var email = ((CFG.contact || {}).email) || "";
     if (mail) {
       mail.hidden = !email;
@@ -354,7 +371,6 @@
   var today = parse(new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10));
   form.elements.date.min = iso(today);
   form.elements.date.max = iso(addDays(today, 365));
-  form.elements.date.value = iso(addDays(today, 1));
   var params = {};
   location.search.replace(/^\?/, "").split("&").forEach(function (kv) { if (kv) { var p = kv.split("="); params[p[0]] = decodeURIComponent(p[1] || ""); } });
   if (params.room && ROOMS[params.room]) {
@@ -366,12 +382,9 @@
   }
 
   /* 모바일: 합계 막대는 계산 영역이 보일 때만 */
-  var bar = $("[data-es-bar]"), sum = document.getElementById("est-summary");
   if (bar && "IntersectionObserver" in window) {
-    var formVisible = false, sumVisible = false;
-    var sync = function () { var on = formVisible && !sumVisible; bar.classList.toggle("is-on", on); document.body.classList.toggle("est-bar-on", on); };
-    new IntersectionObserver(function (es) { es.forEach(function (e) { formVisible = e.isIntersecting; }); sync(); }, { threshold: 0 }).observe(form);
-    new IntersectionObserver(function (es) { es.forEach(function (e) { sumVisible = e.isIntersecting; }); sync(); }, { threshold: 0.15 }).observe(sum);
+    new IntersectionObserver(function (es) { es.forEach(function (e) { formVisible = e.isIntersecting; }); syncBar(); }, { threshold: 0 }).observe(form);
+    new IntersectionObserver(function (es) { es.forEach(function (e) { sumVisible = e.isIntersecting; }); syncBar(); }, { threshold: 0.15 }).observe(sum);
   }
   window.SF_ESTIMATE = { calcRoom: calcRoom, parse: parse, render: render };
 })();

@@ -1,5 +1,6 @@
 import { QueueClient } from '../../integrations/spacecloud-worker/queue.mjs';
 import { SpacecloudUI } from '../../integrations/spacecloud-worker/spacecloud-ui.mjs';
+import { collectHostPayments, paymentRequest } from './payments.mjs';
 import { executeJob } from '../../integrations/spacecloud-worker/safety.mjs';
 import { ensureStore,problem,loadState,saveState,loadPublicState,savePublicState,onlySpacecloudState,savePublicCandidate,loadPublicCandidate,promotePublicCandidate,publicCandidateStatus,lockRunner,assertLock,unlockRunner,reserveBudget,settleBudget,budgetStatus,paidIncluded } from './store.mjs';
 
@@ -42,7 +43,7 @@ function queueConfig(env){const origin=new URL(env.API_ORIGIN);if(origin.protoco
 function reservationRow(row){return {id:row.budget_id,day:new Date(row.started_at).toISOString().slice(0,10),month:new Date(row.started_at).toISOString().slice(0,7),started_at:row.started_at,reserved_ms:row.reserved_ms};}
 async function budgetFor(env,row){const budget=await env.STATE_DB.prepare('SELECT * FROM cloud_budget_reservations WHERE id=?1').bind(row.budget_id).first();if(!budget)throw problem('missing-budget','브라우저 사용량 기록을 확인해야 합니다.',503);return {...reservationRow(row),...budget};}
 
-export function createRunner({launch,connect,Queue=QueueClient,Driver=SpacecloudUI,execute=executeJob,now=()=>Date.now(),setDeadline=setTimeout,clearDeadline=clearTimeout}={}) {
+export function createRunner({launch,connect,Queue=QueueClient,Driver=SpacecloudUI,execute=executeJob,collectPayments=collectHostPayments,requestPayments=paymentRequest,now=()=>Date.now(),setDeadline=setTimeout,clearDeadline=clearTimeout}={}) {
   const bounded=(promise,ms=5000)=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(problem('remote-timeout','클라우드 브라우저 응답을 확인하지 못했습니다.',503)),ms);Promise.resolve(promise).then(resolve,reject).finally(()=>clearTimeout(timer));});
   async function closeRemote(env,sessionId,browser) {
     let closed=false;
@@ -75,7 +76,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
     // An orphaned expired lock is uncertain; it must never silently authorize another browser.
     await env.STATE_DB.prepare("UPDATE cloud_runner_lock SET review=1 WHERE id=1 AND token IS NOT NULL AND expires_at<=?1").bind(now()).run();
   }
-  async function runBrowser(env,{kind='run',job,queue,storageState,publicStorageState,candidate,publicAvailabilityMode='guest-browser',token,budget,activeMs}={}) {
+  async function runBrowser(env,{kind='run',job,queue,storageState,publicStorageState,candidate,publicAvailabilityMode='guest-browser',token,budget,activeMs,sales}={}) {
     let browser,context,sessionId,closed=false,recorded=false,timer,leaseTimer,deadlineReached=false,launchAttempted=false,leaseLost=false,beating=false;
     const started=budget.started_at,expires=started+activeMs;
     const live=()=>{if(leaseLost || deadlineReached || now()>=expires)throw problem('browser-deadline','안전 실행시간이나 작업 임대를 넘겨 추가 변경을 중단했습니다.');};
@@ -92,6 +93,13 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
           .bind(budget.id,sessionId,token,started,expires).run();recorded=true;
         live();context=await browser.newContext({storageState,locale:'ko-KR',timezoneId:'Asia/Seoul',viewport:{width:1600,height:1100}});
         live();
+        if(kind==='sales'){
+          const rows=await collectPayments(context,sales.plan,live);
+          await heartbeat();
+          await saveState(env,await context.storageState({indexedDB:true}),{guard:live});
+          await heartbeat();
+          return requestPayments(sales.config,{action:'sync',complete:true,observed_at:sales.plan.observed_at,rows});
+        }
         if(job)leaseTimer=setInterval(async()=>{if(beating || leaseLost)return;beating=true;try{await heartbeat();}catch{leaseLost=true;}finally{beating=false;}},20000);
         // Customer login is a separately saved profile, never the host profile.
         const publicContext=kind==='run' && publicAvailabilityMode!=='public-api-v1'?await browser.newContext({storageState:publicStorageState,locale:'ko-KR',timezoneId:'Asia/Seoul',viewport:{width:1600,height:1100}}):undefined;
@@ -153,6 +161,32 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       // Delegation is explicit. Missing metadata never proves a browser was not acquired.
       if(!delegated){if(budget)await settleBudget(env,budget,{closed:true,notStarted:true,now:now()});await unlockRunner(env,token);}
       throw error;
+    }
+  }
+  async function runSales(env,{retry=false}={}) {
+    if(env.SPACECLOUD_CLOUD_SALES!=='true')throw problem('sales-disabled','클라우드 결제 수집 설정을 확인해 주세요.',503);
+    await ensureStore(env);
+    const config=queueConfig(env),token=await lockRunner(env,{duration:240000,now:now()});
+    if(!token)return {ok:true,busy:true};
+    let plan,budget,delegated=false;
+    try {
+      ({plan}=await requestPayments(config,{action:'begin',retry}));
+      if(!plan)return {ok:true,idle:true};
+      configured(env);
+      const storageState=await loadState(env);
+      if(!storageState)throw problem('login-required','클라우드 호스트 로그인이 필요합니다.',503);
+      const activeMs=120000;
+      budget=await reserveBudget(env,activeMs+CLEANUP_MS,{now:now()});
+      delegated=true;
+      return await runBrowser(env,{kind:'sales',storageState,token,budget,activeMs,sales:{plan,config}});
+    } catch(error) {
+      if(plan)try{await requestPayments(config,{action:'error',observed_at:plan.observed_at,error:error.code || 'collection-error'});}catch{}
+      throw error;
+    } finally {
+      if(!delegated){
+        if(budget)await settleBudget(env,budget,{closed:true,notStarted:true,now:now()});
+        await unlockRunner(env,token);
+      }
     }
   }
   async function revalidateGuest(env) {
@@ -350,6 +384,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       const origin=request.headers.get('origin');if(origin && origin!==url.origin)return response({ok:false,error:'origin'},403);
       try {
         if(url.pathname==='/status' && request.method==='GET')return response(await status(env));
+        if(url.pathname==='/sales/status' && request.method==='GET')return response(await requestPayments(queueConfig(env),{action:'status'}));
         if(url.pathname==='/login/provider' && request.method==='GET')return response(await providerStatus(env));
         if(request.method!=='POST')return response({ok:false,error:'method'},405);
         let body={};const text=await request.text();if(text.length>4096)return response({ok:false,error:'too-large'},413);if(text)body=JSON.parse(text);
@@ -362,6 +397,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
           return response({ok:true,scheduled:true,message:'상시 클라우드 스케줄에서 예약 작업을 처리합니다.'},202);
         }
         if(url.pathname==='/check')return response(await runOne(env,{check:true}));
+        if(url.pathname==='/sales/check')return response(await runSales(env,{retry:true}));
         if(url.pathname==='/login/start')return response(await startLogin(env,{provider:body?.provider}));
         if(['/login/save','/login/cancel'].includes(url.pathname))return response(await saveLogin(env,String(body?.login_id || ''),{cancel:url.pathname==='/login/cancel'}));
         if(url.pathname==='/guest-login/start')return response(await startLogin(env,{guest:true,provider:body?.provider}));
@@ -373,7 +409,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       } catch(error){return response({ok:false,error:error.code || 'cloud-error',message:error.code?error.message:'클라우드 작업을 완료하지 못했습니다. 새 결제를 보류하고 연결을 확인해 주세요.',
         ...(error.retryable===true?{retryable:true,resumable:true,purpose:'guest',login_id:error.login_id,expires_at:error.expires_at,phase:error.phase,...(error.recovery_view_url?{recovery_view_url:error.recovery_view_url}:{})}:{})},error.status || 503);}
     },
-    async scheduled(env){
+    async scheduled(env,scheduledTime=now()){
       // Never tie unpaid PayApp expiry to Chrome login, browser locks or budget.
       // This authenticated website action cannot lease work or launch a browser.
       try {await new Queue(queueConfig(env)).maintenance();}
@@ -382,6 +418,9 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       catch(error){console.error('spacecloud-cloud','browser-maintenance',error.code || 'operation-failed');return;}
       if(env.ENABLED==='true' && env.ALLOW_WRITES==='true'){
         try{await runOne(env);}catch(error){console.error('spacecloud-cloud',error.code || 'operation-failed');}
+      }
+      if(env.SPACECLOUD_CLOUD_SALES==='true' && new Date(scheduledTime).getUTCMinutes()%5===0){
+        try{await runSales(env);}catch(error){console.error('spacecloud-cloud','sales',error.code || 'operation-failed');}
       }
     }
   };

@@ -38,3 +38,34 @@ test('after-settlement separate cancellation is queued for review rather than gu
  assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sales').get().n,0);assert.equal(e.sqlite.prepare('SELECT status FROM spacecloud_sync_device').get().status,'review');
  const r=await status({env:e,request:new Request('https://example.test/',{headers:{authorization:'Bearer local-admin-only'}})});const j=await r.json();assert.equal(j.review.length,1);assert(!JSON.stringify(j).includes('token_hash'));
 });
+
+test('cloud collection retries the same range and stores its first payment without a paired Chrome device',async t=>{
+ const {onRequestPost:cloud}=await import('../functions/api/internal/spacecloud-payments.js');
+ const {paymentScan}=await import('../functions/_lib/spacecloud-cloud-sales.js');
+ const clock=Date.parse('2026-11-08T10:00:00Z');
+ t.mock.timers.enable({apis:['Date'],now:clock});
+ const e=env(),key='test-only-spacecloud-worker-token-for-cloud';
+ e.SPACECLOUD_WORKER_TOKEN=key;
+ const call=(body,token=key)=>cloud({env:e,request:req(body,token)});
+ assert.equal((await call({action:'begin'},'other')).status,401);
+ const started=await (await call({action:'begin'})).json();
+ assert.deepEqual(started.plan,{kind:'recent',from:'2026-10-01',to:'2026-11-08',observed_at:clock});
+ assert.equal((await (await call({action:'begin'})).json()).plan,null);
+ assert.equal((await call({action:'sync',complete:true,observed_at:clock,rows:[{...row,paid_at:'2026-09-30'}]})).status,400);
+ await call({action:'error',observed_at:clock,error:'login-required'});
+ assert.equal((await (await call({action:'begin'})).json()).plan,null);
+ t.mock.timers.setTime(clock+30*60000);
+ const retry=await (await call({action:'begin'})).json();
+ assert.deepEqual(retry.plan,{...started.plan,observed_at:Date.now()});
+ const body={action:'sync',complete:true,observed_at:retry.plan.observed_at,rows:[row]};
+ assert.equal((await (await call(body)).json()).counts.added,1);
+ assert.equal((await call(body)).status,409);
+ assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sales').get().n,1);
+ const checked=await (await status({env:e,request:req({},'local-admin-only')})).json();
+ assert.equal(checked.device,null);
+ assert.equal(checked.cloud.through_date,'2026-11-08');
+ assert.equal(checked.cloud.status,'ok');
+ const plan=paymentScan({status:'ok',through_date:'2026-11-08',last_success:clock},Date.parse('2027-06-01T00:00:00Z'));
+ assert.deepEqual(plan,{kind:'recent',from:'2026-11-09',to:'2027-02-06'});
+ e.sqlite.close();
+});

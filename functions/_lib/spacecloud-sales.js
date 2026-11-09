@@ -1,3 +1,7 @@
+import { isCalendarLinked } from './spacecloud-links.js';
+
+export const SAME_DAY_REVIEW = '같은 이용일의 기존 스페이스클라우드 매출 확인 필요';
+
 // Settlement imports are financial records, separate from room occupancy.
 export async function ensureSpacecloudSales(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS spacecloud_sales (
@@ -19,6 +23,48 @@ export function calendarReservationId(sourceUrl) {
     if (url.protocol !== 'https:' || url.hostname !== 'partner.spacecloud.kr' || url.port || url.username || url.password || url.search || url.hash) return null;
     return /^\/reservation\/(\d{1,16})\/?$/.exec(url.pathname)?.[1] || null;
   } catch { return null; }
+}
+
+// A legacy calendar code may differ from the current code for the same slot.
+export function calendarManualSources(manual, events) {
+  const byCode = new Map(events.map(event => [event.code, event]));
+  const bySlot = new Map();
+  const key = row => JSON.stringify([row.space, row.date, row.start_min, row.end_min,
+    (row.customer_name || '').normalize('NFC').trim()]);
+  for (const event of events) {
+    const slot = key(event);
+    bySlot.set(slot, bySlot.has(slot) ? null : event);
+  }
+  const sources = new Map();
+  for (const row of manual) {
+    const source = byCode.get(row.code) || (isCalendarLinked(row) && bySlot.get(key(row)));
+    if (source) sources.set(row.code, source);
+  }
+  return sources;
+}
+
+// Reconcile the payment ledger with original calendar IDs before display
+// merging can hide a booking behind another manually entered slot.
+export function calendarPaymentGaps(events, manual, imported, year) {
+  const byId = new Map(imported.map(payment => [payment.reservation_id, payment]));
+  const linked = new Set(imported.map(payment => payment.linked_code).filter(Boolean));
+  const paidManual = manual.filter(row => ['paid', 'refunded'].includes(row.pay_status) && !linked.has(row.code));
+  const sources = calendarManualSources(paidManual, events);
+  const manualIds = new Set([...sources.values()].map(event => calendarReservationId(event.source_url)).filter(Boolean));
+  const gaps = new Map();
+  for (const event of events) {
+    if (!event.date.startsWith(year + '-')) continue;
+    const id = calendarReservationId(event.source_url);
+    if (!id || manualIds.has(id)) continue;
+    const payment = byId.get(id);
+    if (payment && event.date >= payment.use_date && event.date <= payment.end_date) continue;
+    const current = gaps.get(id);
+    if (!current || event.date < current.date) {
+      gaps.set(id, { reservation_id:id, date:event.date, space:event.space, date_conflict:!!payment });
+    }
+  }
+  const rows = [...gaps.values()].sort((a,b) => b.date.localeCompare(a.date) || a.reservation_id.localeCompare(b.reservation_id));
+  return { count:rows.length, rows:rows.slice(0,20) };
 }
 
 // Enrich occupancy rows for display only. Sales aggregation continues to read

@@ -32,6 +32,8 @@
   var busy = false, finished = false, submission = null;
   var initialTimePreference = null;
   var startGrid = $("[data-start-time-grid]"), timeButtons = [];
+  var nextGrid = $("[data-next-time-grid]"), nextTimePicker = $("[data-next-time-picker]"), timeGridNote = $("[data-time-grid-note]");
+  var inlineTotal = $("[data-inline-total]");
   var submit = $("[data-submit]"), scheduleError = $("[data-schedule-error]"), submitError = $("[data-submit-error]");
   var room = function () { return (form.querySelector("[name=room]:checked") || {}).value || "r3"; };
   var capacity = function () { return +((pricing.rooms || {})[room()] || {}).max || { r1: 36, r2: 40, r3: 16, r4: 48, r5: 30 }[room()]; };
@@ -68,33 +70,76 @@
   };
   var syncTimeGrid = function () {
     refreshStartOptions(kstNow());
+    var s = selectedMinutes(), choosingEnd = Number.isFinite(s.start) && !Number.isFinite(s.end);
+    var gridDisabled = busy || finished || fields.start_min.disabled;
+    var endOptions = new Map(Array.from(fields.end_min.options).map(function (item) { return [+item.value, item]; }));
+    var showNextDay = false, hasSameDayEnd = false;
     timeButtons.forEach(function (item) {
-      var reason = item.option.bookingReason;
-      var disabled = busy || finished || fields.start_min.disabled || item.option.disabled || !availability.ready || availability.loading || availability.open === false;
-      var selected = !disabled && fields.start_min.value === item.option.value;
-      item.button.disabled = disabled;
+      var minute = item.minute, nextDay = !item.startOption;
+      var endChoice = choosingEnd && minute > s.start;
+      var endOption = endOptions.get(minute);
+      var selected = Number.isFinite(s.start) && (minute === s.start || minute > s.start && minute <= s.end);
+      var reason, disabled;
+      if (endChoice) {
+        disabled = !endOption || endOption.disabled;
+        reason = !endOption ? "최소 2시간" : disabled ? "예약 마감" : "종료 가능";
+        if (!nextDay && !disabled) hasSameDayEnd = true;
+      } else {
+        disabled = nextDay || item.startOption.disabled;
+        reason = nextDay ? "" : item.startOption.bookingReason;
+      }
+      if (nextDay) {
+        item.button.hidden = !(selected || endChoice && endOption && !endOption.disabled);
+        if (!item.button.hidden) showNextDay = true;
+      }
+      item.button.disabled = gridDisabled || disabled;
       item.button.className = "booking-time" + (selected ? " is-selected" : "");
       item.button.setAttribute("aria-pressed", selected ? "true" : "false");
-      item.button.setAttribute("aria-label", hm(+item.option.value) + " · " + (selected ? "선택됨" : reason));
-      item.status.textContent = selected ? "선택됨" : reason;
+      var status = selected ? minute === s.start ? "시작" : minute === s.end ? "종료" : "선택됨" : reason;
+      item.button.setAttribute("aria-label", hm(minute) + " · " + status + (choosingEnd && minute === s.start ? " · 다시 누르면 초기화" : ""));
+      item.status.textContent = status;
     });
+    if (nextTimePicker) {
+      nextTimePicker.hidden = !showNextDay;
+      if (!showNextDay) nextTimePicker.open = false;
+      else if (choosingEnd ? !hasSameDayEnd : s.end >= 1440) nextTimePicker.open = true;
+    }
+    if (timeGridNote) {
+      var hint = choosingEnd ? "종료 시간을 눌러 주세요. 시작 시간을 다시 누르면 선택이 초기화됩니다."
+        : Number.isFinite(s.end) ? "선택한 구간을 표시했습니다. 시작 시간을 누르면 다시 선택할 수 있습니다."
+        : "시작 시간과 종료 시간을 차례로 누르면 전체 구간이 선택됩니다.";
+      if (timeGridNote.textContent !== hint) timeGridNote.textContent = hint;
+    }
+  };
+  var addTimeButton = function (grid, minute, startOption) {
+    var button = document.createElement("button"), label = document.createElement("span"), status = document.createElement("span");
+    button.type = "button"; button.value = minute; label.className = "booking-time-label"; label.textContent = hm(minute % 1440); status.className = "booking-time-status";
+    button.appendChild(label); button.appendChild(status);
+    button.addEventListener("click", function () {
+      syncTimeGrid();
+      if (button.disabled || button.hidden) return;
+      var s = selectedMinutes();
+      if (Number.isFinite(s.start) && !Number.isFinite(s.end) && minute > s.start) {
+        fields.end_min.value = String(minute);
+        fields.end_min.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+      }
+      setError(scheduleError, "");
+      fields.start_min.value = Number.isFinite(s.start) && !Number.isFinite(s.end) && minute === s.start ? "" : String(minute);
+      buildEndTimes("");
+    });
+    grid.appendChild(button); timeButtons.push({ button: button, minute: minute, startOption: startOption, status: status });
   };
   var renderTimeGrid = function () {
     if (!startGrid) return;
     startGrid.innerHTML = ""; timeButtons = [];
     Array.prototype.forEach.call(fields.start_min.options, function (item) {
-      if (item.value === "") return;
-      var button = document.createElement("button"), label = document.createElement("span"), status = document.createElement("span");
-      button.type = "button"; button.value = item.value; label.className = "booking-time-label"; label.textContent = hm(+item.value); status.className = "booking-time-status";
-      button.appendChild(label); button.appendChild(status);
-      button.addEventListener("click", function () {
-        syncTimeGrid();
-        if (button.disabled || busy || finished || !availability.ready || availability.loading || availability.open === false) return;
-        fields.start_min.value = item.value;
-        fields.start_min.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-      startGrid.appendChild(button); timeButtons.push({ button: button, option: item, status: status });
+      if (item.value !== "") addTimeButton(startGrid, +item.value, item);
     });
+    if (nextGrid) {
+      nextGrid.innerHTML = "";
+      for (var minute = 1440; minute < 2880; minute += availability.step) addTimeButton(nextGrid, minute);
+    }
     syncTimeGrid();
   };
   var scheduleProblem = function () {
@@ -118,6 +163,8 @@
     $("[data-summary-duration]").textContent = validTimes ? (s.end - s.start) / 60 + "시간" : "—";
     var amount = validTimes ? quote(pricing, room(), val("date"), s.start, s.end) : null;
     $("[data-summary-amount]").textContent = amount === null ? "—" : money(amount);
+    var inlineText = amount === null ? "" : (s.end - s.start) / 60 + "시간 · 예상 대관료 " + money(amount);
+    if (inlineTotal.textContent !== inlineText) inlineTotal.textContent = inlineText;
     var problem = scheduleProblem();
     submit.disabled = busy || finished || !!problem;
   };
@@ -185,7 +232,7 @@
           buildTimes();
           setError(scheduleError, "요금 계산기에서 고른 시간은 현재 예약할 수 없거나 이용 기준에 맞지 않습니다. 시작·종료 시간을 다시 선택해 주세요.");
         }
-      } else buildTimes(Number.isFinite(s.start) ? s.start : undefined, Number.isFinite(s.end) ? s.end : undefined);
+      } else buildTimes(Number.isFinite(s.start) ? s.start : undefined, Number.isFinite(s.end) ? s.end : "");
       if (+val("people") > capacity() && scheduleError.hidden) setError(scheduleError, roomNames[room()] + "은 최대 " + capacity() + "명입니다. 인원을 확인해 주세요.");
     } catch (error) {
       if (serial !== availability.serial) return;
@@ -196,6 +243,8 @@
     } finally { clearTimeout(timer); if (serial === availability.serial) { availability.loading = false; $("[data-availability-panel]").setAttribute("aria-busy", "false"); renderSummary(); } }
   };
   var syncRoom = function () {
+    $("[data-selected-room]").textContent = roomNames[room()];
+    $("[data-selected-capacity]").textContent = "최대 " + capacity() + "명";
     fields.people.max = capacity(); $("[data-capacity-note]").textContent = "선택한 방 최대 " + capacity() + "명 · 인원 추가요금 없음";
     if (+val("people") > capacity()) setError(scheduleError, roomNames[room()] + "은 최대 " + capacity() + "명입니다. 인원을 확인해 주세요.");
     loadAvailability();
@@ -252,7 +301,11 @@
   fields.purpose.addEventListener("change", function () { var other = val("purpose") === "other"; fields.purpose_detail.required = other; $("[data-purpose-detail-note]").textContent = other ? "기타 선택 시 필수" : "선택"; });
   $("[data-retry-availability]").addEventListener("click", loadAvailability);
   var params = new URLSearchParams(window.location.search), initialRoom = params.get("room");
-  if (roomNames[initialRoom]) { var radio = form.querySelector('[name="room"][value="' + initialRoom + '"]'); if (radio) radio.checked = true; }
+  var initialRoomInput = $$("[name=room]").find(function (input) { return input.value === initialRoom; });
+  if (initialRoomInput) {
+    initialRoomInput.checked = true;
+    $("[data-room-picker]").open = false;
+  }
   syncDateBounds(kstNow());
   var initialDate = params.get("date"); if (dateIsReal(initialDate) && initialDate >= fields.date.min && initialDate <= fields.date.max) fields.date.value = initialDate;
   var initialPeople = params.get("people");

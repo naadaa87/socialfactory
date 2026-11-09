@@ -408,6 +408,62 @@ test('settlement linked to a calendar-backed manual sale does not count twice',a
   }finally{globalThis.fetch=originalFetch;}
 });
 
+test('automatic collection accepts a verified payment beside a separate same-day manual booking', async t => {
+  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-08T20:31:00+09:00')});
+  const e = env({r2:url(2),r3:url(3)});
+  const seminar = event('seminar','20261108T100000','20261108T130000').replace(/URL:[^\r]+\r\n/, '');
+  const paidBooking = event('paid','20261108T170000','20261108T220000').replace('/123','/987');
+  const original = globalThis.fetch;
+  globalThis.fetch = async u => response(calendar(String(u) === url(2) ? seminar : paidBooking));
+  t.after(() => { globalThis.fetch = original; e.sqlite.close(); });
+  const {onRequestPost:sync} = await import('../functions/api/spacecloud-sync.js');
+  const {createCode,exchange} = await import('../functions/_lib/spacecloud-sync.js');
+  const {token} = await exchange(e, await createCode(e));
+  const [manual] = (await loadSpacecloud(e)).results.filter(x => x.space === 'r2');
+  const create = await createReservation({env:e,request:new Request('https://example.test/',{
+    method:'POST',headers,body:JSON.stringify({sourceCode:manual.code,amount:55000,paid_at:'2026-11-01'})
+  })});
+  assert.equal(create.status,200);
+  const legacyCode = 'SC2-0000000000000000';
+  e.sqlite.prepare('UPDATE reservations SET code=? WHERE code=?').run(legacyCode,manual.code);
+  e.sqlite.exec(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status,paid_at)
+    VALUES('OLD','cancelled','r1','2026-11-08',600,780,'기존 세미나','spacecloud',40000,'spacecloud','paid','2026-11-01')`);
+  e.sqlite.prepare('INSERT INTO reservation_payment_relinks(original_code,replacement_code) VALUES(?,?)').run('OLD',legacyCode);
+  const row = {reservation_id:'987',venue:'소셜팩토리 건대 (초특가)',use_date:'2026-11-08',
+    end_date:'2026-11-08',paid_at:'2026-11-08',amount:100000,refund_amount:0};
+  const collect = rows => sync({env:e,request:new Request('https://example.test/api/spacecloud-sync',{
+    method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+    body:JSON.stringify({action:'sync',complete:true,observed_at:Date.now(),rows})
+  })});
+  const salesSummary = async () => (await getSales({env:e,request:new Request(
+    'https://example.test/?year=2026',{headers})})).json();
+  e.sqlite.exec(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status,paid_at)
+    VALUES('UNVERIFIED','confirmed','r3','2026-11-08',1020,1320,'수기 일정','spacecloud',50000,'spacecloud','paid','2026-11-08')`);
+  const before = await salesSummary();
+  assert.equal(before.unrecordedSpacecloud,0); // The manual slot masks it on the reservation list.
+  assert.deepEqual(before.spacecloudPaymentGaps,{count:1,rows:[
+    {reservation_id:'987',date:'2026-11-08',space:'r3',date_conflict:false}
+  ]});
+  e.sqlite.prepare("DELETE FROM reservations WHERE code='UNVERIFIED'").run();
+  e.sqlite.prepare(`INSERT INTO spacecloud_sync_audit(reservation_id,observed_at,after_refund,action,reason)
+    VALUES(?,?,0,'review',?)`).run(row.reservation_id,Date.now()-60000,'같은 이용일의 기존 스페이스클라우드 매출 확인 필요');
+  const run = await (await collect([row])).json();
+  assert.equal(run.counts.added,1);
+  await collect([row]);
+  const unverified = await (await collect([{...row,reservation_id:'988'}])).json();
+  assert.equal(unverified.counts.review,1);
+  const {onRequestGet:syncStatus} = await import('../functions/api/admin/spacecloud-sync.js');
+  const status = await (await syncStatus({env:e,request:new Request('https://example.test/',{headers})})).json();
+  assert.deepEqual(status.review.map(x=>x.reservation_id),['988']);
+  const reservations = await (await getReservations({env:e,request:new Request(
+    'https://example.test/?from=2026-11-08&to=2026-11-08',{headers})})).json();
+  assert.equal(reservations.results.find(r=>r.external && r.space==='r3').payment.amount,100000);
+  const sales = await salesSummary();
+  assert.deepEqual(sales.spacecloudPaymentGaps,{count:0,rows:[]});
+  assert.equal(sales.total,155000);
+  assert.equal(sales.n,2);
+});
+
 test('pre-settlement payment and later settlement share one ID; future use is counted by paid month',async t=>{
  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-25T03:00:00Z')});
  const {onRequestPost:importSales}=await import('../functions/api/admin/spacecloud-import.js');
