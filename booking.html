@@ -61,7 +61,7 @@
 <div class="booking-grid"><label class="booking-field">이용 날짜 <span class="required">필수</span><input type="date" name="date" required aria-describedby="booking-calendar-note"></label><label class="booking-field">이용 인원 <span class="required">필수</span><span class="booking-number"><input type="number" name="people" min="1" max="16" step="1" value="1" inputmode="numeric" required><span>명</span></span><small data-capacity-note>선택한 방 최대 16명 · 인원 추가요금 없음</small></label></div>
 <div class="booking-availability" data-availability-panel aria-busy="false"><p id="booking-calendar-note" data-availability-message role="status">날짜를 선택하면 신청 가능한 시간을 확인합니다.</p><button class="btn-link" type="button" data-retry-availability hidden>일정 다시 확인</button><div class="booking-blocked" data-blocked-times></div></div>
 <div class="booking-time-picker">
-<p class="booking-time-title" id="booking-start-grid-title">이용 시간 바로 선택</p>
+<p class="booking-time-title" id="booking-start-grid-title">시작·종료 시간 바로 선택</p>
 <p class="booking-hint" id="booking-start-grid-note" data-time-grid-note aria-live="polite">시작 시간과 종료 시간을 차례로 누르면 전체 구간이 선택됩니다.</p>
 <div class="booking-time-grid" data-start-time-grid role="group" aria-labelledby="booking-start-grid-title" aria-describedby="booking-start-grid-note"></div>
 <details class="booking-next-times" data-next-time-picker hidden>
@@ -173,6 +173,6 @@
 <script src="js/booking-rates.js?v=customer-audit-20261106"></script>
 <script src="js/site-config.js?v=customer-audit-20261106"></script>
 <script src="js/main.js?v=customer-audit-20261106"></script>
-<script src="js/booking.js?v=time-range-20261109"></script>
+<script src="js/booking.js?v=end-time-20261110"></script>
 </body>
 </html>

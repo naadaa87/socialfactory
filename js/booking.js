@@ -171,14 +171,17 @@
   var option = function (select, value, label, disabled) { var o = document.createElement("option"); o.value = value; o.textContent = label; o.disabled = !!disabled; select.appendChild(o); return o; };
   var buildEndTimes = function (preferred) {
     var start = +fields.start_min.value, list = fields.end_min;
-    list.innerHTML = ""; option(list, "", "종료 시간을 골라 주세요");
-    if (!availability.ready || availability.open === false || fields.start_min.value === "" || !fields.start_min.selectedOptions[0] || fields.start_min.selectedOptions[0].disabled) { list.disabled = true; renderSummary(); return; }
-    list.disabled = false;
+    var canChooseEnd = availability.ready && availability.open !== false && fields.start_min.value !== ""
+      && fields.start_min.selectedOptions[0] && !fields.start_min.selectedOptions[0].disabled;
+    list.innerHTML = "";
+    option(list, "", canChooseEnd ? "종료 시간을 골라 주세요" : "시작 시간을 먼저 골라 주세요");
+    list.disabled = !canChooseEnd;
+    if (!canChooseEnd) { renderSummary(); return; }
     for (var end = start + 120; end <= start + 1440; end += availability.step) {
       var blocked = overlaps(start, end, availability.blocked);
-      option(list, end, hm(end) + " · " + (end - start) / 60 + "시간" + (blocked ? " · 예약 마감" : ""), blocked);
+      option(list, end, hm(end) + (blocked ? " · 예약 마감" : ""), blocked);
     }
-    var wanted = preferred !== undefined ? String(preferred) : String(start + 120);
+    var wanted = preferred !== undefined ? String(preferred) : "";
     var found = Array.prototype.find.call(list.options, function (o) { return o.value === wanted && !o.disabled; });
     list.value = found ? wanted : "";
     renderSummary();
