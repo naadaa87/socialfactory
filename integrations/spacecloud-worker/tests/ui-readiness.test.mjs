@@ -4,6 +4,17 @@ import vm from 'node:vm';
 import { SpacecloudUI,SpacecloudReadiness,TIME_RADIO_NAME,publicCalendarLayout } from '../spacecloud-ui.mjs';
 import {memoFor} from '../safety.mjs';
 
+test('single-day calendar read returns the records for that day',async()=>{
+  const ui=new SpacecloudUI(null,{});
+  const date='2026-11-24';
+  const records=[{date,start_min:1380,end_min:1440}];
+  ui.recordsForDates=async dates=>{
+    assert.deepEqual(dates,[date]);
+    return [records];
+  };
+  assert.deepEqual(await ui.recordsFor(date),records);
+});
+
 function targetSet(visibleCount,{hiddenCount=0}={}) {
   const calls=[];
   const selected={async count(){return visibleCount;},async isVisible(){return visibleCount===1;},async scrollIntoViewIfNeeded(){calls.push('scroll');},async boundingBox(){return {x:10,y:20,width:30,height:40};},page(){return {mouse:{async click(x,y){calls.push(['click',x,y]);}}};}};

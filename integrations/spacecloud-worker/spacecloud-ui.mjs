@@ -170,7 +170,8 @@ export class SpacecloudUI {
     return {room,range_start:start,range_end:end,events};
   }
   async recordsFor(date) {
-    return this.recordsForDates([date]);
+    const [records]=await this.recordsForDates([date]);
+    return records;
   }
   async recordsForDates(dates,{refresh=true}={}) {
     // Both nights can be read from the same freshly loaded calendar. Keep the
