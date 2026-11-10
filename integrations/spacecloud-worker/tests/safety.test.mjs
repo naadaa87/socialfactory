@@ -229,3 +229,41 @@ test('public API preflight is required for new writes while already-owned verifi
  const job=makeJob({action:'verify'}),driver=fakeDriver(planJob(job).segments.map(own));driver.config={publicAvailabilityMode:'public-api-v1'};driver.assertPublicAvailable=async()=>{throw Error('owned block is intentionally unavailable');};
  const result=await executeJob(job,driver,async()=>{});assert.equal(result.status,'succeeded');assert.equal(driver.created.length,0);assert.equal(driver.publicChecks.length,1);
 });
+
+test('overnight block and release verify both dates from a fresh calendar after the final write',async()=>{
+  for(const action of ['block','release']){
+    const job=makeJob({action,start_min:1380,end_min:1500});
+    const segments=planJob(job).segments,dates=segments.map(segment=>segment.date);
+    const driver=fakeDriver(action==='release'?segments.map(own):[]);
+    const groupedReads=[];
+    driver.recordsForDates=async function(requested,{refresh=true}={}){
+      groupedReads.push({requested,refresh,writes:this.created.length+this.removed.length});
+      return requested.map(()=>[...this.records]);
+    };
+    driver.verifyPublic=async function(segment,remaining){
+      assert.equal(this.created.length+this.removed.length,2);
+      this.publicChecks.push({segment,remaining});
+    };
+    const result=await executeJob(job,driver,async()=>{});
+    assert.equal(result.status,'succeeded');
+    assert.equal(result.receipt[action==='release'?'verified_released':'verified_blocked'],true);
+    assert.deepEqual(groupedReads,[{requested:dates,refresh:false,writes:0},{requested:dates,refresh:true,writes:2}]);
+    assert.deepEqual(driver.hostReads,[dates[1]]);
+    assert.deepEqual(driver.publicChecks.map(check=>check.segment.date),dates);
+  }
+});
+
+test('a conflict that appears on the first night during the second write prevents overnight confirmation',async()=>{
+  const job=makeJob({start_min:1380,end_min:1500});
+  const segments=planJob(job).segments,driver=fakeDriver();
+  driver.recordsForDates=async function(dates){return dates.map(()=>[...this.records]);};
+  const create=driver.createSegment.bind(driver);
+  driver.createSegment=async function(segment){
+    await create(segment);
+    if(segment.date===segments[1].date)this.records.push({...segments[0],name:'guest booking',manual:false});
+  };
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'review');
+  assert.equal(result.receipt.verified_blocked,undefined);
+  assert.equal(driver.removed.length,0);
+});

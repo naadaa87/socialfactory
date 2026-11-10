@@ -53,7 +53,14 @@ export async function executeJob(rawJob, driver, heartbeat) {
     // Read every affected date before the first change, including the next day for overnight bookings.
     const initial = [],initialReadTimes=[];
     phase='read-initial';
-    for (const segment of job.segments) {
+    const grouped=job.segments.length>1 && typeof driver.recordsForDates==='function';
+    const dates=job.segments.map(segment=>segment.date);
+    if(grouped) {
+      const readStartedAt=Date.now();
+      const records=await driver.recordsForDates(dates,{refresh:false});
+      initial.push(...job.segments.map((segment,index)=>inspectRecords(records[index],segment)));
+      initialReadTimes.push(readStartedAt);
+    } else for (const segment of job.segments) {
       const readStartedAt=Date.now();
       initial.push(inspectRecords(await driver.recordsFor(segment.date),segment));
       initialReadTimes.push(readStartedAt);
@@ -92,29 +99,46 @@ export async function executeJob(rawJob, driver, heartbeat) {
       receipt.no_conflicts=true;receipt.verified_blocked=true;
       return {status:'succeeded',receipt};
     }
+    const release=job.action==='release';
+    const verifyWrittenSegment=async (segment,after)=>{
+      if(release ? after.own : !after.own || after.conflicts.length) {
+        throw new ReviewRequired(release?'등록한 차단의 해제를 확인하지 못했습니다.':'차단 등록 또는 다른 예약 유무를 확인하지 못했습니다.');
+      }
+      phase=release?'verify-public-release':'verify-public-block';
+      await driver.verifyPublic(segment,release?after.conflicts:[after.own]);
+    };
     for (let i=0;i<job.segments.length;i++) {
       const segment=job.segments[i];
       phase='read-before-change';
-      const current=inspectRecords(await driver.recordsFor(segment.date),segment);
-      if (job.action === 'release') {
-        if (current.own) { phase='remove-owned';await heartbeat(); await driver.removeSegment(segment,current.own); changed=true; }
-        phase='read-after-release';
-        const hostObservedAt=Date.now();
-        const after=inspectRecords(await driver.recordsFor(segment.date),segment);
-        if (after.own) throw new ReviewRequired('등록한 차단의 해제를 확인하지 못했습니다.');
-        phase='verify-public-release';await driver.verifyPublic(segment,after.conflicts);
-        observationTimes.push(hostObservedAt);
+      const current=grouped && i===0?initial[0]:inspectRecords(await driver.recordsFor(segment.date),segment);
+      if(release) {
+        if(current.own) {phase='remove-owned';await heartbeat();await driver.removeSegment(segment,current.own);changed=true;}
       } else {
-        if (current.conflicts.length) throw new ReviewRequired('작업 도중 다른 예약이 확인되었습니다. 결제를 보류합니다.');
-        if (!current.own) {
-          if (job.action === 'verify') throw new ReviewRequired('홈페이지 예약의 외부 차단을 찾지 못했습니다.');
-          phase='create-owned';await heartbeat(); await driver.createSegment(segment); changed=true;
+        if(current.conflicts.length)throw new ReviewRequired('작업 도중 다른 예약이 확인되었습니다. 결제를 보류합니다.');
+        if(!current.own) {
+          phase='create-owned';await heartbeat();await driver.createSegment(segment);changed=true;
         }
-        phase='read-after-block';const hostObservedAt=Date.now();const after=inspectRecords(await driver.recordsFor(segment.date),segment);
-        if (!after.own || after.conflicts.length) throw new ReviewRequired('차단 등록 또는 다른 예약 유무를 확인하지 못했습니다.');
-        phase='verify-public-block';await driver.verifyPublic(segment,[after.own]);
-        observationTimes.push(hostObservedAt);
       }
+      if(!grouped) {
+        phase=release?'read-after-release':'read-after-block';
+        const readStartedAt=Date.now();
+        const after=inspectRecords(await driver.recordsFor(segment.date),segment);
+        await verifyWrittenSegment(segment,after);
+        observationTimes.push(readStartedAt);
+      }
+    }
+    if(grouped) {
+      // Observe both dates only after the final write. The first night's proof
+      // must not age while the next night's write is still running.
+      phase=release?'read-after-release':'read-after-block';
+      const readStartedAt=Date.now();
+      const records=await driver.recordsForDates(dates);
+      for(let i=0;i<job.segments.length;i++) {
+        phase=release?'read-after-release':'read-after-block';
+        const segment=job.segments[i];
+        await verifyWrittenSegment(segment,inspectRecords(records[i],segment));
+      }
+      observationTimes.push(readStartedAt);
     }
     receipt.observed_at=Math.min(...observationTimes);
     await heartbeat();

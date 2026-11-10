@@ -170,13 +170,21 @@ export class SpacecloudUI {
     return {room,range_start:start,range_end:end,events};
   }
   async recordsFor(date) {
-    // A full reload prevents reusing a previously rendered, stale calendar.
-    await this.openRoom(this.room);
-    const records=[...await this.readDate(previousDate(date)),...await this.readDate(date)];
-    for(let i=0;i<records.length;i++) {
-      if(records[i].name===this.job?.marker) records[i]=await this.readOwnedDetail(records[i]);
+    return this.recordsForDates([date]);
+  }
+  async recordsForDates(dates,{refresh=true}={}) {
+    // Both nights can be read from the same freshly loaded calendar. Keep the
+    // preceding date to detect reservations that extend past midnight.
+    if(refresh)await this.openRoom(this.room);
+    const byDate=new Map();
+    for(const date of new Set(dates.flatMap(date=>[previousDate(date),date]))) {
+      const records=await this.readDate(date);
+      for(let i=0;i<records.length;i++) {
+        if(records[i].name===this.job?.marker)records[i]=await this.readOwnedDetail(records[i]);
+      }
+      byDate.set(date,records);
     }
-    return records;
+    return dates.map(date=>[...byDate.get(previousDate(date)),...byDate.get(date)]);
   }
   async ownedPopup(record) {
     const cell=await this.dateCell(record.source.date);
