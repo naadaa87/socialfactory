@@ -267,3 +267,18 @@ test('a conflict that appears on the first night during the second write prevent
   assert.equal(result.receipt.verified_blocked,undefined);
   assert.equal(driver.removed.length,0);
 });
+
+test('an overnight write missing from the first host refresh is reread without a duplicate write',async()=>{
+  const job=makeJob({start_min:1380,end_min:1500});
+  const segments=planJob(job).segments,driver=fakeDriver();
+  let reads=0;
+  driver.recordsForDates=async function(dates){
+    reads++;
+    return dates.map(()=>reads===2?this.records.slice(0,1):[...this.records]);
+  };
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'succeeded');
+  assert.equal(reads,3);
+  assert.deepEqual(driver.created,segments);
+  assert.equal(driver.publicChecks.length,2);
+});
