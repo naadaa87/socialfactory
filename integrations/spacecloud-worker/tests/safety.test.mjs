@@ -236,8 +236,8 @@ test('overnight block and release verify both dates from a fresh calendar after 
     const segments=planJob(job).segments,dates=segments.map(segment=>segment.date);
     const driver=fakeDriver(action==='release'?segments.map(own):[]);
     const groupedReads=[];
-    driver.recordsForDates=async function(requested,{refresh=true}={}){
-      groupedReads.push({requested,refresh,writes:this.created.length+this.removed.length});
+    driver.recordsForDates=async function(requested){
+      groupedReads.push({requested,writes:this.created.length+this.removed.length});
       return requested.map(()=>[...this.records]);
     };
     driver.verifyPublic=async function(segment,remaining){
@@ -247,7 +247,7 @@ test('overnight block and release verify both dates from a fresh calendar after 
     const result=await executeJob(job,driver,async()=>{});
     assert.equal(result.status,'succeeded');
     assert.equal(result.receipt[action==='release'?'verified_released':'verified_blocked'],true);
-    assert.deepEqual(groupedReads,[{requested:dates,refresh:false,writes:0},{requested:dates,refresh:true,writes:2}]);
+    assert.deepEqual(groupedReads,[{requested:dates,writes:0},{requested:dates,writes:2}]);
     assert.deepEqual(driver.hostReads,[dates[1]]);
     assert.deepEqual(driver.publicChecks.map(check=>check.segment.date),dates);
   }
@@ -266,4 +266,34 @@ test('a conflict that appears on the first night during the second write prevent
   assert.equal(result.status,'review');
   assert.equal(result.receipt.verified_blocked,undefined);
   assert.equal(driver.removed.length,0);
+});
+
+test('an overnight write missing from the first host refresh is reread without a duplicate write',async()=>{
+  const job=makeJob({start_min:1380,end_min:1500});
+  const segments=planJob(job).segments,driver=fakeDriver();
+  let reads=0;
+  driver.recordsForDates=async function(dates){
+    reads++;
+    return dates.map(()=>reads===2?this.records.slice(0,1):[...this.records]);
+  };
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'succeeded');
+  assert.equal(reads,3);
+  assert.deepEqual(driver.created,segments);
+  assert.equal(driver.publicChecks.length,2);
+});
+
+test('an overnight removal missing from the first host refresh is reread without a duplicate removal',async()=>{
+  const job=makeJob({action:'release',start_min:1380,end_min:1500});
+  const records=planJob(job).segments.map(own),driver=fakeDriver(records);
+  let reads=0;
+  driver.recordsForDates=async function(dates){
+    reads++;
+    return dates.map(()=>reads===2?[records[1]]:[...this.records]);
+  };
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'succeeded');
+  assert.equal(reads,3);
+  assert.deepEqual(driver.removed,records);
+  assert.equal(driver.publicChecks.length,2);
 });

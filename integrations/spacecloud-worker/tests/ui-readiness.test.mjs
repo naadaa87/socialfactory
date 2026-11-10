@@ -4,6 +4,31 @@ import vm from 'node:vm';
 import { SpacecloudUI,SpacecloudReadiness,TIME_RADIO_NAME,publicCalendarLayout } from '../spacecloud-ui.mjs';
 import {memoFor} from '../safety.mjs';
 
+test('single-day calendar read returns the records for that day',async()=>{
+  const ui=new SpacecloudUI(null,{});
+  const date='2026-11-24';
+  const records=[{date,start_min:1380,end_min:1440}];
+  ui.recordsForDates=async dates=>{
+    assert.deepEqual(dates,[date]);
+    return [records];
+  };
+  assert.deepEqual(await ui.recordsFor(date),records);
+});
+
+test('an already visible host month is reloaded through the month controls before reading',async()=>{
+  const ui=new SpacecloudUI(null,{});
+  let month='2026.11';
+  const events=[];
+  ui.hostMonth=async()=>month;
+  ui.moveHostMonth=async date=>{
+    const target=date.slice(0,7).replace('-','.');
+    if(target!==month)events.push(['load',month=target]);
+  };
+  ui.readDate=async date=>{events.push(['read',date]);return [];};
+  assert.deepEqual(await ui.recordsForDates(['2026-11-24','2026-11-25']),[[],[]]);
+  assert.deepEqual(events,[['load','2026.12'],['load','2026.11'],['read','2026-11-23'],['read','2026-11-24'],['read','2026-11-25']]);
+});
+
 function targetSet(visibleCount,{hiddenCount=0}={}) {
   const calls=[];
   const selected={async count(){return visibleCount;},async isVisible(){return visibleCount===1;},async scrollIntoViewIfNeeded(){calls.push('scroll');},async boundingBox(){return {x:10,y:20,width:30,height:40};},page(){return {mouse:{async click(x,y){calls.push(['click',x,y]);}}};}};
@@ -184,5 +209,6 @@ test('deletion targets the unique nested confirmation rather than both visible a
   ui.readOwnedDetail=async(_record,leaveOpen)=>{assert.equal(leaveOpen,true);return {...segment,name:segment.marker,memo:memoFor(segment)};};
   ui.click=async locator=>{const found=locator.nodes();assert.equal(found.length,1);if(found[0]===deleteButton){events.push('request');inner.visible=true;}else {assert.equal(found[0],confirmButton);events.push('confirm');inner.visible=false;outer.visible=false;}};
   ui.beforeWrite=async()=>events.push('lease');
-  await ui.removeSegment(segment,{});assert.deepEqual(events,['request','lease','confirm']);
+  ui.settle=async page=>{assert.equal(page,host);events.push('settle');};
+  await ui.removeSegment(segment,{});assert.deepEqual(events,['request','lease','confirm','settle']);
 });

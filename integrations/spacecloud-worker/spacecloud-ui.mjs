@@ -170,14 +170,22 @@ export class SpacecloudUI {
     return {room,range_start:start,range_end:end,events};
   }
   async recordsFor(date) {
-    return this.recordsForDates([date]);
+    const [records]=await this.recordsForDates([date]);
+    return records;
   }
-  async recordsForDates(dates,{refresh=true}={}) {
-    // Both nights can be read from the same freshly loaded calendar. Keep the
-    // preceding date to detect reservations that extend past midnight.
-    if(refresh)await this.openRoom(this.room);
+  async recordsForDates(dates) {
+    // Reopening the room can show a stale month. Month navigation loads the
+    // live schedule. Include the prior day for reservations crossing midnight.
+    const readDates=new Set(dates.flatMap(date=>[previousDate(date),date]));
+    const firstDate=readDates.values().next().value;
+    if(await this.hostMonth()===monthOf(firstDate)) {
+      const nextMonth=new Date(firstDate.slice(0,7)+'-01T00:00:00Z');
+      nextMonth.setUTCMonth(nextMonth.getUTCMonth()+1);
+      await this.moveHostMonth(nextMonth.toISOString().slice(0,10));
+    }
+    await this.moveHostMonth(firstDate);
     const byDate=new Map();
-    for(const date of new Set(dates.flatMap(date=>[previousDate(date),date]))) {
+    for(const date of readDates) {
       const records=await this.readDate(date);
       for(let i=0;i<records.length;i++) {
         if(records[i].name===this.job?.marker)records[i]=await this.readOwnedDetail(records[i]);
@@ -260,6 +268,8 @@ export class SpacecloudUI {
     if(this.config.publicAvailabilityMode===PUBLIC_AVAILABILITY_MODE){await this.assertPublicAvailable(segment);await this.beforeWrite();}
     await this.click(this.host.locator('a#_addExternalSchedule'),'외부예약 등록 확인');
     await this.host.locator('#reserve_name').waitFor({state:'hidden'});
+    // The dialog can close before the host's calendar request finishes.
+    await this.settle(this.host);
   }
   async removeSegment(segment,record) {
     if(!this.config.allowWrites)throw new ReviewRequired('외부 예약 쓰기가 비활성 상태입니다.');
@@ -273,6 +283,7 @@ export class SpacecloudUI {
     await this.beforeWrite();
     await this.click(confirm.getByText('확인',{exact:true}),'자체 외부예약 삭제 확인');
     await confirm.waitFor({state:'hidden'});
+    await this.settle(this.host);
   }
   publicProgress(step,event,extra={}) {
     try{this.reportReview?.({phase:'public-progress',step,event,elapsed_ms:Math.max(0,Date.now()-(this.publicStartedAt || Date.now())),attempt:this.publicAttempt || 1,...extra});}catch{}

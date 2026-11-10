@@ -57,7 +57,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
     const dates=job.segments.map(segment=>segment.date);
     if(grouped) {
       const readStartedAt=Date.now();
-      const records=await driver.recordsForDates(dates,{refresh:false});
+      const records=await driver.recordsForDates(dates);
       initial.push(...job.segments.map((segment,index)=>inspectRecords(records[index],segment)));
       initialReadTimes.push(readStartedAt);
     } else for (const segment of job.segments) {
@@ -101,9 +101,9 @@ export async function executeJob(rawJob, driver, heartbeat) {
     }
     const release=job.action==='release';
     const verifyWrittenSegment=async (segment,after)=>{
-      if(release ? after.own : !after.own || after.conflicts.length) {
-        throw new ReviewRequired(release?'등록한 차단의 해제를 확인하지 못했습니다.':'차단 등록 또는 다른 예약 유무를 확인하지 못했습니다.');
-      }
+      if(release && after.own)throw new ReviewRequired('등록한 차단의 해제를 확인하지 못했습니다.');
+      if(!release && after.conflicts.length)throw new ReviewRequired('차단 등록 후 다른 예약이 확인되었습니다.');
+      if(!release && !after.own)throw new ReviewRequired('등록한 외부예약이 호스트 달력에 표시되지 않습니다.');
       phase=release?'verify-public-release':'verify-public-block';
       await driver.verifyPublic(segment,release?after.conflicts:[after.own]);
     };
@@ -131,12 +131,22 @@ export async function executeJob(rawJob, driver, heartbeat) {
       // Observe both dates only after the final write. The first night's proof
       // must not age while the next night's write is still running.
       phase=release?'read-after-release':'read-after-block';
-      const readStartedAt=Date.now();
-      const records=await driver.recordsForDates(dates);
+      let readStartedAt=Date.now();
+      let records=await driver.recordsForDates(dates);
+      let inspected=job.segments.map((segment,i)=>inspectRecords(records[i],segment));
+      // The host can briefly render an older calendar after accepting a write.
+      // Refresh once without repeating the mutation or retrying a real conflict.
+      const shouldRefresh=release?inspected.some(day=>day.own)
+        :inspected.every(day=>!day.conflicts.length) && inspected.some(day=>!day.own);
+      if(shouldRefresh) {
+        await heartbeat();
+        readStartedAt=Date.now();
+        records=await driver.recordsForDates(dates);
+        inspected=job.segments.map((segment,i)=>inspectRecords(records[i],segment));
+      }
       for(let i=0;i<job.segments.length;i++) {
         phase=release?'read-after-release':'read-after-block';
-        const segment=job.segments[i];
-        await verifyWrittenSegment(segment,inspectRecords(records[i],segment));
+        await verifyWrittenSegment(job.segments[i],inspected[i]);
       }
       observationTimes.push(readStartedAt);
     }
