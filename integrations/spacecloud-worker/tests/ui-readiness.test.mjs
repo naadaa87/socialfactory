@@ -195,5 +195,6 @@ test('deletion targets the unique nested confirmation rather than both visible a
   ui.readOwnedDetail=async(_record,leaveOpen)=>{assert.equal(leaveOpen,true);return {...segment,name:segment.marker,memo:memoFor(segment)};};
   ui.click=async locator=>{const found=locator.nodes();assert.equal(found.length,1);if(found[0]===deleteButton){events.push('request');inner.visible=true;}else {assert.equal(found[0],confirmButton);events.push('confirm');inner.visible=false;outer.visible=false;}};
   ui.beforeWrite=async()=>events.push('lease');
-  await ui.removeSegment(segment,{});assert.deepEqual(events,['request','lease','confirm']);
+  ui.settle=async page=>{assert.equal(page,host);events.push('settle');};
+  await ui.removeSegment(segment,{});assert.deepEqual(events,['request','lease','confirm','settle']);
 });

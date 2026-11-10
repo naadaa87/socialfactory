@@ -261,6 +261,8 @@ export class SpacecloudUI {
     if(this.config.publicAvailabilityMode===PUBLIC_AVAILABILITY_MODE){await this.assertPublicAvailable(segment);await this.beforeWrite();}
     await this.click(this.host.locator('a#_addExternalSchedule'),'외부예약 등록 확인');
     await this.host.locator('#reserve_name').waitFor({state:'hidden'});
+    // The dialog can close before the host's calendar request finishes.
+    await this.settle(this.host);
   }
   async removeSegment(segment,record) {
     if(!this.config.allowWrites)throw new ReviewRequired('외부 예약 쓰기가 비활성 상태입니다.');
@@ -274,6 +276,7 @@ export class SpacecloudUI {
     await this.beforeWrite();
     await this.click(confirm.getByText('확인',{exact:true}),'자체 외부예약 삭제 확인');
     await confirm.waitFor({state:'hidden'});
+    await this.settle(this.host);
   }
   publicProgress(step,event,extra={}) {
     try{this.reportReview?.({phase:'public-progress',step,event,elapsed_ms:Math.max(0,Date.now()-(this.publicStartedAt || Date.now())),attempt:this.publicAttempt || 1,...extra});}catch{}

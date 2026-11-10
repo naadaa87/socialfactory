@@ -94,9 +94,10 @@ test('the final host submit is bracketed by lease checks and a fresh public pref
     const events=[],values=new Map(),ui=new SpacecloudUI(null,{allowWrites:true,publicAvailabilityMode:PUBLIC_AVAILABILITY_MODE});
     ui.host={getByText(){return 'open';},locator(selector){return {selector,async waitFor(){},async selectOption(){},async isChecked(){return false;},async fill(value){values.set(selector,value);},async inputValue(){return values.get(selector);}};}};
     ui.click=async target=>{if(target?.selector==='a#_addExternalSchedule')events.push('submit');};ui.chooseFormDate=async()=>{};
+    ui.settle=async page=>{assert.equal(page,ui.host);events.push('settle');};
     ui.beforeWrite=async()=>events.push('lease');ui.assertPublicAvailable=async()=>{events.push('public');if(blocked)throw Object.assign(new Error('pending hold'),{name:'ReviewRequired'});};
     const operation=ui.createSegment({...segment,marker:'SFWEB:B261215-PREFLIGHT'});
     if(blocked){await assert.rejects(operation,{name:'ReviewRequired'});assert.deepEqual(events,['lease','public']);}
-    else {await operation;assert.deepEqual(events,['lease','public','lease','submit']);}
+    else {await operation;assert.deepEqual(events,['lease','public','lease','submit','settle']);}
   }
 });
