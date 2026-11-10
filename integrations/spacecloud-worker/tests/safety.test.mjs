@@ -236,8 +236,8 @@ test('overnight block and release verify both dates from a fresh calendar after 
     const segments=planJob(job).segments,dates=segments.map(segment=>segment.date);
     const driver=fakeDriver(action==='release'?segments.map(own):[]);
     const groupedReads=[];
-    driver.recordsForDates=async function(requested,{refresh=true}={}){
-      groupedReads.push({requested,refresh,writes:this.created.length+this.removed.length});
+    driver.recordsForDates=async function(requested){
+      groupedReads.push({requested,writes:this.created.length+this.removed.length});
       return requested.map(()=>[...this.records]);
     };
     driver.verifyPublic=async function(segment,remaining){
@@ -247,7 +247,7 @@ test('overnight block and release verify both dates from a fresh calendar after 
     const result=await executeJob(job,driver,async()=>{});
     assert.equal(result.status,'succeeded');
     assert.equal(result.receipt[action==='release'?'verified_released':'verified_blocked'],true);
-    assert.deepEqual(groupedReads,[{requested:dates,refresh:false,writes:0},{requested:dates,refresh:true,writes:2}]);
+    assert.deepEqual(groupedReads,[{requested:dates,writes:0},{requested:dates,writes:2}]);
     assert.deepEqual(driver.hostReads,[dates[1]]);
     assert.deepEqual(driver.publicChecks.map(check=>check.segment.date),dates);
   }

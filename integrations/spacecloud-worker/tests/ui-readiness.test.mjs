@@ -15,6 +15,20 @@ test('single-day calendar read returns the records for that day',async()=>{
   assert.deepEqual(await ui.recordsFor(date),records);
 });
 
+test('an already visible host month is reloaded through the month controls before reading',async()=>{
+  const ui=new SpacecloudUI(null,{});
+  let month='2026.11';
+  const events=[];
+  ui.hostMonth=async()=>month;
+  ui.moveHostMonth=async date=>{
+    const target=date.slice(0,7).replace('-','.');
+    if(target!==month)events.push(['load',month=target]);
+  };
+  ui.readDate=async date=>{events.push(['read',date]);return [];};
+  assert.deepEqual(await ui.recordsForDates(['2026-11-24','2026-11-25']),[[],[]]);
+  assert.deepEqual(events,[['load','2026.12'],['load','2026.11'],['read','2026-11-23'],['read','2026-11-24'],['read','2026-11-25']]);
+});
+
 function targetSet(visibleCount,{hiddenCount=0}={}) {
   const calls=[];
   const selected={async count(){return visibleCount;},async isVisible(){return visibleCount===1;},async scrollIntoViewIfNeeded(){calls.push('scroll');},async boundingBox(){return {x:10,y:20,width:30,height:40};},page(){return {mouse:{async click(x,y){calls.push(['click',x,y]);}}};}};

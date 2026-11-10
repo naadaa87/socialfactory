@@ -173,12 +173,19 @@ export class SpacecloudUI {
     const [records]=await this.recordsForDates([date]);
     return records;
   }
-  async recordsForDates(dates,{refresh=true}={}) {
-    // Both nights can be read from the same freshly loaded calendar. Keep the
-    // preceding date to detect reservations that extend past midnight.
-    if(refresh)await this.openRoom(this.room);
+  async recordsForDates(dates) {
+    // Reopening the room can show a stale month. Month navigation loads the
+    // live schedule. Include the prior day for reservations crossing midnight.
+    const readDates=new Set(dates.flatMap(date=>[previousDate(date),date]));
+    const firstDate=readDates.values().next().value;
+    if(await this.hostMonth()===monthOf(firstDate)) {
+      const nextMonth=new Date(firstDate.slice(0,7)+'-01T00:00:00Z');
+      nextMonth.setUTCMonth(nextMonth.getUTCMonth()+1);
+      await this.moveHostMonth(nextMonth.toISOString().slice(0,10));
+    }
+    await this.moveHostMonth(firstDate);
     const byDate=new Map();
-    for(const date of new Set(dates.flatMap(date=>[previousDate(date),date]))) {
+    for(const date of readDates) {
       const records=await this.readDate(date);
       for(let i=0;i<records.length;i++) {
         if(records[i].name===this.job?.marker)records[i]=await this.readOwnedDetail(records[i]);

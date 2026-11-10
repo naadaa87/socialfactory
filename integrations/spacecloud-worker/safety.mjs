@@ -57,7 +57,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
     const dates=job.segments.map(segment=>segment.date);
     if(grouped) {
       const readStartedAt=Date.now();
-      const records=await driver.recordsForDates(dates,{refresh:false});
+      const records=await driver.recordsForDates(dates);
       initial.push(...job.segments.map((segment,index)=>inspectRecords(records[index],segment)));
       initialReadTimes.push(readStartedAt);
     } else for (const segment of job.segments) {
