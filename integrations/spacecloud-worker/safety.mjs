@@ -136,7 +136,9 @@ export async function executeJob(rawJob, driver, heartbeat) {
       let inspected=job.segments.map((segment,i)=>inspectRecords(records[i],segment));
       // The host can briefly render an older calendar after accepting a write.
       // Refresh once without repeating the mutation or retrying a real conflict.
-      if(!release && inspected.every(day=>!day.conflicts.length) && inspected.some(day=>!day.own)) {
+      const shouldRefresh=release?inspected.some(day=>day.own)
+        :inspected.every(day=>!day.conflicts.length) && inspected.some(day=>!day.own);
+      if(shouldRefresh) {
         await heartbeat();
         readStartedAt=Date.now();
         records=await driver.recordsForDates(dates);

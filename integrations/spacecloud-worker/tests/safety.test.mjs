@@ -282,3 +282,18 @@ test('an overnight write missing from the first host refresh is reread without a
   assert.deepEqual(driver.created,segments);
   assert.equal(driver.publicChecks.length,2);
 });
+
+test('an overnight removal missing from the first host refresh is reread without a duplicate removal',async()=>{
+  const job=makeJob({action:'release',start_min:1380,end_min:1500});
+  const records=planJob(job).segments.map(own),driver=fakeDriver(records);
+  let reads=0;
+  driver.recordsForDates=async function(dates){
+    reads++;
+    return dates.map(()=>reads===2?[records[1]]:[...this.records]);
+  };
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'succeeded');
+  assert.equal(reads,3);
+  assert.deepEqual(driver.removed,records);
+  assert.equal(driver.publicChecks.length,2);
+});
