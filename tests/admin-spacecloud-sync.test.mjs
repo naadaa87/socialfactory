@@ -176,3 +176,18 @@ test('a slow post-write result gets a bounded read-only check without recreating
   assert.equal(links(env).length,1);
   assert.equal(await claimSyncJob(env),null);
 });
+test('cancellation after an uncertain creation queues an exact owned release and bounds repeated failures',async()=>{
+  const env=await fixture(),row=insert(env);
+  await reconcileAdminReservations(env);
+  const first=await claimSyncJob(env);await ack(env,first,'review');
+  env.sqlite.prepare("UPDATE reservations SET status='cancelled' WHERE code=?").run(row.code);
+  await reconcileAdminReservations(env);
+  const release=await claimSyncJob(env);
+  assert.equal(release.action,'release');assert.equal(release.code,first.code);
+  assert.deepEqual(release.replaces,[]);
+  await ack(env,release,'review');await reconcileAdminReservations(env);
+  const retry=await claimSyncJob(env);assert.equal(retry.action,'release');
+  await ack(env,retry,'review');await reconcileAdminReservations(env);
+  assert.equal(await claimSyncJob(env),null);
+  assert.equal(links(env)[0].state,'review');
+});

@@ -58,6 +58,17 @@ export async function reconcileAdminReservations(env) {
       FROM spacecloud_admin_links l JOIN spacecloud_blocks b ON b.code=l.sync_code
       WHERE l.desired=1 AND b.state='pending' AND NOT EXISTS
       (SELECT 1 FROM spacecloud_sync_jobs j WHERE j.booking_code=l.sync_code AND j.state IN ('queued','leased','review'))`).bind(now),
+    // Cancelling after an interrupted write still releases only the exact
+    // owned marker. Bound recovery attempts, retaining uncertainty for review.
+    env.DB.prepare(`UPDATE spacecloud_sync_jobs SET state='cancelled',updated_at=?1
+      WHERE state='review' AND booking_code IN
+      (SELECT l.sync_code FROM spacecloud_admin_links l JOIN spacecloud_blocks b ON b.code=l.sync_code
+       WHERE l.desired=0 AND b.state='review' AND ${mayRelease}
+       AND (SELECT COUNT(*) FROM spacecloud_sync_jobs j WHERE j.booking_code=l.sync_code AND j.action='release')<2)`).bind(now),
+    env.DB.prepare(`UPDATE spacecloud_blocks SET state='releasing',cancel_requested=1,verified_at=NULL,updated_at=?1
+      WHERE state='review' AND code IN(SELECT l.sync_code FROM spacecloud_admin_links l WHERE l.desired=0 AND ${mayRelease})
+      AND EXISTS(SELECT 1 FROM spacecloud_sync_jobs j WHERE j.booking_code=spacecloud_blocks.code
+        AND j.state='cancelled' AND j.updated_at=?1)`).bind(now),
     // New coverage must be verified before old coverage can be released.
     env.DB.prepare(`UPDATE spacecloud_blocks SET cancel_requested=1,state='releasing',verified_at=NULL,updated_at=?1
       WHERE state IN ('pending','blocking','blocked') AND code IN
