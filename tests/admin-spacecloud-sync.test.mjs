@@ -165,3 +165,14 @@ test('public preflight tolerates only verified old coverage while new hours must
   await ui.assertPublicAvailable(segment);
   hours[12]=false;await assert.rejects(ui.assertPublicAvailable(segment));
 });
+test('a slow post-write result gets a bounded read-only check without recreating its marker',async()=>{
+  const env=await fixture();insert(env);
+  await reconcileAdminReservations(env);
+  const first=await claimSyncJob(env);await ack(env,first,'review');
+  await reconcileAdminReservations(env);
+  const check=await claimSyncJob(env);
+  assert.equal(check.action,'verify');assert.equal(check.code,first.code);
+  await ack(env,check);await reconcileAdminReservations(env);
+  assert.equal(links(env).length,1);
+  assert.equal(await claimSyncJob(env),null);
+});

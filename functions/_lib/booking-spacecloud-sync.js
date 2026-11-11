@@ -168,7 +168,7 @@ export async function claimSyncJob(env) {
   const block=await getSync(env,job.booking_code);
   if (job.action==='block') await env.DB.prepare("UPDATE spacecloud_blocks SET state=CASE WHEN cancel_requested=1 THEN 'releasing' ELSE 'blocking' END,updated_at=?2 WHERE code=?1 AND state<>'review'").bind(block.code,now).run();
   return {id:job.id,job_id:job.id,lease_token:token,lease_until:until,action:job.action,code:block.code,
-    room:block.room,date:block.date,start_min:block.start_min,end_min:block.end_min,marker:block.marker,segments:block.segments,replaces:job.action==='block'?await adminReplacements(env,block):[]};
+    room:block.room,date:block.date,start_min:block.start_min,end_min:block.end_min,marker:block.marker,segments:block.segments,replaces:job.action!=='release'?await adminReplacements(env,block):[]};
 }
 async function adminReplacements(env,block) {
   const {results}=await env.DB.prepare(`SELECT b.* FROM spacecloud_admin_links own

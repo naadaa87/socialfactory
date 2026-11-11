@@ -35,6 +35,24 @@ export async function reconcileAdminReservations(env) {
     env.DB.prepare(`UPDATE spacecloud_blocks SET state='released',cancel_requested=1,updated_at=?1
       WHERE state='pending' AND code IN(SELECT sync_code FROM spacecloud_admin_links WHERE desired=0)
       AND NOT EXISTS(SELECT 1 FROM spacecloud_sync_jobs j WHERE j.booking_code=spacecloud_blocks.code AND j.attempts>0)`).bind(now),
+    // Read-only verification may recover a slow post-write acknowledgement.
+    // The original marker stays immutable and no creation is repeated.
+    env.DB.prepare(`UPDATE spacecloud_sync_jobs SET state='cancelled',updated_at=?1
+      WHERE state='review' AND action IN ('block','verify') AND booking_code IN
+      (SELECT l.sync_code FROM spacecloud_admin_links l JOIN spacecloud_blocks b ON b.code=l.sync_code
+       WHERE l.desired=1 AND b.state='review' AND
+       (SELECT COUNT(*) FROM spacecloud_sync_jobs v WHERE v.booking_code=l.sync_code AND v.action='verify')<2)`).bind(now),
+    env.DB.prepare(`UPDATE spacecloud_blocks SET state='pending',verified_at=NULL,updated_at=?1
+      WHERE state='review' AND code IN(SELECT sync_code FROM spacecloud_admin_links WHERE desired=1)
+      AND EXISTS(SELECT 1 FROM spacecloud_sync_jobs j WHERE j.booking_code=spacecloud_blocks.code
+        AND j.action IN ('block','verify') AND j.state='cancelled' AND j.updated_at=?1)`).bind(now),
+    env.DB.prepare(`INSERT INTO spacecloud_sync_jobs(id,booking_code,room,action,created_at,updated_at)
+      SELECT lower(hex(randomblob(18))),l.sync_code,l.room,'verify',?1,?1
+      FROM spacecloud_admin_links l JOIN spacecloud_blocks b ON b.code=l.sync_code
+      WHERE l.desired=1 AND b.state='pending' AND EXISTS
+      (SELECT 1 FROM spacecloud_sync_jobs j WHERE j.booking_code=l.sync_code AND j.action IN ('block','verify')
+        AND j.state='cancelled' AND j.updated_at=?1)
+      AND NOT EXISTS(SELECT 1 FROM spacecloud_sync_jobs j WHERE j.booking_code=l.sync_code AND j.state IN ('queued','leased','review'))`).bind(now),
     env.DB.prepare(`INSERT INTO spacecloud_sync_jobs(id,booking_code,room,action,created_at,updated_at)
       SELECT lower(hex(randomblob(18))),l.sync_code,l.room,'block',?1,?1
       FROM spacecloud_admin_links l JOIN spacecloud_blocks b ON b.code=l.sync_code

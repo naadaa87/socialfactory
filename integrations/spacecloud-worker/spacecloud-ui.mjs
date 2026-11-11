@@ -199,9 +199,13 @@ export class SpacecloudUI {
     const entries=cell.locator('.booking_list li a');
     const entry=entries.nth(record.source.index);
     if(normalize(await entry.innerText())!==record.source.text || await entry.getAttribute('href')) throw new ReviewRequired('대상 외부 예약의 표식이 변경되었습니다.');
-    await this.click(entry,'외부예약 상세 열기');
+    this.reportReview?.({phase:'owned-detail',step:'opening'});
+    this.observe(this.host).changed();
+    await entry.click();
+    await this.settle(this.host);
     const popup=this.host.locator('.layer_popup.reservation_state._popup4:visible');
     await popup.waitFor({state:'visible'});
+    this.reportReview?.({phase:'owned-detail',step:'opened'});
     if(normalize(await popup.locator('.pop_header.type5').innerText())!=='직접 추가한 예약 건입니다.') throw new ReviewRequired('직접 등록한 외부 예약이 아닙니다.');
     const title=normalize(await popup.locator('article .title').innerText());
     if(!title.includes(`${Number(this.room.slice(1))}번룸`)) throw new ReviewRequired('외부 예약의 방이 일치하지 않습니다.');
@@ -214,6 +218,7 @@ export class SpacecloudUI {
     if(!nameLine || !match) throw new ReviewRequired('외부 예약 상세의 날짜와 시간을 확인하지 못했습니다.');
     const date=match[1]+'-'+match[2]+'-'+match[3],start_min=Number(match[4])*60+Number(match[5]);
     let end_min=Number(match[6])*60+Number(match[7]);if(end_min<start_min)end_min+=1440;
+    this.reportReview?.({phase:'owned-detail',step:'memo'});
     const memo=normalize(await popup.locator('.list_memo > div').innerText());
     const result={...record,date,start_min,end_min,name:nameLine.replace(/^예약자명\s*:\s*/,''),memo,manual:true};
     if(!leaveOpen) {
