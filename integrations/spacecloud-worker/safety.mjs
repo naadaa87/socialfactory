@@ -9,11 +9,12 @@ export const memoFor = segment => `홈페이지 예약 연동 · ${segment.marke
 
 export function planJob(job) {
   const jobId=String(job?.job_id ?? job?.id ?? '');
+  const admin=/^BADM[a-f0-9]{32}$/.test(job?.code || '');
   if (!job || !['block','verify','release'].includes(job.action) || !/^r[1-5]$/.test(job.room)
     || !/^B[A-Za-z0-9_-]{6,40}$/.test(job.code) || job.marker !== `SFWEB:${job.code}`
     || !dateOK(job.date) || !Number.isInteger(job.start_min) || !Number.isInteger(job.end_min)
     || job.start_min < 0 || job.start_min >= 1440 || job.start_min % 60 || job.end_min % 60
-    || job.end_min - job.start_min < 120 || job.end_min - job.start_min > 1440
+    || job.end_min - job.start_min < (admin?60:120) || job.end_min - job.start_min > (admin?1500:1440)
     || !job.lease_token || !/^[A-Za-z0-9_-]{1,128}$/.test(jobId)) {
     throw new ReviewRequired('잘못된 작업 또는 시간 단위입니다. 실제 예약은 변경하지 않았습니다.');
   }
@@ -23,7 +24,13 @@ export function planJob(job) {
     ['date','start_min','end_min','marker'].some(key => s[key] !== segments[i][key])))) {
     throw new ReviewRequired('작업의 날짜별 시간 범위가 일치하지 않습니다.');
   }
-  return { ...job, job_id:jobId, segments };
+  const replacements=job.replaces || [];
+  if(!Array.isArray(replacements) || replacements.length>100 || (replacements.length && !admin)
+    || replacements.some(s=>!dateOK(s.date) || !/^SFWEB:BADM[a-f0-9]{32}$/.test(s.marker)
+      || s.marker===job.marker || !Number.isInteger(s.start_min) || !Number.isInteger(s.end_min)
+      || s.start_min<0 || s.end_min>1440 || s.end_min<=s.start_min || s.start_min%60 || s.end_min%60))
+    throw new ReviewRequired('이전 연동 예약의 표식과 시간 범위를 확인하지 못했습니다.');
+  return { ...job, job_id:jobId, segments,replaces:replacements };
 }
 
 const absolute = (record, key) => Date.parse(record.date+'T00:00:00Z')/60000 + record[key];
@@ -31,7 +38,7 @@ export const overlaps = (a,b) => absolute(a,'start_min') < absolute(b,'end_min')
 export const samePeriod = (a,b) => a.date === b.date && a.start_min === b.start_min && a.end_min === b.end_min;
 export const isOwned = (record, segment) => samePeriod(record,segment) && record.name === segment.marker && record.memo === memoFor(segment) && record.manual === true;
 
-export function inspectRecords(records, segment) {
+export function inspectRecords(records, segment, replacements=[]) {
   if (!Array.isArray(records) || records.some(r => !dateOK(r.date) || !Number.isInteger(r.start_min) || !Number.isInteger(r.end_min)
     || r.start_min < 0 || r.end_min <= r.start_min || r.end_min > 2880)) {
     throw new ReviewRequired('캘린더 예약 시간을 모두 확인하지 못했습니다.');
@@ -40,7 +47,7 @@ export function inspectRecords(records, segment) {
   const own = marked.filter(r => isOwned(r,segment));
   // Overnight bookings have one owned record per date. An adjacent day segment is not a duplicate.
   if (marked.some(r => !isOwned(r,segment)) || own.length > 1) throw new ReviewRequired('연동 표식이 중복되거나 날짜·시간·메모가 다릅니다. 삭제하지 않고 확인이 필요합니다.');
-  return { own:own[0] || null, conflicts:records.filter(r => !isOwned(r,segment) && overlaps(r,segment)) };
+  return { own:own[0] || null, conflicts:records.filter(r => !isOwned(r,segment) && !replacements.some(old=>isOwned(r,old)) && overlaps(r,segment)) };
 }
 
 export async function executeJob(rawJob, driver, heartbeat) {
@@ -48,6 +55,15 @@ export async function executeJob(rawJob, driver, heartbeat) {
   let changed = false,phase='open-room';const observationTimes=[];
   try {
     driver.job=job;
+    driver.managedRecords=[];
+    const inspect=(records,segment)=>{
+      const result=inspectRecords(records,segment,job.replaces);
+      for(const record of records)if(job.replaces.some(old=>isOwned(record,old))) {
+        if(!driver.managedRecords.some(old=>samePeriod(old,record) && old.name===record.name))
+          driver.managedRecords.push(record);
+      }
+      return result;
+    };
     driver.beforeWrite=heartbeat;
     await driver.openRoom(job.room);
     // Read every affected date before the first change, including the next day for overnight bookings.
@@ -58,11 +74,11 @@ export async function executeJob(rawJob, driver, heartbeat) {
     if(grouped) {
       const readStartedAt=Date.now();
       const records=await driver.recordsForDates(dates);
-      initial.push(...job.segments.map((segment,index)=>inspectRecords(records[index],segment)));
+      initial.push(...job.segments.map((segment,index)=>inspect(records[index],segment)));
       initialReadTimes.push(readStartedAt);
     } else for (const segment of job.segments) {
       const readStartedAt=Date.now();
-      initial.push(inspectRecords(await driver.recordsFor(segment.date),segment));
+      initial.push(inspect(await driver.recordsFor(segment.date),segment));
       initialReadTimes.push(readStartedAt);
     }
     if(job.action==='verify' && initial.some(x=>!x.own)) {
@@ -110,7 +126,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
     for (let i=0;i<job.segments.length;i++) {
       const segment=job.segments[i];
       phase='read-before-change';
-      const current=grouped && i===0?initial[0]:inspectRecords(await driver.recordsFor(segment.date),segment);
+      const current=grouped && i===0?initial[0]:inspect(await driver.recordsFor(segment.date),segment);
       if(release) {
         if(current.own) {phase='remove-owned';await heartbeat();await driver.removeSegment(segment,current.own);changed=true;}
       } else {
@@ -122,7 +138,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
       if(!grouped) {
         phase=release?'read-after-release':'read-after-block';
         const readStartedAt=Date.now();
-        const after=inspectRecords(await driver.recordsFor(segment.date),segment);
+        const after=inspect(await driver.recordsFor(segment.date),segment);
         await verifyWrittenSegment(segment,after);
         observationTimes.push(readStartedAt);
       }
@@ -133,7 +149,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
       phase=release?'read-after-release':'read-after-block';
       let readStartedAt=Date.now();
       let records=await driver.recordsForDates(dates);
-      let inspected=job.segments.map((segment,i)=>inspectRecords(records[i],segment));
+      let inspected=job.segments.map((segment,i)=>inspect(records[i],segment));
       // The host can briefly render an older calendar after accepting a write.
       // Refresh once without repeating the mutation or retrying a real conflict.
       const shouldRefresh=release?inspected.some(day=>day.own)
@@ -142,7 +158,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
         await heartbeat();
         readStartedAt=Date.now();
         records=await driver.recordsForDates(dates);
-        inspected=job.segments.map((segment,i)=>inspectRecords(records[i],segment));
+        inspected=job.segments.map((segment,i)=>inspect(records[i],segment));
       }
       for(let i=0;i<job.segments.length;i++) {
         phase=release?'read-after-release':'read-after-block';

@@ -129,8 +129,10 @@
   function pstTag(r) { if (r.external) return r.payment ? '<span class="st ' + (r.payment.refund_amount ? 'gray' : 'ok') + '">' + (r.payment.refund_amount ? (r.payment.refund_amount < r.payment.amount ? '부분 환불' : '환불') : '결제 완료') + '</span>' : '<span class="st sc-tag">' + (r.payment_conflict ? '일정 확인 필요' : '금액 확인 필요') + '</span>'; var p = PST[r.pay_status] || [r.pay_status, ""]; var t = r.pay_status === "refunded" && r.refund_amount < r.amount ? "부분 환불" : p[0]; return '<span class="st ' + p[1] + '">' + esc(t) + "</span>"; }
   function resStTag(r) {
     if (r.external) return '<span class="st sc-tag">' + (r.history_source === 'host_verified' ? '이용완료 확인' : r.historical ? '지난 외부 일정' : '외부 일정') + '</span>';
-    if (r.status === "cancelled") return '<span class="st bad">취소</span>';
-    var ph = phase(r); return ph === "done" ? '<span class="st gray">이용 완료</span>' : ph === "now" ? '<span class="st blue">이용 중</span>' : '<span class="st blue">예약 확정</span>';
+    var sync = r.spacecloud_sync;
+    var syncTag = sync ? '<span class="st '+(sync.state==='review'?'bad':sync.state==='blocked'?'ok':'gray')+'">'+({review:'외부연동 확인 필요',pending:'외부연동 처리 중',blocked:'외부시간 확보',released:'외부시간 해제'}[sync.state] || '')+'</span>' : '';
+    if (r.status === "cancelled") return syncTag + '<span class="st bad">취소</span>';
+    var ph = phase(r); return syncTag + (ph === "done" ? '<span class="st gray">이용 완료</span>' : ph === "now" ? '<span class="st blue">이용 중</span>' : '<span class="st blue">예약 확정</span>');
   }
   var net = function (r) { if (r.external) return 0; return r.pay_status === "unpaid" ? 0 : Math.max(0, (r.amount || 0) - (r.refund_amount || 0)); };
   var RES = {};   // 예약번호 → 예약 (화면에 불러온 것)
@@ -434,6 +436,7 @@
       var it = j.item; RES[it.code] = it;
       closeDrawer($("#dr-form"));
       toast(RF.code ? "예약을 고쳤습니다 · " + it.code : "예약을 등록했습니다 · " + it.code + " · " + kdate(it.date) + " " + hm(it.start_min));
+      if(it.spacecloud_sync)toast(it.spacecloud_sync.message);
       reloadCurrent(); openDetail(it.code);
     }).catch(function (x) {
       if (guard(x)) return;
@@ -501,6 +504,7 @@
     var rule = refundRule(r), sug = r.pay_status === "unpaid" ? 0 : Math.round(r.amount * rule.rate / 100 / 100) * 100;
     var h = '<div class="dt-top">' + resStTag(r) + pstTag(r) + '<span class="mono small muted">' + esc(r.code) + "</span></div>"
       + '<div class="dt-when">' + esc(kdateY(r.date)) + " " + esc(timeText(r)) + "<small>" + esc(spaceName(r)) + (room ? " · 최대 " + room.max + "명" : "") + " · " + esc(dur(r.end_min - r.start_min)) + (r.end_min > 1440 ? " · " + esc(kdate(addDays(r.date, 1))) + "까지" : "") + "</small></div>"
+      + (r.spacecloud_sync ? '<div class="alert '+(r.spacecloud_sync.state==='review'?'bad':'')+'">'+esc(r.spacecloud_sync.message)+'</div>' : '')
       + '<div class="dt-acts"><button class="btn btn-primary btn-sm" type="button" id="dt-edit">수정</button><button class="btn btn-light btn-sm" type="button" id="dt-copy">고객 안내문 복사</button>'
       + (tel ? '<a class="btn btn-light btn-sm" href="tel:' + esc(tel) + '">전화</a><a class="btn btn-light btn-sm" href="sms:' + esc(tel) + '">문자</a>' : "") + "</div>"
       + '<div class="sec"><h3>예약자</h3>' + kv("이름 · 단체", esc(r.customer_name)) + kv("연락처", esc(r.phone || "")) + kv("인원", r.people != null ? esc(r.people + "명") + (room && r.people > room.max ? ' <span class="st bad">최대 ' + room.max + "명 초과</span>" : "") : "")

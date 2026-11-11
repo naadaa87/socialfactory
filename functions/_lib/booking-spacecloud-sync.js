@@ -5,6 +5,15 @@ const REVIEW_HOLD = "('pending','blocking','blocked','releasing','review')";
 const absolute = (a, field) => `(CAST(strftime('%s', ${a}.date) AS INTEGER) / 60 + ${a}.${field})`;
 const overlaps = (a,b) => `${absolute(a,'start_min')} < ${absolute(b,'end_min')} AND ${absolute(b,'start_min')} < ${absolute(a,'end_min')}`;
 export const SYNC_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS spacecloud_admin_links (
+    sync_code TEXT PRIMARY KEY, reservation_code TEXT NOT NULL,room TEXT NOT NULL,date TEXT NOT NULL,
+    original_start INTEGER NOT NULL,original_end INTEGER NOT NULL,
+    desired INTEGER NOT NULL DEFAULT 1,created_at INTEGER NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_sc_admin_desired ON spacecloud_admin_links(reservation_code) WHERE desired=1`,
+  `CREATE INDEX IF NOT EXISTS idx_sc_admin_parent ON spacecloud_admin_links(reservation_code)`,
+  `DROP TRIGGER IF EXISTS sc_reservation_hold_insert`,
+  `DROP TRIGGER IF EXISTS sc_reservation_hold_update`,
   `CREATE TABLE IF NOT EXISTS spacecloud_payment_checks (code TEXT PRIMARY KEY, after_ms INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS spacecloud_blocks (
     code TEXT PRIMARY KEY, room TEXT NOT NULL, date TEXT NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL,
@@ -32,9 +41,10 @@ export const SYNC_SCHEMA = [
     BEGIN SELECT CASE WHEN EXISTS (SELECT 1 FROM spacecloud_blocks b WHERE b.code <> NEW.code
       AND b.room=NEW.room AND b.state IN ${REVIEW_HOLD} AND ${overlaps('b','NEW')})
       THEN RAISE(ABORT,'booking-conflict') END; END`),
-  ...['INSERT','UPDATE'].map(action => `CREATE TRIGGER IF NOT EXISTS sc_reservation_hold_${action.toLowerCase()}
+  ...['INSERT','UPDATE'].map(action => `CREATE TRIGGER IF NOT EXISTS sc_reservation_hold_v2_${action.toLowerCase()}
     BEFORE ${action} ON reservations WHEN NEW.status='confirmed' AND NEW.space IN ('r1','r2','r3','r4','r5')
     BEGIN SELECT CASE WHEN EXISTS (SELECT 1 FROM spacecloud_blocks b WHERE b.code <> NEW.code
+      AND NOT EXISTS(SELECT 1 FROM spacecloud_admin_links l WHERE l.sync_code=b.code AND l.reservation_code=NEW.code)
       AND b.room=NEW.space AND b.state IN ${REVIEW_HOLD} AND ${overlaps('b','NEW')})
       THEN RAISE(ABORT,'booking-conflict') END; END`)
 ];
@@ -64,7 +74,7 @@ const nextDate = value => new Date(Date.parse(value+'T00:00:00Z')+86400000).toIS
 export function bookingSegments(booking) {
   if (!/^r[1-5]$/.test(booking?.room) || !isoDate(booking.date) || !Number.isInteger(booking.start_min)
     || !Number.isInteger(booking.end_min) || booking.start_min < 0 || booking.start_min >= 1440
-    || booking.end_min <= booking.start_min || booking.end_min-booking.start_min > 1440
+    || booking.end_min <= booking.start_min || booking.end_min-booking.start_min > (/^BADM[a-f0-9]{32}$/.test(booking.code || '')?1500:1440)
     || booking.start_min%60 || booking.end_min%60)
     throw syncError('sync-time-step','스페이스클라우드 자동 연동 예약은 1시간 단위로 선택해 주세요.',400);
   const marker = 'SFWEB:'+booking.code;
@@ -147,7 +157,7 @@ export async function claimSyncJob(env) {
       WHERE id=(SELECT j.id FROM spacecloud_sync_jobs j JOIN spacecloud_blocks b ON b.code=j.booking_code
         WHERE j.state='queued' AND b.state NOT IN ('review','released','conflict')
         AND NOT EXISTS (SELECT 1 FROM spacecloud_sync_jobs l WHERE l.room=j.room AND l.state IN ('leased','review'))
-        ORDER BY CASE j.action WHEN 'release' THEN 0 WHEN 'verify' THEN 1 ELSE 2 END,j.created_at,j.id LIMIT 1)
+        ORDER BY CASE j.action WHEN 'release' THEN 0 WHEN 'verify' THEN 1 ELSE 2 END,CASE WHEN j.booking_code LIKE 'BADM%' THEN 1 ELSE 0 END,j.created_at,j.id LIMIT 1)
         AND state='queued'`).bind(token,until,now).run();
   } catch(error) {
     if (/UNIQUE.*spacecloud_sync_jobs.room/i.test(String(error?.message))) return null;
@@ -158,7 +168,15 @@ export async function claimSyncJob(env) {
   const block=await getSync(env,job.booking_code);
   if (job.action==='block') await env.DB.prepare("UPDATE spacecloud_blocks SET state=CASE WHEN cancel_requested=1 THEN 'releasing' ELSE 'blocking' END,updated_at=?2 WHERE code=?1 AND state<>'review'").bind(block.code,now).run();
   return {id:job.id,job_id:job.id,lease_token:token,lease_until:until,action:job.action,code:block.code,
-    room:block.room,date:block.date,start_min:block.start_min,end_min:block.end_min,marker:block.marker,segments:block.segments};
+    room:block.room,date:block.date,start_min:block.start_min,end_min:block.end_min,marker:block.marker,segments:block.segments,replaces:job.action==='block'?await adminReplacements(env,block):[]};
+}
+async function adminReplacements(env,block) {
+  const {results}=await env.DB.prepare(`SELECT b.* FROM spacecloud_admin_links own
+    JOIN spacecloud_admin_links old ON old.reservation_code=own.reservation_code AND old.sync_code<>own.sync_code
+    JOIN spacecloud_blocks b ON b.code=old.sync_code
+    WHERE own.sync_code=?1 AND old.desired=0 AND b.room=?2 AND b.state IN ('blocked','blocking','releasing')`)
+    .bind(block.code,block.room).all();
+  return (results || []).flatMap(row=>bookingSegments(row));
 }
 async function leasedJob(env,body,{allowComplete=false}={}) {
   const id=clean(body?.job_id,100),token=clean(body?.lease_token,100);

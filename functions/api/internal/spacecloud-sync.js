@@ -1,3 +1,4 @@
+import { reconcileAdminReservations } from '../../_lib/admin-spacecloud-sync.js';
 import { json } from '../../_lib/auth.js';
 import { prepareBookings } from '../../_lib/booking.js';
 import { workerAuthorized,syncEnabled,claimSyncJob,finishSyncJob,heartbeatSyncJob,saveWorkerCalendar } from '../../_lib/booking-spacecloud-sync.js';
@@ -11,7 +12,7 @@ const gate = (request,env) => !workerAuthorized(request,env) ? json({ok:false,er
 const failure = error => json({ok:false,error:error?.code || 'sync-error',message:error?.code ? error.message : '예약 연동 작업을 처리하지 못했습니다.'},Number(error?.status) || 503);
 export async function onRequestGet({request,env}) {
   const denied=gate(request,env);if(denied)return denied;
-  try {await prepareBookings(env);await sweepUnpaidBookings(env);await loadSpacecloud(env);return json({ok:true,job:await claimSyncJob(env)});}catch(error){return failure(error);}
+  try {await prepareBookings(env);await sweepUnpaidBookings(env);await loadSpacecloud(env);await reconcileAdminReservations(env);return json({ok:true,job:await claimSyncJob(env)});}catch(error){return failure(error);}
 }
 export async function onRequestPost({request,env,waitUntil}) {
   const denied=gate(request,env);if(denied)return denied;
@@ -24,7 +25,8 @@ export async function onRequestPost({request,env,waitUntil}) {
     if(body?.action==='maintenance') {
       noticeOptions={};
       await sweepUnpaidBookings(env);await loadSpacecloud(env);
-      return json({ok:true,maintenance:true});
+      const adminSync=await reconcileAdminReservations(env);
+      return json({ok:true,maintenance:true,admin_sync:adminSync});
     }
     if(body?.action==='heartbeat')return json(await heartbeatSyncJob(env,body));
     if(body?.action==='snapshot')return json(await saveWorkerCalendar(env,body));
@@ -35,6 +37,7 @@ export async function onRequestPost({request,env,waitUntil}) {
     if(result.status==='succeeded' || result.status==='conflict') {
       const {onSyncCompleted}=await import('../../_lib/booking-checkout.js');
       await onSyncCompleted(env,result.code);
+      await reconcileAdminReservations(env);
       // A released hold can still be present in the five-minute iCal cache.
       // Refresh the real feed; retain its conservative stale fallback on errors.
       if(result.status==='succeeded' && result.state==='released') await loadSpacecloud(env,{force:true});

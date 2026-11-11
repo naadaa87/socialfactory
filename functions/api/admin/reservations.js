@@ -1,3 +1,6 @@
+import { prepareBookings } from '../../_lib/booking.js';
+import { syncEnabled } from '../../_lib/booking-spacecloud-sync.js';
+import { reconcileAdminReservations,adminReservationSyncStatus } from '../../_lib/admin-spacecloud-sync.js';
 import { ensureSpacecloudSales, attachCalendarPayments, calendarReservationId } from "../../_lib/spacecloud-sales.js";
 /**
  * /api/admin/reservations — 관리자 예약 등록 · 조회 · 변경 (로그인 쿠키 또는 Authorization: Bearer ADMIN_KEY)
@@ -26,6 +29,17 @@ async function bookingLinked(env,code) {
   return exists && await env.DB.prepare('SELECT code FROM booking_requests WHERE code=?1').bind(code).first();
 }
 const bookingProtection=()=>json({ok:false,error:'booking-payment-linked',message:'홈페이지 결제 예약입니다. 예약 신청·페이앱 화면에서 결제·시간 해제를 함께 처리해 주세요.'},409);
+
+async function savedReservation(env,row) {
+  if(!syncEnabled(env))return row;
+  try {
+    await reconcileAdminReservations(env);
+    return (await adminReservationSyncStatus(env,[row]))[0];
+  } catch(error) {
+    console.error('admin-reservation-sync',error?.code || 'queue-error');
+    return {...row,spacecloud_sync:{state:'pending',message:'예약은 저장됐습니다. 서버에서 스페이스클라우드 연동을 재시도합니다.'}};
+  }
+}
 
 /** 등록 · 수정 입력값 검사 — 문제가 있으면 { error } */
 function readFields(b, prev) {
@@ -65,12 +79,20 @@ async function conflicts(env, v, exceptCode) {
   ).bind(v.space, addDaysIso(v.date, -1), addDaysIso(v.date, 1), exceptCode || "").all();
   const base = dayIndex(v.date) * 1440, s = base + v.start_min, e = base + v.end_min;
   const external = await loadSpacecloud(env);
-  return mergeCalendarRows(results || [], external.results, { info: external.info }).filter((r) => r.code !== exceptCode && r.space === v.space).filter((r) => { const b0 = dayIndex(r.date) * 1440; return b0 + r.start_min < e && s < b0 + r.end_min; })
+  let externalRows=external.results;
+  if(exceptCode && syncEnabled(env)) {
+    const copies=await websiteHoldCalendarCodes(env,externalRows);
+    const {results:owned}=await env.DB.prepare('SELECT sync_code FROM spacecloud_admin_links WHERE reservation_code=?1').bind(exceptCode).all();
+    const markers=(owned || []).map(row=>'SFWEB:'+row.sync_code);
+    externalRows=externalRows.filter(row=>!copies.has(row.code) || !markers.some(marker=>row.customer_name?.includes(marker)));
+  }
+  return mergeCalendarRows(results || [], externalRows, { info: external.info }).filter((r) => r.code !== exceptCode && r.space === v.space).filter((r) => { const b0 = dayIndex(r.date) * 1440; return b0 + r.start_min < e && s < b0 + r.end_min; })
     .map((r) => ({ code: r.code, date: r.date, time: hm(r.start_min) + "–" + hm(r.end_min), name: r.customer_name, people: r.people }));
 }
 
 export async function onRequestGet({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
+  if(syncEnabled(env))await prepareBookings(env);
   const u = new URL(request.url), p = (k, n = 40) => clean(u.searchParams.get(k) || "", n);
   const where = [], args = [];
   const add = (sql, val) => { args.push(val); where.push(sql.replace("?", "?" + args.length)); };
@@ -96,12 +118,13 @@ export async function onRequestGet({ request, env }) {
     const external = code ? null : await loadSpacecloudForDisplay(env, { from: isIsoDate(from) ? from : undefined, to: isIsoDate(to) ? to : undefined });
     const rows = mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : [],
       { info: external?.info, sourceRows: external?.results || [] });
-    return json({ ok: true, today: kstToday(), results: await attachCalendarPayments(env, rows), spacecloud: external && external.info });
+    return json({ ok: true, today: kstToday(), results: await adminReservationSyncStatus(env,await attachCalendarPayments(env, rows)), spacecloud: external && external.info });
   } catch (e) { console.error("res-get", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
 }
 
 export async function onRequestPost({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
+  if(syncEnabled(env))await prepareBookings(env);
   let b; try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
   let source = null;
   const sourceCode = clean(b && b.sourceCode, 20);
@@ -154,7 +177,7 @@ export async function onRequestPost({ request, env }) {
          VALUES (?1, 'confirmed', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`
       ).bind(code, v.space, v.space_note, v.date, v.start_min, v.end_min, v.customer_name, v.phone, v.people, v.purpose, v.channel, v.amount, v.list_amount, v.amount_note, v.pay_method, v.pay_status, v.paid_at, v.memo, v.inquiry_ref).run();
       const row = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(code).first();
-      return json({ ok: true, code, item: row, overlapped: clash.length });
+      return json({ ok: true, code, item: await savedReservation(env,row), overlapped: clash.length });
     } catch (e) {
       if (sourceCode && /UNIQUE/i.test(String(e && e.message))) {
         const row = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(sourceCode).first();
@@ -169,6 +192,7 @@ export async function onRequestPost({ request, env }) {
 
 export async function onRequestPatch({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
+  if(syncEnabled(env))await prepareBookings(env);
   let b; try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
   const code = clean(b && b.code, 20);
   const prev = code && await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(code).first();
@@ -236,18 +260,20 @@ export async function onRequestPatch({ request, env }) {
   try {
     await stmt.run();
     const row = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(code).first();
-    return json({ ok: true, item: row });
+    return json({ ok: true, item: await savedReservation(env,row) });
   } catch (e) { if (/booking-conflict/.test(String(e && e.message))) return json({ok:false,error:"conflict",message:"홈페이지 예약이 확보한 시간과 겹칩니다."},409); console.error("res-patch", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
 }
 
 export async function onRequestDelete({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
+  if(syncEnabled(env))await prepareBookings(env);
   let b; try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
   const code = clean(b && b.code, 20);
   if (!code) return json({ ok: false, error: "invalid" }, 400);
   try {
     if (await bookingLinked(env,code)) return bookingProtection();
     const r = await env.DB.prepare("DELETE FROM reservations WHERE code = ?1").bind(code).run();
+    if(syncEnabled(env))await savedReservation(env,{code,status:'cancelled'});
     return json({ ok: true, deleted: (r && r.meta && r.meta.changes) || 0 });
   } catch (e) { console.error("res-del", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
 }

@@ -188,7 +188,7 @@ export class SpacecloudUI {
     for(const date of readDates) {
       const records=await this.readDate(date);
       for(let i=0;i<records.length;i++) {
-        if(records[i].name===this.job?.marker)records[i]=await this.readOwnedDetail(records[i]);
+        if(records[i].name===this.job?.marker || this.job?.replaces?.some(old=>old.marker===records[i].name))records[i]=await this.readOwnedDetail(records[i]);
       }
       byDate.set(date,records);
     }
@@ -355,7 +355,7 @@ export class SpacecloudUI {
   async assertPublicAvailable(segment) {
     const snapshot=await this.readPublicAvailability(segment);
     if(snapshot.day_available!==true)throw new ReviewRequired('공개 예약 화면에서 이용할 수 없는 날짜로 확인되어 등록과 결제를 보류합니다.');
-    for(const slot of publicSlotExpectations(segment,[]))if(snapshot.hours[slot.index]!==true)throw new ReviewRequired('공개 예약 화면에서 이미 이용할 수 없는 시간이 확인되어 등록과 결제를 보류합니다.');
+    for(const slot of publicSlotExpectations(segment,this.managedRecords || []))if(!slot.disabled && snapshot.hours[slot.index]!==true)throw new ReviewRequired('공개 예약 화면에서 이미 이용할 수 없는 시간이 확인되어 등록과 결제를 보류합니다.');
   }
   async waitPublicPropagation() {await new Promise(resolve=>setTimeout(resolve,1000));}
   async verifyPublicAPI(segment,remaining) {
