@@ -681,3 +681,17 @@ test('scheduled payment collection uses the saved server login and the existing 
   assert.equal(f.counters.closes.length,1);
   assert.equal(lock(f).token,null);
 });
+
+test('scheduled full host calendar collection restores the server login, commits complete scopes and closes within the shared budget',async()=>{
+ const f=await ready(fixture({SPACECLOUD_CLOUD_CALENDAR:'true'})),calls=[];
+ const plan={observed_at:CLOCK,scopes:[{space:'r1',month:'2026-11',product_id:'140236'}]};
+ let began=false;
+ const runner=createRunner({...f.deps,
+  requestCalendar:async(config,body)=>{calls.push(body);if(body.action==='begin'){if(began)return {plan:null};began=true;return {plan};}return {ok:true};},
+  collectCalendar:async(context,received,live)=>{assert.equal(received,plan);live();assert.equal(typeof context.storageState,'function');return [{...plan.scopes[0],events:[]}];}
+ });
+ f.setJob(null);await runner.scheduled(f.env,CLOCK);
+ assert.deepEqual(calls.map(b=>b.action),['begin','sync']);assert.equal(calls[1].complete,true);assert.equal(f.counters.launches,1);assert.equal(f.counters.closes.length,1);
+ assert.equal(f.counters.completions.length,0);assert.equal(lock(f).token,null);
+ await runner.scheduled(f.env,CLOCK+60000);assert.equal(f.counters.launches,1);
+});

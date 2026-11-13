@@ -599,6 +599,12 @@
       + (last ? new Date(last).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) + " 확인" : "확인 대기")
       + (failures.length ? " · " + failures.map(function (r) { return SPL[r.space] + (r.error ? " (" + r.error + ")" : " 재확인 필요"); }).join(", ") : " · 열려 있는 동안 5분마다 확인")
       + " · 자동 수집 금액은 매출 화면에서 한 번만 집계");
+    var host = info.host_calendar;
+    if (host) {
+      if (host.last_success) text += " · 수기 원본 대조 " + new Date(host.last_success).toLocaleString("ko-KR", {timeZone:"Asia/Seoul"});
+      if (host.status === "queued" || host.status === "running") text += " · 날짜·룸 변경까지 서버에서 대조 중";
+      if (host.status === "error") text += " · 수기 원본 대조 재시도 필요 (마지막 확인 일정 유지)";
+    }
     targets.forEach(function (el) { el.textContent = text; el.classList.toggle("sc-warning", !!info.error || failures.length > 0); });
   }
   document.addEventListener("click", function (event) {

@@ -706,3 +706,57 @@ test('superseded past payment-linked slots leave the timetable without changing 
   assert.equal(restored.results.length,1);assert.equal(restored.results[0].code,code);
  } finally {globalThis.fetch=original;e.sqlite.close();}
 });
+
+test('authoritative monthly host snapshots reconcile manual date/room/name changes, cancellation and restoration while preserving sales',async()=>{
+ const {beginHostCalendar,finishHostCalendar,requestHostCalendar}=await import('../functions/_lib/spacecloud-host-calendar.js');
+ const e=env(Object.fromEntries([1,2,3,4,5].map(n=>['r'+n,url(n)])));
+ const before=Date.parse('2026-10-30T00:00:00Z'),now=Date.parse('2026-11-13T04:00:00Z');
+ let body=calendar(event('old','20261031T100000','20261031T120000').replace(/URL:[^\r]+\r\n/,'').replace('SUMMARY:예약 일정','SUMMARY:이전 이름'));
+ const fetcher=async u=>response(u===url(1)?body:calendar());
+ const old=await loadSpacecloud(e,{fetcher,force:true,now:before});body=calendar();await loadSpacecloud(e,{fetcher,force:true,now});
+ const code=old.results[0].code;
+ e.sqlite.prepare(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status,paid_at) VALUES(?,'confirmed','r1','2026-10-31',600,720,'이전 이름','spacecloud',40000,'spacecloud','paid','2026-10-31')`).run(code);
+ const plan=await beginHostCalendar(e,{now:now+1000});
+ const snapshots=plan.scopes.map(s=>({...s,events:s.space==='r2'&&s.month==='2026-11'?[
+  {id:'55',date:'2026-11-08',start_min:840,end_min:1020,title:'최신 이름'},
+  {id:'56',date:'2026-11-15',start_min:840,end_min:1020,title:'최신 이름'}]:[]}));
+ const result=await finishHostCalendar(e,{observed_at:plan.observed_at,complete:true,snapshots});assert.equal(result.counts.removed,1);
+ const latest=await loadSpacecloud(e,{fetcher,now:now+2000,from:'2026-10-01',to:'2026-11-30'});
+ assert.deepEqual(latest.results.map(r=>[r.space,r.date,r.start_min,r.customer_name]),[['r2','2026-11-08',840,'최신 이름'],['r2','2026-11-15',840,'최신 이름']]);
+ assert(latest.info.removed_linked_codes.includes(code));
+ assert.equal(e.sqlite.prepare('SELECT amount FROM reservations WHERE code=?').get(code).amount,40000);
+ // Even a stale iCal reappearance cannot resurrect the obsolete version.
+ body=calendar(event('delayed','20261031T100000','20261031T120000').replace(/URL:[^\r]+\r\n/,'').replace('SUMMARY:예약 일정','SUMMARY:이전 이름'));
+ assert.equal((await loadSpacecloud(e,{fetcher,force:true,now:now+4000})).results.length,2);
+ await requestHostCalendar(e,now+5000);const next=await beginHostCalendar(e,{now:now+6000});
+ assert(next);await finishHostCalendar(e,{observed_at:next.observed_at,complete:true,snapshots:next.scopes.map(s=>({...s,events:s.space==='r1'&&s.month==='2026-10'?[{id:'55',date:'2026-10-31',start_min:600,end_min:720,title:'이전 이름'}]:[]}))});
+ const restored=await loadSpacecloud(e,{fetcher,now:now+7000});assert.equal(restored.results.length,1);assert.equal(restored.results[0].code,code);
+ assert(!restored.info.removed_linked_codes.includes(code));
+ e.sqlite.close();
+});
+
+test('host snapshot validation is all-or-nothing and failed collection retains last verified schedules',async()=>{
+ const {beginHostCalendar,finishHostCalendar,failHostCalendar,hostCalendarSummary}=await import('../functions/_lib/spacecloud-host-calendar.js');
+ const e=env(Object.fromEntries([1,2,3,4,5].map(n=>['r'+n,url(n)]))),now=Date.parse('2026-11-13T04:00:00Z');
+ await loadSpacecloud(e,{fetcher:async()=>response(calendar()),now});
+ const plan=await beginHostCalendar(e,{now});const full=plan.scopes.map(s=>({...s,events:[]}));
+ await assert.rejects(()=>finishHostCalendar(e,{observed_at:now,complete:true,snapshots:full.slice(1)}),{code:'host-calendar-incomplete'});
+ assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_host_calendars').get().n,0);
+ const bad=structuredClone(full);bad.at(-1).events=[{id:'4',date:'2026-12-01',start_min:600,end_min:500,title:'잘못된 시간'}];
+ await assert.rejects(()=>finishHostCalendar(e,{observed_at:now,complete:true,snapshots:bad}));
+ assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_host_calendar_removed').get().n,0);
+ await failHostCalendar(e,now,'host-calendar-http');assert.equal((await hostCalendarSummary(e)).status,'error');
+ await assert.rejects(()=>finishHostCalendar(e,{observed_at:now,complete:true,snapshots:full}),{code:'host-calendar-stale'});
+ e.sqlite.close();
+});
+
+test('an older full host mirror cannot retain a website hold that the live feed has released',async()=>{
+ const {beginHostCalendar,finishHostCalendar}=await import('../functions/_lib/spacecloud-host-calendar.js');
+ const e=env(Object.fromEntries([1,2,3,4,5].map(n=>['r'+n,url(n)]))),now=Date.parse('2026-11-13T04:00:00Z');
+ await loadSpacecloud(e,{fetcher:async()=>response(calendar()),now});
+ e.sqlite.exec("INSERT INTO spacecloud_blocks(code,room,date,start_min,end_min,marker,access_token,state,created_at,updated_at) VALUES('B261113-EXAMPLE','r1','2026-11-14',600,720,'SFWEB:B261113-EXAMPLE','test-token','released',1,1)");
+ const plan=await beginHostCalendar(e,{now});
+ await finishHostCalendar(e,{observed_at:now,complete:true,snapshots:plan.scopes.map(s=>({...s,events:s.space==='r1'&&s.month==='2026-11'?[{id:'88',date:'2026-11-14',start_min:600,end_min:720,title:'SFWEB:B261113-EXAMPLE'}]:[]}))});
+ const result=await loadSpacecloud(e,{fetcher:async()=>response(calendar()),force:true,now:now+1000});
+ assert.equal(result.results.length,0);e.sqlite.close();
+});
