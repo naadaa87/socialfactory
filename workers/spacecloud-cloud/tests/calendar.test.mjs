@@ -47,3 +47,21 @@ test('normal calendar reads use the saved server profile directly, refresh expir
  assert(!JSON.stringify(result.snapshots).includes('PRIVATE'));
  assert.equal(await collectHostCalendarAPI({origins:[]},{scopes}),null);
 });
+
+test('normal paid reservations use host status and ID so cancelled copies cannot survive stale iCal',()=>{
+ const raw=grid();raw[12].reservations=[
+  {id:123,symd:'20261113',shour:10,ehour:12,rsv_stat_cd:'RSCMP',user_info:{name:'예약자*',phone:'PRIVATE_PHONE'}},
+  {id:124,symd:'20261113',shour:14,ehour:15,rsv_stat_cd:'CANCELLED',user_info:{name:'취소'}},
+  {id:125,symd:'20261113',eymd:'20261120',shour:9,ehour:17,rsv_stat_cd:'RSCMP',user_info:{name:'여러 날'}}
+ ];
+ const snapshot=parseHostMonth(raw,scope);
+ assert.deepEqual(snapshot.paid_ids,['123','125']);
+ assert.deepEqual(snapshot.events,[{id:'123',date:'2026-11-13',start_min:600,end_min:780,title:'예약자*',kind:'reservation'}]);
+ assert(!JSON.stringify(snapshot).includes('PRIVATE_PHONE'));
+});
+
+test('rate limits retain the provider retry delay instead of initiating browser restoration',async()=>{
+ const {collectHostCalendarAPI}=await import('../calendar.mjs');
+ const state={origins:[{origin:'https://partner.spacecloud.kr',localStorage:[{name:'spacecloud__userInfo',value:JSON.stringify({accessToken:'private'})}]}]};
+ await assert.rejects(()=>collectHostCalendarAPI(state,{scopes:[scope]},{fetcher:async()=>new Response('',{status:429,headers:{'Retry-After':'120'}})}),e=>e.code==='host-calendar-rate-limit'&&e.retry_after_ms===120000);
+});

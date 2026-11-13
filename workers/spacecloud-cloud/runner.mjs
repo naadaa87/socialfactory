@@ -44,7 +44,7 @@ function queueConfig(env){const origin=new URL(env.API_ORIGIN);if(origin.protoco
 function reservationRow(row){return {id:row.budget_id,day:new Date(row.started_at).toISOString().slice(0,10),month:new Date(row.started_at).toISOString().slice(0,7),started_at:row.started_at,reserved_ms:row.reserved_ms};}
 async function budgetFor(env,row){const budget=await env.STATE_DB.prepare('SELECT * FROM cloud_budget_reservations WHERE id=?1').bind(row.budget_id).first();if(!budget)throw problem('missing-budget','브라우저 사용량 기록을 확인해야 합니다.',503);return {...reservationRow(row),...budget};}
 
-export function createRunner({launch,connect,Queue=QueueClient,Driver=SpacecloudUI,execute=executeJob,collectPayments=collectHostPayments,requestPayments=paymentRequest,collectCalendar=collectHostCalendar,collectCalendarAPI=collectHostCalendarAPI,requestCalendar=calendarRequest,now=()=>Date.now(),setDeadline=setTimeout,clearDeadline=clearTimeout}={}) {
+export function createRunner({launch,connect,Queue=QueueClient,Driver=SpacecloudUI,execute=executeJob,collectPayments=collectHostPayments,requestPayments=paymentRequest,collectCalendar=collectHostCalendar,collectCalendarAPI=collectHostCalendarAPI,requestCalendar=calendarRequest,now=()=>Date.now(),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),setDeadline=setTimeout,clearDeadline=clearTimeout}={}) {
   const bounded=(promise,ms=5000)=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(problem('remote-timeout','클라우드 브라우저 응답을 확인하지 못했습니다.',503)),ms);Promise.resolve(promise).then(resolve,reject).finally(()=>clearTimeout(timer));});
   async function closeRemote(env,sessionId,browser) {
     let closed=false;
@@ -223,7 +223,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       delegated=true;
       return await runBrowser(env,{kind:'calendar',storageState,token,budget,activeMs,calendar:{plan,config}});
     } catch(error) {
-      if(plan)try{await requestCalendar(config,{action:'error',observed_at:plan.observed_at,error:error.code||'collection-error'});}catch{}
+      if(plan)try{await requestCalendar(config,{action:'error',observed_at:plan.observed_at,error:error.code||'collection-error',retry_after_ms:error.retry_after_ms});}catch{}
       throw error;
     } finally {
       if(!delegated){if(budget)await settleBudget(env,budget,{closed:true,notStarted:true,now:now()});await unlockRunner(env,token);}
@@ -461,7 +461,17 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         try{await runOne(env);}catch(error){console.error('spacecloud-cloud',error.code || 'operation-failed');}
       }
       if(env.SPACECLOUD_CLOUD_CALENDAR==='true'){
-        try{await runCalendar(env);}catch(error){console.error('spacecloud-cloud','calendar',error.code||'operation-failed');}
+        const deadline=now()+55000,fast=env.SPACECLOUD_CALENDAR_FAST_POLL==='true';
+        for(let pass=0;pass<(fast?6:1);pass++){
+          if(pass){
+            if(now()+10000>=deadline)break;
+            await pause(10000);
+            // Give newly queued website reservations priority between reads.
+            if(env.ENABLED==='true' && env.ALLOW_WRITES==='true')try{await runOne(env);}catch(error){console.error('spacecloud-cloud',error.code||'operation-failed');}
+          }
+          if(now()>=deadline)break;
+          try{await runCalendar(env);}catch(error){console.error('spacecloud-cloud','calendar',error.code||'operation-failed');}
+        }
       }
       if(env.SPACECLOUD_CLOUD_SALES==='true' && new Date(scheduledTime).getUTCMinutes()%5===0){
         try{await runSales(env);}catch(error){console.error('spacecloud-cloud','sales',error.code || 'operation-failed');}

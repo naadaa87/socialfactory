@@ -705,3 +705,13 @@ test('a full calendar API audit continues with zero browser allowance and does n
  assert.deepEqual(calls.map(b=>b.action),['begin','sync']);assert.equal(calls[1].transport,'api');
  assert.equal(f.counters.launches,0);assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_budget_reservations').get().n,0);assert.equal(lock(f).token,null);
 });
+
+test('fast server polling rechecks during the minute without a browser or monopolizing the booking queue',async()=>{
+ const f=await ready(fixture({SPACECLOUD_CLOUD_CALENDAR:'true',SPACECLOUD_CALENDAR_FAST_POLL:'true',ENABLED:'false'})),times=[],pauses=[];
+ const runner=createRunner({...f.deps,pause:async ms=>{pauses.push(ms);f.advance(ms);},
+  requestCalendar:async(config,body)=>{if(body.action==='begin'){times.push(f.now());return {plan:{observed_at:f.now(),scopes:[]}};}return {ok:true};},
+  collectCalendarAPI:async state=>({state,snapshots:[]})});
+ await runner.scheduled(f.env,CLOCK);
+ assert.deepEqual(times.map(t=>t-CLOCK),[0,10000,20000,30000,40000,50000]);
+ assert(pauses.every(ms=>ms===10000));assert.equal(f.counters.launches,0);assert.equal(f.counters.claims,0);assert.equal(lock(f).token,null);
+});

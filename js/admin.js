@@ -241,7 +241,7 @@
   var INQS = { r1: "1번룸", r2: "2번룸", r3: "3번룸", r4: "4번룸", r5: "5번룸", coworking: "코워킹", office: "독립사무실", undecided: "미정", "": "-" };
   function loadDash() {
     $("#dash-date").textContent = kdateY(todayIso()) + " 기준";
-    api("/api/admin/dashboard").then(function (d) {
+    return api("/api/admin/dashboard").then(function (d) {
       renderSpacecloudStatus(d.spacecloud);
       var c = d.counts || {}, mo = d.month || {};
       applyCounts(c);
@@ -597,15 +597,16 @@
     var text = info.error || (!info.configured ? "스페이스클라우드 캘린더가 아직 연결되지 않았습니다." :
       "스페이스클라우드 " + rooms.length + "개 룸 연결 · " + rooms.reduce(function (a, r) { return a + r.count; }, 0) + "개 일정 · "
       + (last ? new Date(last).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) + " 확인" : "확인 대기")
-      + (failures.length ? " · " + failures.map(function (r) { return SPL[r.space] + (r.error ? " (" + r.error + ")" : " 재확인 필요"); }).join(", ") : " · 열려 있는 동안 5분마다 확인")
+      + (failures.length ? " · " + failures.map(function (r) { return SPL[r.space] + (r.error ? " (" + r.error + ")" : " 재확인 필요"); }).join(", ") : " · 예약 화면은 5초마다 변경 확인")
       + " · 자동 수집 금액은 매출 화면에서 한 번만 집계");
     var host = info.host_calendar;
     if (host) {
+      text += " · 원본 변경·취소 10초 간격 대조";
       if (host.last_success) text += " · 수기 원본 대조 " + new Date(host.last_success).toLocaleString("ko-KR", {timeZone:"Asia/Seoul"});
       if (host.status === "queued" || host.status === "running") text += " · 날짜·룸 변경까지 서버에서 대조 중";
       if (host.status === "error") text += " · 수기 원본 대조 재시도 필요 (마지막 확인 일정 유지)";
     }
-    targets.forEach(function (el) { el.textContent = text; el.classList.toggle("sc-warning", !!info.error || failures.length > 0); });
+    targets.forEach(function (el) { el.textContent = text; el.classList.toggle("sc-warning", !!info.error || failures.length > 0 || host && host.status === "error"); });
   }
   document.addEventListener("click", function (event) {
     var button = event.target.closest("[data-sc-refresh]"); if (!button) return;
@@ -618,8 +619,24 @@
   setInterval(function () {
     if (app.hidden || document.hidden) return;
     if (CUR === "sales") loadSales();
-    else if (["dash", "board", "list"].indexOf(CUR) >= 0) reloadCurrent();
   }, 5 * 60 * 1000);
+  var schedulePollBusy = false, scheduleRevision = null;
+  function pollScheduleUpdates(force) {
+    if (app.hidden || document.hidden || schedulePollBusy || ["dash", "board", "list"].indexOf(CUR) < 0) return;
+    var view = CUR;
+    schedulePollBusy = true;
+    return api("/api/admin/spacecloud?version=1").then(function (j) {
+      if (view !== CUR || app.hidden || document.hidden) return;
+      var c = j.calendar || {}, revision = [c.last_success, c.last_attempt, c.status, c.error].join("|");
+      if (force || revision !== scheduleRevision) {
+        scheduleRevision = revision;
+        return LOAD[view]();
+      }
+    }).catch(function (e) { guard(e); }).then(function () { schedulePollBusy = false; });
+  }
+  setInterval(function () { pollScheduleUpdates(false); }, 5000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) pollScheduleUpdates(true); });
+  window.addEventListener("focus", function () { pollScheduleUpdates(true); });
 
   /* =================== 예약 현황 (일간 시간표 · 월간 달력) =================== */
   var BD = { mode: "day", date: null, items: [], requestSeq: 0, controller: null, renderedKey: null };
@@ -641,7 +658,7 @@
     BD.controller = controller;
     var seq = ++BD.requestSeq;
     if (BD.renderedKey !== key) box.innerHTML = emptyMsg("불러오는 중…");
-    api("/api/admin/reservations?from=" + from + "&to=" + to, controller ? { signal: controller.signal } : {}).then(function (j) {
+    return api("/api/admin/reservations?from=" + from + "&to=" + to, controller ? { signal: controller.signal } : {}).then(function (j) {
       if (seq !== BD.requestSeq || key !== BD.mode + BD.date) return;
       BD.items = remember(j.results);
       renderSpacecloudStatus(j.spacecloud);
@@ -752,7 +769,7 @@
   setRange("upcoming");
   function loadList() {
     var box = $("#ls-list"); box.innerHTML = emptyMsg("불러오는 중…");
-    api("/api/admin/reservations?from=" + encodeURIComponent($("#ls-from").value) + "&to=" + encodeURIComponent($("#ls-to").value)).then(function (j) { LS.items = remember(j.results); renderSpacecloudStatus(j.spacecloud); drawList(); }).catch(fail(box));
+    return api("/api/admin/reservations?from=" + encodeURIComponent($("#ls-from").value) + "&to=" + encodeURIComponent($("#ls-to").value)).then(function (j) { LS.items = remember(j.results); renderSpacecloudStatus(j.spacecloud); drawList(); }).catch(fail(box));
   }
   function listFiltered() {
     var st = $("#ls-status").value, sp = $("#ls-space").value, pm = $("#ls-pay").value, ps = $("#ls-pstatus").value, q = $("#ls-q").value.trim().toLowerCase().replace(/-/g, "");

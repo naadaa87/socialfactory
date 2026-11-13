@@ -1,3 +1,5 @@
+import { calendarEventIdentity } from './spacecloud-identity.js';
+import { sha256Hex } from './auth.js';
 export const isCalendarLinked = row => /^SC[1-5]-[a-f0-9]{16}$/.test(row.code) && row.channel === 'spacecloud';
 
 // Occupancy state is separate from the paid/refund ledger. Persist a confirmed
@@ -21,8 +23,12 @@ export async function reconcileCalendarLinks(env, snapshots, now, superseded = [
     if (end <= now && !replaced && !removed.has(row.code)) continue;
     const source = snapshots.find(s => s.room.space === row.space);
     if (!replacement?.authoritative && (!source?.room.updated_at || source.room.error || source.room.stale)) continue;
-    const present = !replaced && source.events.some(e => e.start === start && e.end === end
-      && e.title.normalize('NFC').trim() === row.customer_name.normalize('NFC').trim());
+    let present = false;
+    if(!replaced)for(const e of source.events){
+      if(e.start!==start || e.end!==end)continue;
+      if(e.title.normalize('NFC').trim()===row.customer_name.normalize('NFC').trim()
+        || e.source_url && row.code==='SC'+row.space.slice(1)+'-'+(await sha256Hex(calendarEventIdentity(e)+'|'+row.date)).slice(0,16)){present=true;break;}
+    }
     writes.push(env.DB.prepare(`INSERT INTO spacecloud_calendar_link_state(code,state,checked_at) VALUES(?1,?2,?3)
       ON CONFLICT(code) DO UPDATE SET state=excluded.state,checked_at=excluded.checked_at
       WHERE excluded.checked_at>=spacecloud_calendar_link_state.checked_at`)

@@ -760,3 +760,44 @@ test('an older full host mirror cannot retain a website hold that the live feed 
  const result=await loadSpacecloud(e,{fetcher:async()=>response(calendar()),force:true,now:now+1000});
  assert.equal(result.results.length,0);e.sqlite.close();
 });
+
+test('the quick audit becomes due after ten seconds and preserves provider Retry-After backoff',async t=>{
+ const {beginHostCalendar,finishHostCalendar,failHostCalendar,hostCalendarSummary}=await import('../functions/_lib/spacecloud-host-calendar.js');
+ const now=Date.parse('2026-11-13T04:00:00Z');t.mock.timers.enable({apis:['Date'],now});
+ const e=env(Object.fromEntries([1,2,3,4,5].map(n=>['r'+n,url(n)])));
+ await loadSpacecloud(e,{fetcher:async()=>response(calendar()),now});
+ const plan=await beginHostCalendar(e,{now});await finishHostCalendar(e,{observed_at:now,complete:true,snapshots:plan.scopes.map(s=>({...s,events:[]}))});
+ assert.equal((await hostCalendarSummary(e)).interval_ms,10000);
+ assert.equal(await beginHostCalendar(e,{now:now+9999}),null);
+ const next=await beginHostCalendar(e,{now:now+10000});assert(next);
+ await failHostCalendar(e,next.observed_at,'host-calendar-rate-limit',120000);
+ assert.equal(await beginHostCalendar(e,{now:now+90000}),null);
+ assert(await beginHostCalendar(e,{now:now+120001}));e.sqlite.close();
+});
+
+test('paid booking moves and cancellations replace stale iCal occupancy without modifying imported revenue',async()=>{
+ const {beginHostCalendar,finishHostCalendar,requestHostCalendar}=await import('../functions/_lib/spacecloud-host-calendar.js');
+ const e=env(Object.fromEntries([1,2,3,4,5].map(n=>['r'+n,url(n)]))),now=Date.parse('2026-11-13T04:00:00Z');
+ const old=event('stale','20261115T100000','20261115T120000');
+ const fetcher=async u=>response(u===url(1)?calendar(old):calendar());
+ await loadSpacecloud(e,{fetcher,now});
+ e.sqlite.exec("INSERT INTO spacecloud_sales(reservation_id,use_date,end_date,paid_at,amount,refund_amount,space) VALUES('123','2026-11-15','2026-11-15','2026-11-13',40000,0,'r1')");
+ const plan=await beginHostCalendar(e,{now:now+1000});
+ await finishHostCalendar(e,{observed_at:plan.observed_at,complete:true,snapshots:plan.scopes.map(s=>({...s,paid_ids:s.space==='r2'&&s.month==='2026-11'?['123']:[],events:s.space==='r2'&&s.month==='2026-11'?[{id:'123',date:'2026-11-16',start_min:840,end_min:960,title:'최신 예약자*',kind:'reservation'}]:[]}))});
+ const moved=await loadSpacecloud(e,{fetcher,force:true,now:now+2000});
+ assert.deepEqual(moved.results.map(r=>[r.space,r.date,r.start_min,r.end_min]),[['r2','2026-11-16',840,960]]);
+ assert.equal(e.sqlite.prepare('SELECT amount FROM spacecloud_sales').get().amount,40000);
+ await requestHostCalendar(e,now+3000);const cancel=await beginHostCalendar(e,{now:now+4000});
+ await finishHostCalendar(e,{observed_at:cancel.observed_at,complete:true,snapshots:cancel.scopes.map(s=>({...s,paid_ids:[],events:[]}))});
+ assert.equal((await loadSpacecloud(e,{fetcher,force:true,now:now+5000})).results.length,0);
+ assert.equal(e.sqlite.prepare('SELECT amount FROM spacecloud_sales').get().amount,40000);e.sqlite.close();
+});
+
+test('a paid booking with observed but unsupported multi-day geometry is retained rather than treated as cancelled',async()=>{
+ const {beginHostCalendar,finishHostCalendar}=await import('../functions/_lib/spacecloud-host-calendar.js');
+ const e=env(Object.fromEntries([1,2,3,4,5].map(n=>['r'+n,url(n)]))),now=Date.parse('2026-11-13T04:00:00Z');
+ const fetcher=async u=>response(u===url(1)?calendar(event('known','20261115T100000','20261115T120000')):calendar());
+ const first=await loadSpacecloud(e,{fetcher,now});const plan=await beginHostCalendar(e,{now});
+ await finishHostCalendar(e,{observed_at:now,complete:true,snapshots:plan.scopes.map(s=>({...s,paid_ids:s.space==='r2'&&s.month==='2026-11'?['123']:[],events:[]}))});
+ const after=await loadSpacecloud(e,{fetcher,now:now+1000});assert.equal(after.results.length,1);assert.equal(after.results[0].code,first.results[0].code);e.sqlite.close();
+});
