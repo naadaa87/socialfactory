@@ -137,6 +137,8 @@ test('the visible time grid disables occupied and too-short starts and synchroni
   assert.equal(status(480),'시작');assert.equal(status(600),'종료');
   assert(h.nodes.get('[data-summary-time]').textContent.includes('08:00'));assert(h.nodes.get('[data-summary-time]').textContent.includes('10:00'));
   const blockedEnd=h.fields.end_min.options.find(option=>option.value==='660');assert(blockedEnd.disabled);assert.equal(blockedEnd.textContent,'11:00 · 예약 마감');
+  at(720).click();assert.equal(h.fields.start_min.value,'480');assert.equal(h.fields.end_min.value,'600','editing the end cannot cross an occupied interval');
+  at(480).click();assert.equal(h.fields.start_min.value,'');assert.equal(h.fields.end_min.value,'');
   at(720).click();assert.equal(h.fields.start_min.value,'720');assert.equal(h.fields.end_min.value,'');assert.equal(at(480).attributes['aria-pressed'],'false');
   at(720).click();assert.equal(h.fields.start_min.value,'');assert.equal(h.fields.end_min.value,'');
 });
@@ -151,8 +153,26 @@ test('half-hour grids and next-day collisions use full interval values without r
   nextGrid.find(button=>button.value==='1500').click();
   assert.equal(h.fields.end_min.value,'1500');assert.equal(h.fields.end_min.selectedOptions[0].textContent,'다음 날 01:00');
   assert.deepEqual(nextGrid.filter(button=>button.attributes['aria-pressed']==='true').map(button=>button.value),['1440','1470','1500']);
+  nextGrid.find(button=>button.value==='1560').click();assert.equal(h.fields.start_min.value,'1380');assert.equal(h.fields.end_min.value,'1560');
+  nextGrid.find(button=>button.value==='1500').click();assert.equal(h.fields.start_min.value,'1380');assert.equal(h.fields.end_min.value,'1500');
   blocked=[{start_min:1470,end_min:1560}];await h.hooks.loadAvailability();
   const late=grid().find(button=>button.value==='1380');assert.equal(late.disabled,true);assert.equal(late.children[1].textContent,'2시간 확보 불가');assert.equal(h.fields.start_min.value,'');
+});
+
+test('editing the selected end extends and shortens the range while keeping the start, summary and pricing in sync',async()=>{
+  const h=harness(async()=>({ok:true,json:async()=>({ok:true,blocked:[],step_minutes:60})}));
+  h.fields.date.value='2027-06-06';await h.hooks.loadAvailability();
+  const grid=h.nodes.get('[data-start-time-grid]').children,at=m=>grid.find(b=>b.value===String(m));
+  at(540).click();at(780).click();
+  const initial=h.nodes.get('[data-summary-amount]').textContent;
+  at(900).click();assert.equal(h.fields.start_min.value,'540');assert.equal(h.fields.end_min.value,'900');
+  assert(h.nodes.get('[data-summary-duration]').textContent.includes('6시간'));
+  assert.notEqual(h.nodes.get('[data-summary-amount]').textContent,initial);
+  at(720).click();assert.equal(h.fields.start_min.value,'540');assert.equal(h.fields.end_min.value,'720');
+  assert(h.nodes.get('[data-summary-duration]').textContent.includes('3시간'));
+  assert.deepEqual(grid.filter(b=>b.attributes['aria-pressed']==='true').map(b=>b.value),['540','600','660','720']);
+  at(600).click();assert.equal(h.fields.end_min.value,'720','the minimum duration also applies when editing the end');
+  at(540).click();assert.equal(h.fields.start_min.value,'');assert.equal(h.fields.end_min.value,'');
 });
 
 test('loading, failed and closed booking states never leave an active time button',async()=>{

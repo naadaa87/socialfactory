@@ -70,13 +70,13 @@
   };
   var syncTimeGrid = function () {
     refreshStartOptions(kstNow());
-    var s = selectedMinutes(), choosingEnd = Number.isFinite(s.start) && !Number.isFinite(s.end);
+    var s = selectedMinutes(), hasStart = Number.isFinite(s.start), choosingEnd = hasStart && !Number.isFinite(s.end);
     var gridDisabled = busy || finished || fields.start_min.disabled;
     var endOptions = new Map(Array.from(fields.end_min.options).map(function (item) { return [+item.value, item]; }));
     var showNextDay = false, hasSameDayEnd = false;
     timeButtons.forEach(function (item) {
       var minute = item.minute, nextDay = !item.startOption;
-      var endChoice = choosingEnd && minute > s.start;
+      var endChoice = hasStart && minute > s.start;
       var endOption = endOptions.get(minute);
       var selected = Number.isFinite(s.start) && (minute === s.start || minute > s.start && minute <= s.end);
       var reason, disabled;
@@ -96,7 +96,7 @@
       item.button.className = "booking-time" + (selected ? " is-selected" : "");
       item.button.setAttribute("aria-pressed", selected ? "true" : "false");
       var status = selected ? minute === s.start ? "시작" : minute === s.end ? "종료" : "선택됨" : reason;
-      item.button.setAttribute("aria-label", hm(minute) + " · " + status + (choosingEnd && minute === s.start ? " · 다시 누르면 초기화" : ""));
+      item.button.setAttribute("aria-label", hm(minute) + " · " + status + (hasStart && minute === s.start ? " · 다시 누르면 초기화" : ""));
       item.status.textContent = status;
     });
     if (nextTimePicker) {
@@ -106,7 +106,7 @@
     }
     if (timeGridNote) {
       var hint = choosingEnd ? "종료 시간을 눌러 주세요. 시작 시간을 다시 누르면 선택이 초기화됩니다."
-        : Number.isFinite(s.end) ? "선택한 구간을 표시했습니다. 시작 시간을 누르면 다시 선택할 수 있습니다."
+        : Number.isFinite(s.end) ? "다른 종료 시간을 누르면 시작 시간은 그대로 두고 변경됩니다. 시작 시간을 다시 누르면 선택이 초기화됩니다."
         : "시작 시간과 종료 시간을 차례로 누르면 전체 구간이 선택됩니다.";
       if (timeGridNote.textContent !== hint) timeGridNote.textContent = hint;
     }
@@ -119,13 +119,13 @@
       syncTimeGrid();
       if (button.disabled || button.hidden) return;
       var s = selectedMinutes();
-      if (Number.isFinite(s.start) && !Number.isFinite(s.end) && minute > s.start) {
+      if (Number.isFinite(s.start) && minute > s.start) {
         fields.end_min.value = String(minute);
         fields.end_min.dispatchEvent(new Event("change", { bubbles: true }));
         return;
       }
       setError(scheduleError, "");
-      fields.start_min.value = Number.isFinite(s.start) && !Number.isFinite(s.end) && minute === s.start ? "" : String(minute);
+      fields.start_min.value = Number.isFinite(s.start) && minute === s.start ? "" : String(minute);
       buildEndTimes("");
     });
     grid.appendChild(button); timeButtons.push({ button: button, minute: minute, startOption: startOption, status: status });
