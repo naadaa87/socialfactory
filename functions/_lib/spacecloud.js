@@ -7,6 +7,7 @@ import { historicalCalendarRows, rememberFeedEvents, reconcileCalendarHistory } 
 import { calendarEventIdentity } from './spacecloud-identity.js';
 import { isCalendarLinked, reconcileCalendarLinks } from './spacecloud-links.js';
 import { bookingSegments } from './booking-spacecloud-sync.js';
+import { loadHostCalendar } from './spacecloud-host-calendar.js';
 
 const TTL = 5 * 60 * 1000;
 const DAY = 86400000, KST = 9 * 3600000;
@@ -226,11 +227,14 @@ export async function loadSpacecloud(env, { force = false, fetcher = fetch, now 
         error: cached.error || null, stale: !!cached.error || !cached.updated_at || now - cached.updated_at >= TTL * 2 } };
     }));
     const superseded = await reconcileCalendarHistory(env, snapshots);
-    const current = [...new Map(snapshots.flatMap(x => x.rows).map(row => [row.code, row])).values()];
+    const verified = await loadHostCalendar(env, snapshots.map(s=>({space:s.room.space,hash:s.hash})), {from,to});
+    const excluded = new Set(verified.removed.map(r=>r.code));
+    const current = [...new Map(snapshots.flatMap(x => x.rows).concat(verified.rows).filter(r=>!excluded.has(r.code)).map(row => [row.code, row])).values()];
     const history = await historicalCalendarRows(env,
       await Promise.all(feeds.map(async f => ({ space:f.space, hash:await sha256Hex(f.url) }))), current, now, { from, to });
-    const removed = await reconcileCalendarLinks(env, snapshots, now, superseded);
-    return { results: current.concat(history), info: { configured: true, rooms: snapshots.map(x => x.room),
+    const linkedSnapshots = snapshots.map(s=>({...s,events:s.events.concat(verified.events.get(s.room.space)||[])}));
+    const removed = await reconcileCalendarLinks(env, linkedSnapshots, now, superseded.concat(verified.removed));
+    return { results: current.concat(history).filter(r=>!excluded.has(r.code)), info: { configured: true, rooms: snapshots.map(x => x.room), host_calendar:verified.summary,
       removed_linked_codes: removed, refresh_minutes: TTL / 60000 } };
   } catch { return { results: [], info: { configured: true, error: '외부 일정을 읽지 못했습니다. 다시 불러와 주세요.', rooms: [] } }; }
 }
