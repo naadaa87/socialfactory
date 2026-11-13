@@ -31,3 +31,19 @@ test('legacy API uppercase field names are normalized just as in the official ho
  raw[12].EXTERNAL_SCHEDULES=[{ID:55,SYMD:'20261113',SHOUR:10,EHOUR:13,NAME:'최신 예약'}];
  assert.equal(parseHostMonth(raw,scope).events[0].end_min,840);
 });
+
+test('normal calendar reads use the saved server profile directly, refresh expired tokens once, and never send credentials outside the official API',async()=>{
+ const {collectHostCalendarAPI}=await import('../calendar.mjs');
+ const saved={cookies:[],origins:[{origin:'https://partner.spacecloud.kr',localStorage:[{name:'spacecloud__userInfo',value:JSON.stringify({accessToken:'EXPIRED_PRIVATE',refreshToken:'REFRESH_PRIVATE',name:'PRIVATE_PROFILE'})}]}]};
+ const scopes=[scope,{...scope,space:'r1',product_id:'140236'}],calls=[];
+ const result=await collectHostCalendarAPI(saved,{scopes},{fetcher:async(url,options)=>{
+  const u=new URL(url);assert.equal(u.origin,'https://api.spacecloud.kr');assert.equal(options.method,'GET');assert.equal(options.redirect,'manual');calls.push({path:u.pathname,auth:options.headers.Authorization});
+  if(u.pathname.endsWith('/get_token')){assert.equal(options.headers.Authorization,'REFRESH_PRIVATE');return new Response(JSON.stringify({token:'ROTATED_PRIVATE'}));}
+  return options.headers.Authorization==='EXPIRED_PRIVATE'?new Response('',{status:401}):new Response(JSON.stringify(grid()));
+ }});
+ assert.equal(result.snapshots.length,2);assert.equal(calls.filter(c=>c.path.endsWith('/get_token')).length,1);
+ assert.equal(JSON.parse(result.state.origins[0].localStorage[0].value).accessToken,'ROTATED_PRIVATE');
+ assert.equal(JSON.parse(saved.origins[0].localStorage[0].value).accessToken,'EXPIRED_PRIVATE');
+ assert(!JSON.stringify(result.snapshots).includes('PRIVATE'));
+ assert.equal(await collectHostCalendarAPI({origins:[]},{scopes}),null);
+});

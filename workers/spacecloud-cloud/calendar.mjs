@@ -59,3 +59,36 @@ export async function collectHostCalendar(context,plan,live=()=>{}){
 export async function calendarRequest(config,body){
  try{const r=await fetch(config.origin+'/api/internal/spacecloud-calendar',{method:'POST',redirect:'manual',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+config.token,'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok || data.ok!==true)throw fail('calendar-sync-rejected');return data;}catch{throw fail('calendar-sync-rejected');}
 }
+
+// Normal calendar reads need no Browser Run session. Use only the existing
+// encrypted server-side host profile and the official app's token-refresh flow.
+// Never return credentials, cookies or unrelated profile fields in a receipt.
+export async function collectHostCalendarAPI(savedState,plan,{fetcher=fetch,live=()=>{}}={}){
+ const state=structuredClone(savedState),origin=state?.origins?.find(o=>o.origin===HOST);
+ const entry=origin?.localStorage?.find(e=>e.name==='spacecloud__userInfo');
+ let user;try{user=JSON.parse(entry?.value||'null');}catch{return null;}
+ if(!user || typeof user.accessToken!=='string' || !user.accessToken)return null;
+ for(const s of plan.scopes)if(!ROOMS[s.space]||String(ROOMS[s.space].product)!==s.product_id||!/^20\d{2}-\d{2}$/.test(s.month))throw fail('host-calendar-plan');
+ let refreshTask=null;
+ const refresh=()=>refreshTask||=(async()=>{
+  live();const token=user.refreshToken||user.accessToken;
+  const r=await fetcher(API+'/partner/users/get_token',{method:'GET',redirect:'manual',signal:AbortSignal.timeout(15000),headers:{Authorization:token,Accept:'application/json'}});
+  if(r.status!==200)throw fail('host-calendar-login');const value=await r.json();live();
+  if(typeof value.token!=='string'||!value.token||value.token.length>16384)throw fail('host-calendar-login');
+  user={...user,accessToken:value.token};entry.value=JSON.stringify(user);
+ })();
+ const snapshots=new Array(plan.scopes.length);let cursor=0;
+ await Promise.all(Array.from({length:Math.min(5,plan.scopes.length)},async()=>{
+  while(cursor<plan.scopes.length){
+   const index=cursor++,s=plan.scopes[index];live();
+   const url=new URL(API+'/partner/reservations/calendar');url.searchParams.set('year',s.month.slice(0,4));url.searchParams.set('month',s.month.slice(5));url.searchParams.set('product_id',s.product_id);
+   const get=()=>fetcher(url.href,{method:'GET',redirect:'manual',signal:AbortSignal.timeout(15000),headers:{Authorization:user.accessToken,Accept:'application/json'}});
+   let r=await get();live();
+   if(r.status===401){await refresh();r=await get();live();}
+   if(r.status===401)throw fail('host-calendar-login');
+   if(r.status!==200)throw fail('host-calendar-http');
+   snapshots[index]=parseHostMonth(await r.json(),s);live();
+  }
+ }));
+ return {snapshots,state};
+}

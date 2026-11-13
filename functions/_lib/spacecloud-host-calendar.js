@@ -83,7 +83,7 @@ export async function finishHostCalendar(env,body){
   for(const e of scope.events)writes.push(env.DB.prepare('DELETE FROM spacecloud_host_calendar_removed WHERE space=?1 AND identity=?2 AND checked_at<=?3').bind(scope.space,calendarEventIdentity(interval(e)),now));
  }
  // One D1 batch is transactional: incomplete snapshots never remove any slots.
- const counts={rooms:new Set(plan.scopes.map(s=>s.space)).size,months:new Set(plan.scopes.map(s=>s.month)).size,manual:body.snapshots.reduce((n,s)=>n+s.events.length,0),removed:removed.size};
+ const counts={transport:body.transport==='api'?'api':'browser',rooms:new Set(plan.scopes.map(s=>s.space)).size,months:new Set(plan.scopes.map(s=>s.month)).size,manual:body.snapshots.reduce((n,s)=>n+s.events.length,0),removed:removed.size};
  writes.push(env.DB.prepare(`UPDATE spacecloud_host_calendar_state SET last_success=?1,status='success',counts=?2,error=NULL WHERE id=1 AND last_attempt=?1 AND status='running'`).bind(now,JSON.stringify(counts)));
  await env.DB.batch(writes);
  return {ok:true,counts};
