@@ -157,6 +157,22 @@ test('changed feed configuration never serves an old projection and explicit ref
   assert.deepEqual((await loadCalendarDisplay(e)).results.map(r=>r.date),['2026-11-15']);
  } finally {globalThis.fetch=original;e.sqlite.close();}
 });
+test('source audits refresh expired fallback feeds in the background without waiting for their network responses',async()=>{
+ const {beginHostCalendar}=await import('../functions/_lib/spacecloud-host-calendar.js');
+ const {onRequestPost:sync}=await import('../functions/api/internal/spacecloud-calendar.js');
+ const e=env(Object.fromEntries([1,2,3,4,5].map(n=>['r'+n,url(n)]))),original=globalThis.fetch;
+ e.SPACECLOUD_WORKER_TOKEN='test-worker-token-longer-than-thirty-two';
+ try {
+  await loadSpacecloud(e,{now:Date.now()-60000,fetcher:async()=>response(calendar())});
+  const plan=await beginHostCalendar(e),releases=[],jobs=[];let markStarted;
+  const started=new Promise(resolve=>{markStarted=resolve;});
+  globalThis.fetch=()=>new Promise(resolve=>{releases.push(()=>resolve(response(calendar())));if(releases.length===5)markStarted();});
+  const result=await sync({env:e,waitUntil:job=>jobs.push(job),request:new Request('https://test.invalid/api/internal/spacecloud-calendar',{method:'POST',headers:{authorization:'Bearer '+e.SPACECLOUD_WORKER_TOKEN},body:JSON.stringify({action:'sync',observed_at:plan.observed_at,complete:true,snapshots:plan.scopes.map(s=>({...s,events:[]}))})})});
+  assert.equal(result.status,200);assert.equal(jobs.length,1);
+  await started;releases.forEach(release=>release());await Promise.all(jobs);
+  assert((await loadCalendarDisplay(e)).info.rooms.every(room=>!room.stale&&!room.error));
+ } finally {globalThis.fetch=original;e.sqlite.close();}
+});
 test('per-room feed failures preserve other rooms and changed URLs cannot expose old-room snapshots', async()=>{
  const e=env({r1:url(1),r2:url(2)});const fetcher=async u=>u===url(1)?response(calendar(event('same','20261024T100000','20261024T110000'))):Promise.reject(new Error('offline'));
  const a=await loadSpacecloud(e,{fetcher,now:2000000});assert.equal(a.results.length,1);assert(a.info.rooms.find(r=>r.space==='r2').error);
