@@ -25,3 +25,6 @@ CREATE TABLE IF NOT EXISTS cloud_auth_candidates (id TEXT PRIMARY KEY, version T
 
 CREATE TABLE IF NOT EXISTS cloud_browser_runs (id TEXT PRIMARY KEY,session_id TEXT NOT NULL,lock_token TEXT NOT NULL,
     budget_id TEXT NOT NULL,started_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,state TEXT NOT NULL DEFAULT 'active');
+
+CREATE TABLE IF NOT EXISTS cloud_calendar_lock (id INTEGER PRIMARY KEY CHECK(id=1),token TEXT,expires_at INTEGER NOT NULL DEFAULT 0);
+INSERT OR IGNORE INTO cloud_calendar_lock(id) VALUES(1);

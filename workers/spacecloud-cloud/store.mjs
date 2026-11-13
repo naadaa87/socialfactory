@@ -1,5 +1,7 @@
 const encoder=new TextEncoder(),decoder=new TextDecoder();
 export const schema=[
+  `CREATE TABLE IF NOT EXISTS cloud_calendar_lock (id INTEGER PRIMARY KEY CHECK(id=1),token TEXT,expires_at INTEGER NOT NULL DEFAULT 0)`,
+  `INSERT OR IGNORE INTO cloud_calendar_lock(id) VALUES(1)`,
   `CREATE TABLE IF NOT EXISTS cloud_session (id TEXT PRIMARY KEY, cipher TEXT NOT NULL, updated_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS cloud_budget (id INTEGER PRIMARY KEY CHECK(id=1), day TEXT NOT NULL DEFAULT '', month TEXT NOT NULL DEFAULT '',
     day_ms INTEGER NOT NULL DEFAULT 0, month_ms INTEGER NOT NULL DEFAULT 0,last_id TEXT)`,
@@ -18,6 +20,21 @@ export const schema=[
   `CREATE TABLE IF NOT EXISTS cloud_browser_runs (id TEXT PRIMARY KEY,session_id TEXT NOT NULL,lock_token TEXT NOT NULL,
     budget_id TEXT NOT NULL,started_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,state TEXT NOT NULL DEFAULT 'active')`
 ];
+export async function lockCalendar(env,now=Date.now()){
+ const token=crypto.randomUUID();
+ const r=await env.STATE_DB.prepare('UPDATE cloud_calendar_lock SET token=?1,expires_at=?2 WHERE id=1 AND (token IS NULL OR expires_at<=?3)').bind(token,now+240000,now).run();
+ return r.meta?.changes?token:null;
+}
+export async function unlockCalendar(env,token){await env.STATE_DB.prepare('UPDATE cloud_calendar_lock SET token=NULL,expires_at=0 WHERE id=1 AND token=?1').bind(token).run();}
+export async function loadVersionedHostState(env){
+ const row=await env.STATE_DB.prepare("SELECT cipher FROM cloud_session WHERE id='spacecloud'").first();
+ return row?{state:await decryptState(row.cipher,env.SESSION_ENCRYPTION_KEY),version:row.cipher}:null;
+}
+export async function saveRefreshedHostState(env,state,version,{guard=()=>{}}={}){
+ guard();const cipher=await encryptState(onlySpacecloudState(state),env.SESSION_ENCRYPTION_KEY);guard();
+ const r=await env.STATE_DB.prepare("UPDATE cloud_session SET cipher=?1,updated_at=?2 WHERE id='spacecloud' AND cipher=?3").bind(cipher,Date.now(),version).run();
+ return !!r.meta?.changes;
+}
 const initialized=new WeakMap();
 export async function ensureStore(env) {
   if(!env.STATE_DB)throw problem('state-db','클라우드 저장소 연결이 필요합니다.',503);

@@ -91,6 +91,7 @@ export async function collectHostCalendarAPI(savedState,plan,{fetcher=fetch,live
  let user;try{user=JSON.parse(entry?.value||'null');}catch{return null;}
  if(!user || typeof user.accessToken!=='string' || !user.accessToken)return null;
  for(const s of plan.scopes)if(!ROOMS[s.space]||String(ROOMS[s.space].product)!==s.product_id||!/^20\d{2}-\d{2}$/.test(s.month))throw fail('host-calendar-plan');
+ const originalToken=user.accessToken;
  let refreshTask=null,failed=null;
  const check=()=>{live();if(failed)throw failed;};
  const refresh=()=>refreshTask||=(async()=>{
@@ -115,5 +116,5 @@ export async function collectHostCalendarAPI(savedState,plan,{fetcher=fetch,live
    snapshots[index]=parseHostMonth(await r.json(),s);check();
   }} catch(error){failed ||= error;throw error;}
  }));
- return {snapshots,state};
+ return {snapshots,state,changed:user.accessToken!==originalToken};
 }
