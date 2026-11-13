@@ -32,12 +32,55 @@ export async function rememberFeedEvents(env, space, configHash, events, now) {
       ON CONFLICT(space,uid) DO UPDATE SET reservation_id=excluded.reservation_id,
       config_hash=excluded.config_hash,start_ms=excluded.start_ms,end_ms=excluded.end_ms,
       title=excluded.title,recorded_at=excluded.recorded_at,source=excluded.source
-      WHERE source IN ('feed','feed_cancelled') AND recorded_at<=excluded.recorded_at`)
+      WHERE source IN ('feed','feed_cancelled','feed_superseded') AND recorded_at<=excluded.recorded_at`)
       .bind(space, calendarEventIdentity(e), reservationId, configHash, e.start, e.end, e.title,
         e.cancelled ? 'feed_cancelled' : 'feed', now);
   });
   const statements = deletes.concat(writes);
   for (let i = 0; i < statements.length; i += 100) await env.DB.batch(statements.slice(i, i + 100));
+}
+
+// A feed omits completed bookings, so absence alone cannot delete history.
+// A live replacement is evidence: payment IDs survive time/room changes; manual
+// bookings have no stable upstream ID, so only overlapping slots with the same
+// room, Korean date and title can be reconciled automatically. Separate sessions
+// and two entries explicitly present in the same snapshot must remain separate.
+export async function reconcileCalendarHistory(env, snapshots) {
+  await ensureCalendarHistory(env);
+  const healthy = snapshots.filter(s => s.room.updated_at && !s.room.error && !s.room.stale);
+  const current = healthy.flatMap(s => s.events.filter(e => !e.cancelled)
+    .map(event => ({ event, space:s.room.space, at:s.room.updated_at })));
+  const records = (await env.DB.prepare(`SELECT * FROM spacecloud_calendar_history
+    WHERE source IN ('feed','host_verified')`).all()).results || [];
+  const day = ms => Math.floor((ms + KST) / 86400000);
+  const writes = [];
+  for (const h of records) {
+    const own = healthy.find(s => s.room.space === h.space && s.hash === h.config_hash);
+    if (!own || h.recorded_at > own.room.updated_at) continue;
+    const old = { start:h.start_ms, end:h.end_ms, title:h.title,
+      source_url:h.reservation_id ? `https://partner.spacecloud.kr/reservation/${h.reservation_id}` : '' };
+    if (own.events.some(e => !e.cancelled && calendarEventIdentity(e) === calendarEventIdentity(old))) continue;
+    const replacement = current.find(({event:e,space,at}) => at >= h.recorded_at && (
+      h.reservation_id ? calendarReservationId(e.source_url) === h.reservation_id
+        : !calendarReservationId(e.source_url) && space === h.space
+          && e.title.normalize('NFC').trim() === h.title.normalize('NFC').trim()
+          && day(e.start) === day(h.start_ms) && e.start < h.end_ms && h.start_ms < e.end
+    ));
+    if (!replacement) continue;
+    writes.push(env.DB.prepare(`UPDATE spacecloud_calendar_history
+      SET source=CASE WHEN source='host_verified' THEN 'host_superseded' ELSE 'feed_superseded' END,recorded_at=?4
+      WHERE space=?1 AND uid=?2 AND config_hash=?3 AND source IN ('feed','host_verified') AND recorded_at<=?4`)
+      .bind(h.space,h.uid,h.config_hash,replacement.at));
+  }
+  for (let i=0;i<writes.length;i+=100) await env.DB.batch(writes.slice(i,i+100));
+  const removed = (await env.DB.prepare("SELECT * FROM spacecloud_calendar_history WHERE source IN ('feed_superseded','host_superseded')").all()).results || [];
+  const rows = [];
+  for (const h of removed) {
+    if (!snapshots.some(s => s.room.space === h.space && s.hash === h.config_hash)) continue;
+    rows.push(...await calendarRows([{start:h.start_ms,end:h.end_ms,title:h.title,
+      source_url:h.reservation_id ? `https://partner.spacecloud.kr/reservation/${h.reservation_id}` : ''}],h.space,h.recorded_at));
+  }
+  return rows;
 }
 
 export async function historicalCalendarRows(env, feeds, current, now, { from, to } = {}) {

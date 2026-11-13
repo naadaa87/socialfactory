@@ -627,3 +627,82 @@ test('own overnight SpaceCloud blocks stay out of schedules and manual sales aft
   assert.equal(recorded.byChannel.spacecloud.amount,15000);
   assert.equal(recorded.unrecordedSpacecloud,3);
 });
+
+test('an extended manual booking replaces its completed earlier version and stays corrected after expiry',async()=>{
+ const e=env();
+ const manual=(uid,start,end)=>event(uid,start,end).replace(/URL:[^\r]+\r\n/,'').replace('SUMMARY:예약 일정','SUMMARY:클라이온 (부가사용)');
+ let body=calendar(manual('old','20261113T100000','20261113T120000'));
+ const fetcher=async()=>response(body);
+ const first=await loadSpacecloud(e,{fetcher,force:true,now:Date.parse('2026-11-13T11:00:00+09:00')});
+ body=calendar(manual('new','20261113T100000','20261113T140000'));
+ const latest=await loadSpacecloud(e,{fetcher,force:true,now:Date.parse('2026-11-13T12:30:00+09:00')});
+ assert.deepEqual(latest.results.map(r=>[r.date,r.start_min,r.end_min]),[['2026-11-13',600,840]]);
+ assert.equal(e.sqlite.prepare("SELECT COUNT(*) n FROM spacecloud_calendar_history WHERE source='feed_superseded'").get().n,1);
+ body=calendar();
+ const expired=await loadSpacecloud(e,{fetcher,force:true,now:Date.parse('2026-11-14T01:00:00+09:00')});
+ assert.equal(expired.results.length,1);assert.equal(expired.results[0].end_min,840);
+ assert.notEqual(expired.results[0].code,first.results[0].code);
+ // Neither an upstream failure nor a narrow month query can resurrect the old slot.
+ const failed=await loadSpacecloud(e,{fetcher:async()=>{throw Error('offline')},force:true,now:Date.parse('2026-11-14T02:00:00+09:00'),from:'2026-11-13',to:'2026-11-13'});
+ assert.equal(failed.results.length,1);assert.equal(failed.results[0].end_min,840);
+ e.sqlite.close();
+});
+
+test('manual sessions remain separate when both are current, on different dates, or do not overlap',async()=>{
+ const e=env(),now=Date.parse('2026-11-13T12:30:00+09:00');
+ const manual=(uid,start,end)=>event(uid,start,end).replace(/URL:[^\r]+\r\n/,'');
+ let body=calendar(manual('previous-day','20261112T100000','20261112T120000'),
+  manual('morning','20261113T080000','20261113T100000'),manual('old','20261113T100000','20261113T120000'));
+ const fetcher=async()=>response(body);
+ await loadSpacecloud(e,{fetcher,force:true,now:now-86400000});
+ body=calendar(manual('explicit-one','20261113T100000','20261113T120000'),manual('explicit-two','20261113T100000','20261113T140000'));
+ const result=await loadSpacecloud(e,{fetcher,force:true,now});
+ assert.equal(result.results.length,4);
+ assert.equal(e.sqlite.prepare("SELECT COUNT(*) n FROM spacecloud_calendar_history WHERE source='feed_superseded'").get().n,0);
+ e.sqlite.close();
+});
+
+test('a failed replacement fetch cannot retire a completed manual booking',async()=>{
+ const e=env(),before=Date.parse('2026-11-13T11:00:00+09:00');
+ const first=await loadSpacecloud(e,{fetcher:async()=>response(calendar(event('manual','20261113T100000','20261113T120000').replace(/URL:[^\r]+\r\n/,''))),force:true,now:before});
+ const failed=await loadSpacecloud(e,{fetcher:async()=>response('broken'),force:true,now:before+7200000});
+ assert.equal(failed.results.length,1);assert.equal(failed.results[0].code,first.results[0].code);
+ assert.equal(e.sqlite.prepare("SELECT COUNT(*) n FROM spacecloud_calendar_history WHERE source='feed_superseded'").get().n,0);
+ e.sqlite.close();
+});
+
+test('payment booking IDs replace old archived dates and rooms even outside the requested date filter',async()=>{
+ const e=env({r1:url(1),r2:url(2)}),before=Date.parse('2026-11-12T11:00:00+09:00'),after=Date.parse('2026-11-13T12:30:00+09:00');
+ let changed=false;
+ const fetcher=async u=>response(calendar(...(changed ? u===url(2)?[event('moved','20261115T100000','20261115T140000')]:[] : u===url(1)?[event('old','20261112T100000','20261112T120000')]:[])));
+ await loadSpacecloud(e,{fetcher,force:true,now:before});changed=true;
+ const oldMonth=await loadSpacecloud(e,{fetcher,force:true,now:after,from:'2026-11-12',to:'2026-11-12'});
+ assert.equal(oldMonth.results.length,0);
+ const result=await loadSpacecloud(e,{fetcher,now:after+1000});
+ assert.deepEqual(result.results.map(r=>[r.space,r.date,r.start_min,r.end_min]),[['r2','2026-11-15',600,840]]);
+ e.sqlite.close();
+});
+
+test('superseded past payment-linked slots leave the timetable without changing the revenue ledger',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-13T11:00:00+09:00')});
+ const e=env(),original=globalThis.fetch;
+ const manual=(uid,end)=>event(uid,'20261113T100000',end).replace(/URL:[^\r]+\r\n/,'');
+ let body=calendar(manual('old','20261113T120000'));globalThis.fetch=async()=>response(body);
+ try {
+  const old=await loadSpacecloud(e,{force:true});const code=old.results[0].code;
+  e.sqlite.prepare(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status,paid_at)
+   VALUES(?,'confirmed','r1','2026-11-13',600,720,'예약 일정','spacecloud',40000,'spacecloud','paid','2026-11-13')`).run(code);
+  t.mock.timers.tick(90*60000);body=calendar(manual('new','20261113T140000'));
+  await loadSpacecloud(e,{force:true});
+  const req=new Request('https://test.invalid/api/admin/reservations?from=2026-11-13&to=2026-11-13',{headers});
+  const result=await(await getReservations({env:e,request:req})).json();
+  assert.equal(result.results.length,1);assert.equal(result.results[0].end_min,840);
+  assert.equal(e.sqlite.prepare('SELECT amount FROM reservations WHERE code=?').get(code).amount,40000);
+  const sales=await(await getSales({env:e,request:new Request('https://test.invalid/api/admin/sales?year=2026',{headers})})).json();
+  assert.equal(sales.total,40000);assert.equal(sales.n,1);
+  // Restoring the exact original slot also restores its existing payment copy.
+  body=calendar(manual('restored','20261113T120000'));await loadSpacecloud(e,{force:true});
+  const restored=await(await getReservations({env:e,request:req})).json();
+  assert.equal(restored.results.length,1);assert.equal(restored.results[0].code,code);
+ } finally {globalThis.fetch=original;e.sqlite.close();}
+});

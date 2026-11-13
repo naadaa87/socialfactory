@@ -3,18 +3,21 @@ export const isCalendarLinked = row => /^SC[1-5]-[a-f0-9]{16}$/.test(row.code) &
 // Occupancy state is separate from the paid/refund ledger. Persist a confirmed
 // disappearance so a cancelled payment-backed slot cannot reappear after its
 // original end time passes. A later successful reappearance restores the slot.
-export async function reconcileCalendarLinks(env, snapshots, now) {
+export async function reconcileCalendarLinks(env, snapshots, now, superseded = []) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS spacecloud_calendar_link_state (
     code TEXT PRIMARY KEY, state TEXT NOT NULL, checked_at INTEGER NOT NULL)`).run();
-  const oldest = new Date(now + 9 * 3600000 - 86400000).toISOString().slice(0, 10);
+  const removed = new Set(((await env.DB.prepare("SELECT code FROM spacecloud_calendar_link_state WHERE state='removed'").all()).results || []).map(r=>r.code));
   const manual = (await env.DB.prepare(`SELECT code,channel,status,space,date,start_min,end_min,customer_name
-    FROM reservations WHERE channel='spacecloud' AND status='confirmed' AND date>=?1`).bind(oldest).all()).results || [];
+    FROM reservations WHERE channel='spacecloud' AND status='confirmed'`).all()).results || [];
   const writes = [];
   for (const row of manual) {
     if (!isCalendarLinked(row)) continue;
     const start = Date.parse(row.date + 'T00:00:00+09:00') + row.start_min * 60000;
     const end = Date.parse(row.date + 'T00:00:00+09:00') + row.end_min * 60000;
-    if (end <= now) continue;
+    const replaced = superseded.some(e => e.space === row.space && e.date === row.date
+      && e.start_min === row.start_min && e.end_min === row.end_min
+      && e.customer_name.normalize('NFC').trim() === row.customer_name.normalize('NFC').trim());
+    if (end <= now && !replaced && !removed.has(row.code)) continue;
     const source = snapshots.find(s => s.room.space === row.space);
     if (!source?.room.updated_at || source.room.error || source.room.stale) continue;
     const present = source.events.some(e => e.start === start && e.end === end

@@ -3,7 +3,7 @@
  * Refresh on authenticated reads (5 minute cache) or explicit admin refresh.
  */
 import { sha256Hex } from './auth.js';
-import { historicalCalendarRows, rememberFeedEvents } from './spacecloud-history.js';
+import { historicalCalendarRows, rememberFeedEvents, reconcileCalendarHistory } from './spacecloud-history.js';
 import { calendarEventIdentity } from './spacecloud-identity.js';
 import { isCalendarLinked, reconcileCalendarLinks } from './spacecloud-links.js';
 import { bookingSegments } from './booking-spacecloud-sync.js';
@@ -221,14 +221,15 @@ export async function loadSpacecloud(env, { force = false, fetcher = fetch, now 
     const snapshots = await Promise.all(feeds.map(async feed => {
       const cached = await refreshRoom(env, feed, force, fetcher, now);
       const events = JSON.parse(cached.events_json);
-      return { events, rows: await calendarRows(events, feed.space, cached.updated_at, { from, to }), room: {
+      return { events, hash:await sha256Hex(feed.url), rows: await calendarRows(events, feed.space, cached.updated_at, { from, to }), room: {
         space: feed.space, count: events.length, checked_at: cached.checked_at, updated_at: cached.updated_at,
         error: cached.error || null, stale: !!cached.error || !cached.updated_at || now - cached.updated_at >= TTL * 2 } };
     }));
+    const superseded = await reconcileCalendarHistory(env, snapshots);
     const current = [...new Map(snapshots.flatMap(x => x.rows).map(row => [row.code, row])).values()];
     const history = await historicalCalendarRows(env,
       await Promise.all(feeds.map(async f => ({ space:f.space, hash:await sha256Hex(f.url) }))), current, now, { from, to });
-    const removed = await reconcileCalendarLinks(env, snapshots, now);
+    const removed = await reconcileCalendarLinks(env, snapshots, now, superseded);
     return { results: current.concat(history), info: { configured: true, rooms: snapshots.map(x => x.room),
       removed_linked_codes: removed, refresh_minutes: TTL / 60000 } };
   } catch { return { results: [], info: { configured: true, error: '외부 일정을 읽지 못했습니다. 다시 불러와 주세요.', rooms: [] } }; }
