@@ -695,3 +695,13 @@ test('scheduled full host calendar collection restores the server login, commits
  assert.equal(f.counters.completions.length,0);assert.equal(lock(f).token,null);
  await runner.scheduled(f.env,CLOCK+60000);assert.equal(f.counters.launches,1);
 });
+
+test('a full calendar API audit continues with zero browser allowance and does not acquire or reserve a browser',async()=>{
+ const f=await ready(fixture({SPACECLOUD_CLOUD_CALENDAR:'true',DAILY_BROWSER_BUDGET_MS:'0',MONTHLY_BROWSER_BUDGET_MS:'0'})),calls=[];
+ const plan={observed_at:CLOCK,scopes:[{space:'r1',month:'2026-11',product_id:'140236'}]};
+ const runner=createRunner({...f.deps,requestCalendar:async(config,body)=>{calls.push(body);return body.action==='begin'?{plan}:{ok:true};},
+  collectCalendarAPI:async(state,received,{live})=>{live();assert.equal(received,plan);return {state,snapshots:[]};}});
+ await runner.runCalendar(f.env);
+ assert.deepEqual(calls.map(b=>b.action),['begin','sync']);assert.equal(calls[1].transport,'api');
+ assert.equal(f.counters.launches,0);assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_budget_reservations').get().n,0);assert.equal(lock(f).token,null);
+});
