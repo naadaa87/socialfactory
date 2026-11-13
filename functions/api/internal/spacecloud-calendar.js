@@ -8,7 +8,7 @@ export async function onRequestPost({request,env}){
   if(b.action==='status')return json({ok:true,calendar:await hostCalendarSummary(env)});
   if(b.action==='begin')return json({ok:true,plan:await beginHostCalendar(env)});
   if(b.action==='sync')return json(await finishHostCalendar(env,b));
-  if(b.action==='error'){await failHostCalendar(env,b.observed_at,b.error);return json({ok:true});}
+  if(b.action==='error'){await failHostCalendar(env,b.observed_at,b.error,b.retry_after_ms);return json({ok:true});}
   return json({ok:false,error:'invalid-action'},400);
  }catch(error){return json({ok:false,error:error.code||'calendar-error'},error.status||503);}
 }

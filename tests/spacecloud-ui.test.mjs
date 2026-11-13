@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 function harness(fetchImpl) {
   const html = readFileSync(new URL('../admin.html', import.meta.url), 'utf8');
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
-  const nodes = new Map();
+  const nodes = new Map(), intervals=[];
   const node = key => {
     if (nodes.has(key)) return nodes.get(key);
     const x = { innerHTML: '', textContent: '', value: '', hidden: true, checked: false, disabled: false, dataset: {},
@@ -23,10 +23,10 @@ function harness(fetchImpl) {
   const window={SF_CONFIG:{pricing:{rooms:{r1:{max:30},r2:{max:40},r3:{max:15},r4:{max:50},r5:{max:30}}}},addEventListener(){},scrollTo(){}};
   let code=readFileSync(new URL('../js/admin.js',import.meta.url),'utf8');
   code=code.replace(/  api\("\/api\/admin\/session"\)\.then\(showApp\)\.catch\([^\n]+\);/,'');
-  code=code.replace(/\}\)\(\);\s*$/, 'window.testHooks={resRow,renderExternalDetail,renderSpacecloudStatus,net,BD,loadBoard,drawDay,drawMonth,SL,drawSales};})();');
+  code=code.replace(/\}\)\(\);\s*$/, 'window.testHooks={resRow,renderExternalDetail,renderSpacecloudStatus,net,BD,loadBoard,drawDay,drawMonth,SL,drawSales,pollScheduleUpdates,setPollView:view=>{CUR=view;app.hidden=false;}};})();');
   vm.runInNewContext(code,{window,document,sessionStorage:{removeItem(){}},location:{hash:'',pathname:'/admin'},history:{replaceState(){}},
-    setTimeout(){},clearTimeout(){},setInterval(){},navigator:{},console,fetch:fetchImpl,AbortController});
-  return {hooks:window.testHooks,nodes,statuses};
+    setTimeout(){},clearTimeout(){},setInterval(fn,ms){intervals.push({fn,ms});},navigator:{},console,fetch:fetchImpl,AbortController});
+  return {hooks:window.testHooks,nodes,statuses,intervals,document};
 }
 const slot={external:true,code:'SC1-123',status:'confirmed',space:'r1',date:'2026-10-24',start_min:600,end_min:720,
  customer_name:'<img src=x onerror=alert(1)>',phone:'',people:null,purpose:'',channel:'spacecloud',amount:null,
@@ -78,4 +78,25 @@ test('channel detail uses total sales including website orders as denominator',(
  hooks.SL.data={year:'2026',years:['2026'],basis:'use',methods:[],months:[],allTime:{total:160000,n:3},total:160000,n:3,refunds:0,unpaid:{amount:0,n:0},thisMonth:{ym:'2026-10',total:160000,n:3},lastMonth:{ym:'2026-09',total:0,n:0},byMethod:{orders:10000},bySpace:{},byChannel:{spacecloud:{label:'스페이스클라우드',amount:100000,n:1},naver:{label:'네이버',amount:50000,n:1},web:{label:'홈페이지',amount:10000,n:1}},channelTotal:160000,unrecordedSpacecloud:2};
  hooks.drawSales();const text=nodes.get('#sl-channel-details').innerHTML;
  assert(text.includes('62.5%'));assert(text.includes('31.3%'));assert(text.includes('6.3%'));assert(text.includes('160,000원'));assert(nodes.get('#sl-channel-note').textContent.includes('2건'));
+});
+
+test('five-second checks refresh only changed schedules and never duplicate an in-flight request',async()=>{
+ const calls=[];let release,version=1;
+ const h=harness((url)=>{
+  calls.push(url);
+  if(url.includes('version=1'))return new Promise(resolve=>{release=()=>resolve({ok:true,json:async()=>({ok:true,calendar:{last_success:version,status:'success'}})});});
+  return Promise.resolve({ok:true,json:async()=>({ok:true,results:[],spacecloud:{configured:false,rooms:[]}})});
+ });
+ h.hooks.setPollView('board');h.hooks.BD.date='2026-11-13';
+ assert(h.intervals.some(i=>i.ms===5000));
+ const first=h.hooks.pollScheduleUpdates(false);h.hooks.pollScheduleUpdates(false);
+ assert.equal(calls.length,1);release();await first;
+ assert.equal(calls.filter(u=>u.includes('/reservations?')).length,1);
+ const same=h.hooks.pollScheduleUpdates(false);release();await same;
+ assert.equal(calls.filter(u=>u.includes('/reservations?')).length,1);
+ version=2;const changed=h.hooks.pollScheduleUpdates(false);release();await changed;
+ assert.equal(calls.filter(u=>u.includes('/reservations?')).length,2);
+ h.document.hidden=true;const count=calls.length;h.hooks.pollScheduleUpdates(false);assert.equal(calls.length,count);
+ h.document.hidden=false;const focused=h.hooks.pollScheduleUpdates(true);release();await focused;
+ assert.equal(calls.filter(u=>u.includes('/reservations?')).length,3);
 });

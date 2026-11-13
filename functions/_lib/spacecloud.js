@@ -9,7 +9,7 @@ import { isCalendarLinked, reconcileCalendarLinks } from './spacecloud-links.js'
 import { bookingSegments } from './booking-spacecloud-sync.js';
 import { loadHostCalendar } from './spacecloud-host-calendar.js';
 
-const TTL = 5 * 60 * 1000;
+const TTL = 15 * 1000;
 const DAY = 86400000, KST = 9 * 3600000;
 const MAX_BYTES = 2 * 1024 * 1024;
 const TABLE = `CREATE TABLE IF NOT EXISTS spacecloud_calendar_cache (

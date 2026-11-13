@@ -20,6 +20,7 @@ crons = ["* * * * *"]
 ENABLED = "true"
 SPACECLOUD_CLOUD_SALES = "true"
 SPACECLOUD_CLOUD_CALENDAR = "true"
+SPACECLOUD_CALENDAR_FAST_POLL = "true"
 ALLOW_WRITES = "true"
 CLOUD_PLAN_CONFIRMED_FREE = "false"
 CLOUD_PLAN_MODE = "paid-included"

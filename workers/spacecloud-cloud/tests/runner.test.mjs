@@ -705,3 +705,26 @@ test('a full calendar API audit continues with zero browser allowance and does n
  assert.deepEqual(calls.map(b=>b.action),['begin','sync']);assert.equal(calls[1].transport,'api');
  assert.equal(f.counters.launches,0);assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_budget_reservations').get().n,0);assert.equal(lock(f).token,null);
 });
+
+test('fast server polling rechecks during the minute without a browser or monopolizing the booking queue',async()=>{
+ const f=await ready(fixture({SPACECLOUD_CLOUD_CALENDAR:'true',SPACECLOUD_CALENDAR_FAST_POLL:'true',ENABLED:'false'})),times=[],pauses=[];
+ const runner=createRunner({...f.deps,pause:async ms=>{pauses.push(ms);f.advance(ms);},
+  requestCalendar:async(config,body)=>{if(body.action==='begin'){times.push(f.now());return {plan:{observed_at:f.now(),scopes:[]}};}return {ok:true};},
+  collectCalendarAPI:async state=>({state,snapshots:[]})});
+ await runner.scheduled(f.env,CLOCK);
+ assert.deepEqual(times.map(t=>t-CLOCK),[0,10000,20000,30000,40000,50000]);
+ assert(pauses.every(ms=>ms===10000));assert.equal(f.counters.launches,0);assert.equal(f.counters.claims,0);assert.equal(lock(f).token,null);
+});
+
+test('calendar API reads continue while a booking browser owns the runner lock and preserve newer login state',async()=>{
+ const {loadVersionedHostState,saveRefreshedHostState}=await import('../store.mjs');
+ const f=await ready(fixture({SPACECLOUD_CLOUD_CALENDAR:'true'})),browserToken=await lockRunner(f.env,{now:CLOCK}),calls=[];
+ const old=await loadVersionedHostState(f.env),newState={cookies:[{name:'new',value:'NEW_PRIVATE_LOGIN',domain:'partner.spacecloud.kr',path:'/'}],origins:[]};
+ await saveState(f.env,newState);
+ assert.equal(await saveRefreshedHostState(f.env,old.state,old.version),false);
+ assert.deepEqual(await loadState(f.env),newState);
+ const runner=createRunner({...f.deps,requestCalendar:async(config,body)=>{calls.push(body);return body.action==='begin'?{plan:{observed_at:CLOCK,scopes:[]}}:{ok:true};},collectCalendarAPI:async state=>({state,snapshots:[],changed:false})});
+ await runner.runCalendar(f.env);
+ assert.deepEqual(calls.map(b=>b.action),['begin','sync']);assert.equal(lock(f).token,browserToken);assert.equal(f.counters.launches,0);
+ assert.equal(f.sqlite.prepare('SELECT token FROM cloud_calendar_lock WHERE id=1').get().token,null);
+});

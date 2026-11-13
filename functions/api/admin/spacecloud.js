@@ -2,12 +2,13 @@
 import { json } from '../../_lib/auth.js';
 import { adminGate } from '../../_lib/admin.js';
 import { loadSpacecloud, readFeedConfig, saveFeedConfig } from '../../_lib/spacecloud.js';
-import { requestHostCalendar } from '../../_lib/spacecloud-host-calendar.js';
+import { requestHostCalendar, hostCalendarSummary } from '../../_lib/spacecloud-host-calendar.js';
 import { cloudRunnerOrigin } from '../../_lib/spacecloud-runner.js';
 
 export async function onRequestGet({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
   try {
+    if(new URL(request.url).searchParams.get('version')==='1')return json({ok:true,calendar:await hostCalendarSummary(env)});
     const feeds = await readFeedConfig(env);
     const data = await loadSpacecloud(env);
     let audit;
