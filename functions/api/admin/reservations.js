@@ -18,8 +18,10 @@ import { ensureSpacecloudSales, attachCalendarPayments, calendarReservationId } 
 import { json, clean, formatPhone } from "../../_lib/auth.js";
 import { adminGate, PAY_METHODS, SPACES, ROOM_KEYS, CHANNELS, kstToday, isIsoDate, addDaysIso, dayIndex, makeResCode, hm } from "../../_lib/admin.js";
 
-import { loadSpacecloud, loadSpacecloudForDisplay, websiteHoldCalendarCodes, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
+import { loadSpacecloud, websiteHoldCalendarCodes, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
 import { isCalendarLinked } from "../../_lib/spacecloud-links.js";
+import { loadCalendarDisplay } from '../../_lib/spacecloud-display.js';
+import { ensureBookingSchema } from '../../_lib/booking-schema.js';
 
 const COLS = "id, code, created_at, updated_at, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, list_amount, amount_note, pay_method, pay_status, paid_at, refund_amount, refunded_at, cancel_reason, cancelled_at, inquiry_ref, memo";
 const int = (v) => { const n = typeof v === "number" ? v : parseInt(String(v == null ? "" : v).replace(/[^0-9-]/g, ""), 10); return Number.isFinite(n) ? Math.round(n) : null; };
@@ -90,9 +92,10 @@ async function conflicts(env, v, exceptCode) {
     .map((r) => ({ code: r.code, date: r.date, time: hm(r.start_min) + "–" + hm(r.end_min), name: r.customer_name, people: r.people }));
 }
 
-export async function onRequestGet({ request, env }) {
+export async function onRequestGet({ request, env, waitUntil }) {
   const deny = await adminGate(request, env); if (deny) return deny;
-  if(syncEnabled(env))await prepareBookings(env);
+  // Expiry/payment maintenance runs independently on the worker, not on calendar reads.
+  if(syncEnabled(env))await ensureBookingSchema(env);
   const u = new URL(request.url), p = (k, n = 40) => clean(u.searchParams.get(k) || "", n);
   const where = [], args = [];
   const add = (sql, val) => { args.push(val); where.push(sql.replace("?", "?" + args.length)); };
@@ -114,8 +117,10 @@ export async function onRequestGet({ request, env }) {
   if (q) { args.push("%" + q + "%"); const n = args.length; where.push(`(customer_name LIKE ?${n} OR REPLACE(phone, '-', '') LIKE ?${n} OR REPLACE(code, '-', '') LIKE ?${n} OR memo LIKE ?${n} OR inquiry_ref LIKE ?${n})`); }
   const sql = `SELECT ${COLS} FROM reservations` + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY date ASC, start_min ASC, id ASC LIMIT 3000";
   try {
-    const { results } = await env.DB.prepare(sql).bind(...args).all();
-    const external = code ? null : await loadSpacecloudForDisplay(env, { from: isIsoDate(from) ? from : undefined, to: isIsoDate(to) ? to : undefined });
+    const [{ results }, external] = await Promise.all([
+      env.DB.prepare(sql).bind(...args).all(),
+      code ? null : loadCalendarDisplay(env, { from: isIsoDate(from) ? from : undefined, to: isIsoDate(to) ? to : undefined, waitUntil })
+    ]);
     const rows = mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : [],
       { info: external?.info, sourceRows: external?.results || [] });
     return json({ ok: true, today: kstToday(), results: await adminReservationSyncStatus(env,await attachCalendarPayments(env, rows)), spacecloud: external && external.info });

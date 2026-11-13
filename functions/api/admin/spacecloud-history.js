@@ -4,6 +4,7 @@ import { sha256Hex } from '../../_lib/auth.js';
 import { readFeedConfig } from '../../_lib/spacecloud.js';
 import { ensureCalendarHistory, historicalInterval } from '../../_lib/spacecloud-history.js';
 import { ensureSpacecloudSales } from '../../_lib/spacecloud-sales.js';
+import { invalidateCalendarDisplay } from '../../_lib/spacecloud-display.js';
 
 // One-time host-center backfill. It adds occupancy only; paid sales remain in spacecloud_sales.
 export async function onRequestPost({ request, env }) {
@@ -53,6 +54,7 @@ export async function onRequestPost({ request, env }) {
   if (body.action === 'commit') {
     if (rows.some(r => r.state === 'blocked')) return json({ ok:false, message:'확인이 필요한 예약이 있습니다. 수정 후 다시 확인해 주세요.', rows }, 409);
     for (let i = 0; i < statements.length; i += 100) await env.DB.batch(statements.slice(i, i + 100));
+    if (statements.length) await invalidateCalendarDisplay(env);
   }
   return json({ ok:true, rows, new_count:rows.filter(r => r.state === 'new').length,
     message:body.action === 'commit' ? '과거 예약 시간표에 반영했습니다. 매출은 중복으로 합산하지 않습니다.' : undefined });

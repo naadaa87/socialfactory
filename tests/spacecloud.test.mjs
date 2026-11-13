@@ -12,6 +12,7 @@ import { onRequestPost as importHistory } from '../functions/api/admin/spaceclou
 import { prepareBookings, applyBookingPayment } from '../functions/_lib/booking.js';
 import { onRequestGet as getBoard } from '../functions/api/admin/reservation-board.js';
 import { onRequestGet as getSales } from '../functions/api/admin/sales.js';
+import { loadCalendarDisplay, publishCalendarDisplay, refreshCalendarDisplay } from '../functions/_lib/spacecloud-display.js';
 
 const url = id => `https://api.spacecloud.kr/partner/reservations/ical?product_id=${id}&ical_uid=exampletoken`;
 const event = (uid = 'one', start = '20261024T230000', end = '20261025T010000', extra = '') =>
@@ -85,6 +86,76 @@ test('snapshots are idempotent; cache TTL, failed/malformed fetch, disappearance
   assert.equal(failed.results.length,1);assert(failed.info.rooms[0].error);assert.equal(failed.info.rooms[0].updated_at,1002000);
   fails=false;body='broken';assert.equal((await loadSpacecloud(e,{...options,force:true,now:1004000})).results.length,1);
   body=calendar();const empty=await loadSpacecloud(e,{...options,force:true,now:1005000});assert.equal(empty.results.length,0);assert.equal(empty.info.rooms[0].error,null);
+});
+test('warm monthly reads use at most five read queries, no upstream calls, and current payment/local records',async()=>{
+ const e=env(),original=globalThis.fetch;e.SPACECLOUD_SYNC_ENABLED='true';
+ globalThis.fetch=async()=>response(calendar(event('oct','20261024T100000','20261024T120000'),event('nov','20261124T100000','20261124T120000')));
+ try {
+  await loadSpacecloud(e,{force:true});
+  e.sqlite.prepare("INSERT INTO spacecloud_sales(reservation_id,use_date,end_date,paid_at,amount,refund_amount,space) VALUES('123','2026-10-24','2026-11-24','2026-10-20',40000,0,'r1')").run();
+  const request=new Request('https://test.invalid/api/admin/reservations?from=2026-11-01&to=2026-11-30',{headers});
+  await getReservations({env:e,request});
+  e.sqlite.prepare("UPDATE spacecloud_sales SET amount=55000 WHERE reservation_id='123'").run();
+  e.sqlite.prepare("INSERT INTO reservations(code,space,date,start_min,end_min,customer_name,amount,pay_method,pay_status) VALUES('R-new','r5','2026-11-26',600,720,'직접 등록',12000,'bank_other','paid')").run();
+  let fetches=0;globalThis.fetch=async()=>{fetches++;throw Error('upstream unavailable');};
+  const statements=[],prepare=e.DB.prepare.bind(e.DB);e.DB.prepare=sql=>{statements.push(sql);return prepare(sql);};
+  const result=await(await getReservations({env:e,request})).json();
+  assert.equal(result.ok,true);assert.equal(fetches,0);assert.equal(result.results.length,2);
+  assert.equal(result.results.find(r=>r.external).payment.amount,55000);
+  assert.equal(result.results.find(r=>r.code==='R-new').amount,12000);
+  assert(statements.length<=5,JSON.stringify(statements));assert(statements.every(sql=>/^SELECT\b/.test(sql)));
+  assert(!statements.some(sql=>/calendar_history|reconcile/i.test(sql)));
+  assert.deepEqual((await loadCalendarDisplay(e,{from:'2026-10-01',to:'2026-10-31'})).results.map(r=>r.date),['2026-10-24']);
+ } finally {globalThis.fetch=original;e.sqlite.close();}
+});
+test('stale display is returned while an upstream refresh runs in the background',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-13T00:00:00Z')});
+ const e=env(),original=globalThis.fetch;
+ globalThis.fetch=async()=>response(calendar(event('slow','20261114T100000','20261114T120000')));
+ try {
+  await loadSpacecloud(e,{force:true});t.mock.timers.tick(20000);
+  let release,markStarted;const started=new Promise(resolve=>{markStarted=resolve;});
+  globalThis.fetch=()=>new Promise(resolve=>{release=()=>resolve(response(calendar()));markStarted();});
+  const jobs=[];const current=await loadCalendarDisplay(e,{waitUntil:job=>jobs.push(job)});
+  assert.equal(current.results.length,1);assert.equal(jobs.length,1);
+  await started;release();await Promise.all(jobs);
+  assert.equal((await loadCalendarDisplay(e)).results.length,0);
+ } finally {globalThis.fetch=original;e.sqlite.close();}
+});
+test('completed source audits immediately publish moved and cancelled slots without waiting for iCal',async()=>{
+ const {beginHostCalendar}=await import('../functions/_lib/spacecloud-host-calendar.js');
+ const {onRequestPost:sync}=await import('../functions/api/internal/spacecloud-calendar.js');
+ const e=env(Object.fromEntries([1,2,3,4,5].map(n=>['r'+n,url(n)]))),original=globalThis.fetch;
+ e.SPACECLOUD_WORKER_TOKEN='test-worker-token-longer-than-thirty-two';
+ globalThis.fetch=async u=>response(u===url(1)?calendar(event('manual','20261114T100000','20261114T120000').replace(/URL:[^\r]+\r\n/,'')):calendar());
+ try {
+  await loadSpacecloud(e,{force:true});const plan=await beginHostCalendar(e);
+  let calls=0;globalThis.fetch=async()=>{calls++;throw Error('must use collected snapshots');};
+  const snapshots=plan.scopes.map(s=>({...s,events:s.space==='r2'&&s.month==='2026-11'?[{id:'55',date:'2026-11-15',start_min:840,end_min:960,title:'옮긴 최신 일정'}]:[]}));
+  const result=await sync({env:e,request:new Request('https://test.invalid/api/internal/spacecloud-calendar',{method:'POST',headers:{authorization:'Bearer '+e.SPACECLOUD_WORKER_TOKEN},body:JSON.stringify({action:'sync',observed_at:plan.observed_at,complete:true,snapshots})})});
+  assert.equal(result.status,200);assert.equal(calls,0);
+  const display=await loadCalendarDisplay(e);
+  assert.deepEqual(display.results.map(r=>[r.space,r.date,r.customer_name]),[['r2','2026-11-15','옮긴 최신 일정']]);
+  await publishCalendarDisplay(e,{results:[],info:{configured:true,rooms:[]}},await readFeedConfig(e),Date.now()+1000);
+  assert.equal((await loadCalendarDisplay(e)).results.length,1);
+  await publishCalendarDisplay(e,{results:[],info:{configured:false,rooms:[]}},await readFeedConfig(e),1);
+  assert.equal((await loadCalendarDisplay(e)).results.length,1);
+ } finally {globalThis.fetch=original;e.sqlite.close();}
+});
+test('changed feed configuration never serves an old projection and explicit refresh runs after older work',async()=>{
+ const e=env(),original=globalThis.fetch;
+ globalThis.fetch=async()=>response(calendar(event('old','20261114T100000','20261114T120000')));
+ try {
+  await loadSpacecloud(e,{force:true});await saveFeedConfig(e,{r1:url(99)});
+  globalThis.fetch=async u=>{assert.equal(u,url(99));return response(calendar());};
+  assert.equal((await loadCalendarDisplay(e)).results.length,0);
+  let release,started;const ready=new Promise(resolve=>{started=resolve;});
+  const first=refreshCalendarDisplay(e,{force:true,fetcher:()=>new Promise(resolve=>{release=()=>resolve(response(calendar()));started();})});
+  await ready;
+  const latest=refreshCalendarDisplay(e,{force:true,fetcher:async()=>response(calendar(event('latest','20261115T100000','20261115T120000')))});
+  release();await Promise.all([first,latest]);
+  assert.deepEqual((await loadCalendarDisplay(e)).results.map(r=>r.date),['2026-11-15']);
+ } finally {globalThis.fetch=original;e.sqlite.close();}
 });
 test('per-room feed failures preserve other rooms and changed URLs cannot expose old-room snapshots', async()=>{
  const e=env({r1:url(1),r2:url(2)});const fetcher=async u=>u===url(1)?response(calendar(event('same','20261024T100000','20261024T110000'))):Promise.reject(new Error('offline'));

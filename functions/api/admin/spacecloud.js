@@ -4,6 +4,7 @@ import { adminGate } from '../../_lib/admin.js';
 import { loadSpacecloud, readFeedConfig, saveFeedConfig } from '../../_lib/spacecloud.js';
 import { requestHostCalendar, hostCalendarSummary } from '../../_lib/spacecloud-host-calendar.js';
 import { cloudRunnerOrigin } from '../../_lib/spacecloud-runner.js';
+import { refreshCalendarDisplay } from '../../_lib/spacecloud-display.js';
 
 export async function onRequestGet({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
@@ -37,6 +38,6 @@ export async function onRequestPost({ request, env }) {
         headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{}'});
     } catch { /* Keep the queued audit and last verified calendar. */ }
   }
-  const data = await loadSpacecloud(env, { force: true });
+  const data = await refreshCalendarDisplay(env, { force: true });
   return json({ ok: !data.info.error, spacecloud: data.info }, data.info.error ? 503 : 200);
 }

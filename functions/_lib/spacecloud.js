@@ -1,6 +1,6 @@
 /** SpaceCloud iCal calendars. Feed URLs stay in SPACECLOUD_ICAL_FEEDS (server secret).
  * Snapshots are separate from reservations: no customer/payment data is invented.
- * Refresh on authenticated reads (5 minute cache) or explicit admin refresh.
+ * The server collector refreshes snapshots; admin calendar reads use a prepared display projection.
  */
 import { sha256Hex } from './auth.js';
 import { historicalCalendarRows, rememberFeedEvents, reconcileCalendarHistory } from './spacecloud-history.js';
@@ -8,6 +8,7 @@ import { calendarEventIdentity } from './spacecloud-identity.js';
 import { isCalendarLinked, reconcileCalendarLinks } from './spacecloud-links.js';
 import { bookingSegments } from './booking-spacecloud-sync.js';
 import { loadHostCalendar } from './spacecloud-host-calendar.js';
+import { publishCalendarDisplay, invalidateCalendarDisplay } from './spacecloud-display.js';
 
 const TTL = 15 * 1000;
 const DAY = 86400000, KST = 9 * 3600000;
@@ -41,8 +42,13 @@ async function configKey(env, source) {
   return crypto.subtle.importKey('raw', hash, 'AES-GCM', false, ['encrypt', 'decrypt']);
 }
 export async function readFeedConfig(env) {
-  await env.DB.prepare(SETTINGS).run();
-  const row = await env.DB.prepare('SELECT payload FROM spacecloud_calendar_settings WHERE id = 1').first();
+  let row;
+  try { row = await env.DB.prepare('SELECT payload FROM spacecloud_calendar_settings WHERE id = 1').first(); }
+  catch (error) {
+    if (!/no such table/i.test(error.message)) throw error;
+    await env.DB.prepare(SETTINGS).run();
+    row = await env.DB.prepare('SELECT payload FROM spacecloud_calendar_settings WHERE id = 1').first();
+  }
   if (row) {
     const data = JSON.parse(row.payload);
     if (data.v !== 1) throw new Error('invalid-config');
@@ -170,11 +176,11 @@ async function readBody(response) {
   return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 }
 
-async function refreshRoom(env, feed, force, fetcher, now) {
+async function refreshRoom(env, feed, force, fetcher, now, cacheOnly = false) {
   const hash = await sha256Hex(feed.url);
   let cached = await env.DB.prepare('SELECT * FROM spacecloud_calendar_cache WHERE space = ?1').bind(feed.space).first();
   if (!cached || cached.config_hash !== hash) cached = { events_json: '[]', updated_at: null, checked_at: 0 };
-  if (force || now - cached.checked_at >= TTL) {
+  if (!cacheOnly && (force || now - cached.checked_at >= TTL)) {
     const key = feed.space + ':' + hash;
     if (pending.has(key)) return pending.get(key);
     const task = (async () => {
@@ -213,14 +219,15 @@ async function refreshRoom(env, feed, force, fetcher, now) {
   return cached;
 }
 
-export async function loadSpacecloud(env, { force = false, fetcher = fetch, now = Date.now(), from, to } = {}) {
+export async function loadSpacecloud(env, { force = false, fetcher = fetch, now = Date.now(), from, to, cacheOnly = false } = {}) {
+  const builtAt = Date.now();
   let feeds;
   try { feeds = await readFeedConfig(env); } catch { return { results: [], info: { configured: false, error: '캘린더 연결 설정을 확인해 주세요.', rooms: [] } }; }
   if (!feeds.length) return { results: [], info: { configured: false, rooms: [] } };
   try {
     await env.DB.prepare(TABLE).run();
     const snapshots = await Promise.all(feeds.map(async feed => {
-      const cached = await refreshRoom(env, feed, force, fetcher, now);
+      const cached = await refreshRoom(env, feed, force, fetcher, now, cacheOnly);
       const events = JSON.parse(cached.events_json);
       return { events, hash:await sha256Hex(feed.url), rows: await calendarRows(events, feed.space, cached.updated_at, { from, to }), room: {
         space: feed.space, count: events.length, checked_at: cached.checked_at, updated_at: cached.updated_at,
@@ -234,8 +241,19 @@ export async function loadSpacecloud(env, { force = false, fetcher = fetch, now 
       await Promise.all(feeds.map(async f => ({ space:f.space, hash:await sha256Hex(f.url) }))), current, now, { from, to });
     const linkedSnapshots = snapshots.map(s=>({...s,events:s.events.concat(verified.events.get(s.room.space)||[])}));
     const removed = await reconcileCalendarLinks(env, linkedSnapshots, now, superseded.concat(verified.removed));
-    return { results: current.concat(history).filter(r=>!excluded.has(r.code)), info: { configured: true, rooms: snapshots.map(x => x.room), host_calendar:verified.summary,
+    const data = { results: current.concat(history).filter(r=>!excluded.has(r.code)), info: { configured: true, rooms: snapshots.map(x => x.room), host_calendar:verified.summary,
       removed_linked_codes: removed, refresh_minutes: TTL / 60000 } };
+    try {
+      if (!from && !to) {
+        const copies = await websiteHoldCalendarCodes(env, data.results);
+        await publishCalendarDisplay(env, { ...data, results: data.results.filter(row => !copies.has(row.code)) }, feeds, builtAt);
+      } else if (!cacheOnly && (force || snapshots.some(s => s.room.checked_at === now))) {
+        // A bounded availability check can refresh a room outside this range.
+        // Never leave a previously published complete view showing its old slots.
+        await invalidateCalendarDisplay(env);
+      }
+    } catch { console.error('calendar-display-publish'); }
+    return data;
   } catch { return { results: [], info: { configured: true, error: '외부 일정을 읽지 못했습니다. 다시 불러와 주세요.', rooms: [] } }; }
 }
 
