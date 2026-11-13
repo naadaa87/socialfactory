@@ -91,7 +91,7 @@ export async function finishHostCalendar(env,body){
   const identity=calendarEventIdentity(c.event);
   if(scope.events.some(e=>calendarEventIdentity(interval(e))===identity))continue;
   const id=paidId(c.event);
-  if(id && (protectedPaid.has(id)||!scope.paid_ids || scope.paid_ids.includes(id)&&!scope.events.some(e=>e.reservation_id===id)))continue;
+  if(id && (protectedPaid.has(id)||!scope.paid_ids))continue;
   removed.set(c.space+'|'+identity,c);
  }
  for(const {space,hash,event} of removed.values())writes.push(env.DB.prepare(`INSERT INTO spacecloud_host_calendar_removed(space,identity,config_hash,checked_at,event_json) VALUES(?1,?2,?3,?4,?5)

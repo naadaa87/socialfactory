@@ -801,3 +801,12 @@ test('a paid booking with observed but unsupported multi-day geometry is retaine
  await finishHostCalendar(e,{observed_at:now,complete:true,snapshots:plan.scopes.map(s=>({...s,paid_ids:s.space==='r2'&&s.month==='2026-11'?['123']:[],events:[]}))});
  const after=await loadSpacecloud(e,{fetcher,now:now+1000});assert.equal(after.results.length,1);assert.equal(after.results[0].code,first.results[0].code);e.sqlite.close();
 });
+
+test('next-month padding does not keep the previous date when a paid booking moves across the month boundary',async()=>{
+ const {beginHostCalendar,finishHostCalendar}=await import('../functions/_lib/spacecloud-host-calendar.js');
+ const e=env(Object.fromEntries([1,2,3,4,5].map(n=>['r'+n,url(n)]))),now=Date.parse('2026-11-13T04:00:00Z');
+ const fetcher=async u=>response(u===url(1)?calendar(event('old','20261129T100000','20261129T120000')):calendar());
+ await loadSpacecloud(e,{fetcher,now});const plan=await beginHostCalendar(e,{now});
+ await finishHostCalendar(e,{observed_at:now,complete:true,snapshots:plan.scopes.map(s=>({...s,paid_ids:s.space==='r1'?['123']:[],events:s.space==='r1'&&s.month==='2026-12'?[{id:'123',date:'2026-12-01',start_min:600,end_min:720,title:'예약자*',kind:'reservation'}]:[]}))});
+ const result=await loadSpacecloud(e,{fetcher,force:true,now:now+1000});assert.deepEqual(result.results.map(r=>r.date),['2026-12-01']);e.sqlite.close();
+});
