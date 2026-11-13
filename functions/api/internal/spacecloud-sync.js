@@ -4,6 +4,7 @@ import { prepareBookings } from '../../_lib/booking.js';
 import { workerAuthorized,syncEnabled,claimSyncJob,finishSyncJob,heartbeatSyncJob,saveWorkerCalendar } from '../../_lib/booking-spacecloud-sync.js';
 import { sweepUnpaidBookings } from '../../_lib/booking-checkout.js';
 import { loadSpacecloud } from '../../_lib/spacecloud.js';
+import { refreshCalendarDisplay } from '../../_lib/spacecloud-display.js';
 
 import { scheduleBookingNotices } from '../../_lib/booking-notify.js';
 
@@ -24,7 +25,7 @@ export async function onRequestPost({request,env,waitUntil}) {
     // even when the browser is logged out, quarantined or out of usage allowance.
     if(body?.action==='maintenance') {
       noticeOptions={};
-      await sweepUnpaidBookings(env);await loadSpacecloud(env);
+      await sweepUnpaidBookings(env);await refreshCalendarDisplay(env);
       const adminSync=await reconcileAdminReservations(env);
       return json({ok:true,maintenance:true,admin_sync:adminSync});
     }

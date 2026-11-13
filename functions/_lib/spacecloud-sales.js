@@ -3,17 +3,21 @@ import { isCalendarLinked } from './spacecloud-links.js';
 export const SAME_DAY_REVIEW = '같은 이용일의 기존 스페이스클라우드 매출 확인 필요';
 
 // Settlement imports are financial records, separate from room occupancy.
+const ready = new WeakMap();
 export async function ensureSpacecloudSales(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS spacecloud_sales (
+  if (!ready.has(env.DB)) {
+    const task = env.DB.batch([env.DB.prepare(`CREATE TABLE IF NOT EXISTS spacecloud_sales (
     reservation_id TEXT PRIMARY KEY, use_date TEXT NOT NULL, end_date TEXT NOT NULL,
     paid_at TEXT NOT NULL, amount INTEGER NOT NULL, refund_amount INTEGER NOT NULL,
     linked_code TEXT, space TEXT NOT NULL, sync_seen INTEGER NOT NULL DEFAULT 0, imported_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours'))
-  )`).run();
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS reservation_payment_relinks (
+  )`),env.DB.prepare(`CREATE TABLE IF NOT EXISTS reservation_payment_relinks (
     original_code TEXT PRIMARY KEY, replacement_code TEXT NOT NULL,
     note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours')),
     CHECK(original_code<>replacement_code)
-  )`).run();
+  )`)]);
+    ready.set(env.DB,task);task.catch(() => ready.delete(env.DB));
+  }
+  await ready.get(env.DB);
 }
 
 // Calendar links are the only shared key with the host payment report.
