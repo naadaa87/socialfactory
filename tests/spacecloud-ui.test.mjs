@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 function harness(fetchImpl) {
   const html = readFileSync(new URL('../admin.html', import.meta.url), 'utf8');
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
-  const nodes = new Map(), intervals=[];
+  const nodes = new Map(), intervals=[], timers=new Map();let timerId=0;
   const node = key => {
     if (nodes.has(key)) return nodes.get(key);
     const x = { innerHTML: '', textContent: '', value: '', hidden: true, checked: false, disabled: false, dataset: {},
@@ -25,8 +25,8 @@ function harness(fetchImpl) {
   code=code.replace(/  api\("\/api\/admin\/session"\)\.then\(showApp\)\.catch\([^\n]+\);/,'');
   code=code.replace(/\}\)\(\);\s*$/, 'window.testHooks={resRow,renderExternalDetail,renderSpacecloudStatus,net,BD,loadBoard,drawDay,drawMonth,SL,drawSales,pollScheduleUpdates,setPollView:view=>{CUR=view;app.hidden=false;}};})();');
   vm.runInNewContext(code,{window,document,sessionStorage:{removeItem(){}},location:{hash:'',pathname:'/admin'},history:{replaceState(){}},
-    setTimeout(){},clearTimeout(){},setInterval(fn,ms){intervals.push({fn,ms});},navigator:{},console,fetch:fetchImpl,AbortController});
-  return {hooks:window.testHooks,nodes,statuses,intervals,document};
+    setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},setInterval(fn,ms){intervals.push({fn,ms});},navigator:{},console,fetch:fetchImpl,AbortController});
+  return {hooks:window.testHooks,nodes,statuses,intervals,document,timers};
 }
 const slot={external:true,code:'SC1-123',status:'confirmed',space:'r1',date:'2026-10-24',start_min:600,end_min:720,
  customer_name:'<img src=x onerror=alert(1)>',phone:'',people:null,purpose:'',channel:'spacecloud',amount:null,
@@ -68,6 +68,40 @@ test('rapid month navigation aborts the old request and ignores its late result'
  assert(nodes.get('#bd-sum-title').textContent.includes('11월'));
  assert.equal(hooks.BD.items.length,0);
 });
+test('polling and focus share a slow initial month request without cancelling it',async()=>{
+ const requests=[];
+ const h=harness((url,opt)=>{
+  if(url.includes('version=1'))return Promise.resolve({ok:true,json:async()=>({ok:true,calendar:{last_success:1,status:'success'}})});
+  return new Promise(resolve=>requests.push({opt,resolve}));
+ });
+ h.hooks.setPollView('board');h.hooks.BD.mode='month';h.hooks.BD.date='2026-11-13';
+ const initial=h.hooks.loadBoard();
+ const polled=h.hooks.pollScheduleUpdates(true);await new Promise(setImmediate);
+ assert.equal(requests.length,1);assert.equal(requests[0].opt.signal.aborted,false);
+ h.hooks.BD.date='2026-11-01';assert.equal(h.hooks.loadBoard(),initial);
+ requests[0].resolve({ok:true,json:async()=>({ok:true,results:[{...slot,date:'2026-11-13'}]})});
+ await Promise.all([initial,polled]);
+ assert(h.nodes.get('#bd-month').innerHTML.includes('data-day="2026-11-13"'));
+ assert(!h.nodes.get('#bd-month').innerHTML.includes('불러오는 중'));
+ assert.equal(h.hooks.BD.pending,null);assert.equal(h.timers.size,0);
+});
+test('a hung monthly request times out with a retry and late data cannot replace a retry',async()=>{
+ const requests=[];const h=harness((url,opt)=>new Promise(resolve=>requests.push({opt,resolve})));
+ h.hooks.BD.mode='month';h.hooks.BD.date='2026-11-01';
+ const initial=h.hooks.loadBoard();[...h.timers.values()].find(t=>t.ms===25000).fn();await initial;
+ assert(requests[0].opt.signal.aborted);assert(h.nodes.get('#bd-month').innerHTML.includes('다시 불러오기'));
+ assert(!h.nodes.get('#bd-month').innerHTML.includes('불러오는 중'));assert.equal(h.hooks.BD.pending,null);
+ const retry=h.hooks.loadBoard();requests[1].resolve({ok:true,json:async()=>({ok:true,results:[]})});await retry;
+ requests[0].resolve({ok:true,json:async()=>({ok:true,results:[slot]})});await new Promise(setImmediate);
+ assert.equal(h.hooks.BD.items.length,0);assert(h.nodes.get('#bd-month').innerHTML.includes('data-day="2026-11-30"'));
+});
+test('background timeout keeps the already displayed month available',async()=>{
+ let hung=false;const h=harness(()=>hung?new Promise(()=>{}):Promise.resolve({ok:true,json:async()=>({ok:true,results:[]})}));
+ h.hooks.BD.mode='month';h.hooks.BD.date='2026-11-01';await h.hooks.loadBoard();
+ const calendar=h.nodes.get('#bd-month').innerHTML;hung=true;
+ const refresh=h.hooks.loadBoard();[...h.timers.values()].find(t=>t.ms===25000).fn();await refresh;
+ assert.equal(h.nodes.get('#bd-month').innerHTML,calendar);assert.equal(h.hooks.BD.pending,null);
+});
 test('source errors show stale-data warnings in every visible status line without exposing feed tokens',()=>{
  const {hooks,statuses}=harness();hooks.renderSpacecloudStatus({configured:true,rooms:[{space:'r1',count:1,updated_at:1,error:'offline',stale:true}]});
  assert(statuses.every(n=>n.textContent.includes('1번룸') && n.textContent.includes('offline')));assert(statuses.every(n=>n.textContent.includes('자동 수집 금액은 매출 화면에서 한 번만 집계')));
@@ -99,4 +133,11 @@ test('five-second checks refresh only changed schedules and never duplicate an i
  h.document.hidden=true;const count=calls.length;h.hooks.pollScheduleUpdates(false);assert.equal(calls.length,count);
  h.document.hidden=false;const focused=h.hooks.pollScheduleUpdates(true);release();await focused;
  assert.equal(calls.filter(u=>u.includes('/reservations?')).length,3);
+});
+test('a hung source-version check releases the polling lock after timeout',async()=>{
+ let calls=0;const h=harness(()=>{calls++;return new Promise(()=>{});});
+ h.hooks.setPollView('board');
+ const check=h.hooks.pollScheduleUpdates(false);
+ [...h.timers.values()].find(t=>t.ms===20000).fn();await check;
+ h.hooks.pollScheduleUpdates(false);assert.equal(calls,2);
 });
