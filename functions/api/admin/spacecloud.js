@@ -10,7 +10,12 @@ export async function onRequestGet({ request, env }) {
   try {
     const feeds = await readFeedConfig(env);
     const data = await loadSpacecloud(env);
-    return json({ ok: true, rooms: feeds.map(f => f.space), spacecloud: data.info });
+    let audit;
+    if(new URL(request.url).searchParams.get('audit')==='1') {
+      const rows=(await env.DB.prepare('SELECT space,event_json,checked_at FROM spacecloud_host_calendar_removed ORDER BY space,checked_at DESC').all()).results||[];
+      audit=rows.map(r=>{const e=JSON.parse(r.event_json);return {space:r.space,title:e.title,start:e.start,end:e.end,checked_at:r.checked_at};});
+    }
+    return json({ ok: true, rooms: feeds.map(f => f.space), spacecloud: data.info, ...(audit?{audit_removed:audit}:{}) });
   } catch { return json({ ok: false, message: '캘린더 연결 설정을 읽지 못했습니다.' }, 503); }
 }
 export async function onRequestPost({ request, env }) {
