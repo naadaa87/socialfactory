@@ -3,7 +3,7 @@ import {ensurePayapp} from './payapp.js';
 import {kstNow} from './admin.js';
 import {orderToken} from './shop.js';
 import {getGuest,ownsGuestOrder} from './guest-orders.js';
-export const PARKING_POLICY='sf-parking-20261106-24h-v2';
+export const PARKING_POLICY='sf-parking-20261114-instant-v3';
 export const TICKETS={'1h':{label:'1시간권',price:4000,hours:1},'2h':{label:'2시간권',price:8000,hours:2},'3h':{label:'3시간권',price:12000,hours:3},daily:{label:'일일권',price:30000,hours:null}};
 export const PARKING_SCHEMA=[
  `CREATE TABLE IF NOT EXISTS parking_settings(id INTEGER PRIMARY KEY CHECK(id=1),value TEXT NOT NULL)`,
@@ -41,7 +41,7 @@ export async function parkingSettings(env){const row=await env.DB.prepare('SELEC
 export const registrationDetails=text=>String(text||'').replace('결제 후 입차 알림과 운영자의 등록이 필요합니다.','결제 후 구매 내역에서 차량별 입차 등록을 요청해 주세요. 주말·공휴일·야간에도 자동 등록합니다.').replace('야간·운영시간 외 등록·출차는 구매 전에 문의해 주세요.','할인 적용 완료를 확인하고 출차해 주세요.');
 export const parkingPolicyTag=s=>sha256Hex(JSON.stringify([PARKING_POLICY,'24/7',s.process_minutes,s.daily_enabled,registrationDetails(s.daily_details),TICKETS]));
 export const hhmm=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
-export const operationText=s=>'자동 등록: 매일 24시간 (주말·공휴일·야간 포함). 입차 요청 후 최대 '+s.process_minutes+'분 이내 처리합니다.';
+export const operationText=s=>'자동 등록: 매일 24시간 (주말·공휴일·야간 포함). 결제 승인 후 바로 입차를 확인해 등록하며, 미입차 차량은 1분 간격으로 다시 확인합니다.';
 export function validDate(s){try{return /^\d{4}-\d{2}-\d{2}$/.test(s||'') && new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;}catch{return false}}
 // 과거 수동 운영 시간·휴무일 설정은 보존하지만 자동 등록을 제한하지 않습니다.
 export function openDate(s){return validDate(s);}
@@ -75,7 +75,7 @@ export function validateParkingVehicles(b,s){
 export const PARKING_JOIN=`SELECT p.*,o.id AS order_id,o.status AS payment_status,o.product_id,o.product_name,o.amount AS payment_amount,p.vehicle_price AS amount,o.buyer_name,o.buyer_phone,o.member_id,o.paid_at,o.test_mode,pg.refunded_amount,pg.payurl FROM parking_orders p JOIN orders o ON o.oid=p.payment_oid JOIN payapp_payments pg ON pg.oid=p.payment_oid`;
 export async function parkingOrder(env,oid){return env.DB.prepare(PARKING_JOIN+' WHERE p.oid=?').bind(oid).first();}
 export async function parkingItems(env,oid){const {results}=await env.DB.prepare(PARKING_JOIN+' WHERE p.payment_oid=? ORDER BY p.created_at,p.rowid').bind(oid).all();return results;}
-export const PARKING_STATUS={waiting:'입차 요청 대기',requested:'입차 요청 접수',processing:'등록 처리 중',applied:'할인 적용 완료',issue:'등록 확인 필요'};
+export const PARKING_STATUS={waiting:'아마노 입차 확인 대기',requested:'입차 요청 접수',processing:'등록 처리 중',applied:'할인 적용 완료',issue:'등록 확인 필요'};
 export function publicParking(p,s=defaults){let terms={};try{terms=JSON.parse(p.terms)}catch{}return {oid:p.oid,paymentOid:p.payment_oid,ticket:p.ticket,ticketLabel:TICKETS[p.ticket]?.label,plate:p.plate,date:p.visit_date,status:p.status,statusLabel:PARKING_STATUS[p.status],paymentStatus:p.payment_status,amount:p.amount,refundedAmount:p.payment_amount===p.amount?p.refunded_amount:p.refunded_amount>=p.payment_amount?p.amount:0,paymentRefundedAmount:p.refunded_amount,refundHold:p.refunded_amount>0&&p.refunded_amount<p.payment_amount,arrivalAt:p.arrival_at,appliedAt:p.applied_at,requestedAt:p.request_at,reviewedAt:p.reviewed_at,version:p.version,operation:operationText(s),dailyDetails:registrationDetails(terms.dailyDetails),createdAt:p.created_at};}
 export async function parkingAccess(request,env,oid,token){const p=await parkingOrder(env,oid);if(!p)return false;const o=await env.DB.prepare('SELECT * FROM orders WHERE oid=?').bind(p.payment_oid).first();if(!o)return false;const m=await getMember(request,env);return safeEqual(String(token||''),await orderToken(env,p.payment_oid))||safeEqual(String(token||''),await orderToken(env,oid))||!!(m&&m.id===o.member_id)||ownsGuestOrder(await getGuest(request,env),o);}
 export function eventStmt(env,p,kind,{version=p.version,refund=p.refunded_amount||0,operation=null}={}){const key=p.oid+':'+kind+':'+(kind==='refund'?refund:kind==='paid'||kind==='arrival'?0:version);return env.DB.prepare(`INSERT OR IGNORE INTO parking_events(event_key,oid,kind,version,refund_amount) SELECT ?,?,?,?,? FROM parking_orders p JOIN orders o ON o.oid=p.payment_oid JOIN payapp_payments pg ON pg.oid=p.payment_oid WHERE p.oid=? AND p.version=? AND (? IS NULL OR p.operation_key=?) AND o.test_mode=0 AND (CASE WHEN ?='refund' THEN pg.refunded_amount>=? AND ?>0 AND (p.vehicle_price=o.amount OR pg.refunded_amount>=o.amount) ELSE o.status='paid' AND o.paid_at IS NOT NULL AND o.tid=pg.mul_no AND pg.refunded_amount=0 END)`).bind(key,p.oid,kind,version,refund,p.oid,version,operation,operation,kind,refund,refund);}
@@ -95,14 +95,14 @@ export async function parkingAction(env,p,b,admin=false){
   update=sql(`UPDATE parking_orders SET request_at=?,request_reason=?,reviewed_at=NULL,version=?,updated_at=? WHERE oid=? AND version=? AND ${paid}`,now,note,version,now,p.oid,p.version);
  }else if(admin&&action==='claim'){
   const at=String(b.entryAt||'').replace('T',' ').slice(0,16)+':00',entry=clean(b.entryId,80);
-  if(!p.arrival_at||!['requested','issue'].includes(p.status)||p.visit_date!==now.slice(0,10)||!s.confirmed)return {error:'이용일 당일 접수된 입차 요청만 처리해 주세요.',status:409};
+  if(!['requested','issue'].includes(p.status)||p.visit_date!==now.slice(0,10)||!s.confirmed)return {error:'이용일 당일 접수된 입차 요청만 처리해 주세요.',status:409};
   if(plateOf(b.plateConfirm)!==p.plate||b.confirmEntry!==true||!entry||!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00$/.test(at)||!validDate(at.slice(0,10))||at.slice(0,10)!==p.visit_date||at>now)return {error:'아마노 입차번호·입차시각·차량번호를 확인해 주세요.',status:400};
-  update=sql(`UPDATE parking_orders SET status='processing',entry_id=?,entry_at=?,version=?,memo=?,updated_at=? WHERE oid=? AND version=? AND (request_at IS NULL OR reviewed_at IS NOT NULL) AND ${paid}`,entry,at,version,clean(b.memo,500),now,p.oid,p.version);
+  update=sql(`UPDATE parking_orders SET status='processing',arrival_at=COALESCE(arrival_at,?),entry_id=?,entry_at=?,version=?,memo=?,updated_at=? WHERE oid=? AND version=? AND (request_at IS NULL OR reviewed_at IS NOT NULL) AND ${paid}`,now,entry,at,version,clean(b.memo,500),now,p.oid,p.version);
  }else if(admin&&action==='complete'){
   if(p.status!=='processing'||b.confirmApplied!==true||!p.entry_id||!p.entry_at)return {error:'아마노에서 실제 할인 적용을 완료했는지 확인해 주세요.',status:409};
   update=sql(`UPDATE parking_orders SET status='applied',applied_at=?,version=?,memo=?,updated_at=? WHERE oid=? AND version=? AND status='processing' AND (request_at IS NULL OR reviewed_at IS NOT NULL) AND ${paid}`,now,version,clean(b.memo,500),now,p.oid,p.version);event='applied';
  }else if(admin&&action==='issue'){
-  note=clean(b.memo,500);if(!note||!p.arrival_at||p.status==='applied')return {error:'확인이 필요한 사유를 입력해 주세요. 이미 적용된 주문은 되돌리지 않습니다.',status:400};
+  note=clean(b.memo,500);if(!note||p.status==='applied')return {error:'확인이 필요한 사유를 입력해 주세요. 이미 적용된 주문은 되돌리지 않습니다.',status:400};
   update=sql(`UPDATE parking_orders SET status='issue',memo=?,version=?,updated_at=? WHERE oid=? AND version=? AND ${paid}`,note,version,now,p.oid,p.version);
  }else if(admin&&action==='review'){
   note=clean(b.memo,500);if(!p.request_at||p.reviewed_at||!note)return {error:'문의 처리 메모를 입력해 주세요.',status:400};

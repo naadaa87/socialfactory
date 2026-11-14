@@ -21,7 +21,12 @@ export function amanoStore(dir,secret){
  return {save,read,publicKey:()=>readFileSync(join(dir,'setup-public.pem'),'utf8'),decrypt:payload=>JSON.parse(privateDecrypt({key:readFileSync(keyPath),oaepHash:'sha256',padding:constants.RSA_PKCS1_OAEP_PADDING},Buffer.from(payload,'base64')).toString('utf8'))};
 }
 export async function amanoRequest(request,env,store,clientFactory=c=>new AmanoClient(c)){
- if(new URL(request.url).pathname==='/v1/socialfactory-amano')return socialfactoryControl(request,env,store,clientFactory,()=>cycleBusy);
+ if(new URL(request.url).pathname==='/v1/socialfactory-amano')return socialfactoryControl(request,env,store,clientFactory,()=>cycleBusy,async paymentOid=>{
+  if(cycleBusy)return {ok:true,busy:true};
+  cycleBusy=true;
+  try{return await runSocialfactory({env,store,clientFactory,paymentOid});}
+  finally{cycleBusy=false;}
+ });
  if(request.method!=='POST'||new URL(request.url).pathname!=='/v1/amano')return json({error:'Not found'},404);
  if(String(env.ALIGO_RELAY_SECRET||'').length<32)return json({error:'Server not configured'},503);
  const raw=await request.text();if(raw.length>12000)return json({error:'Payload too large'},413);
@@ -41,7 +46,7 @@ export async function amanoRequest(request,env,store,clientFactory=c=>new AmanoC
    if(!store.read('settings')?.enabled&&!store.read('socialfactory-settings')?.enabled)return json({ok:true,enabled:false,processed:0,waiting:0,issues:[]});
    const credentials=store.read('credentials');if(!credentials)return json({error:'아마노 계정 연결 필요'},409);
    cycleBusy=true;
-   try{const result=store.read('settings')?.enabled?await runCycle({site:(action,data)=>parkingSite(env.ALIGO_RELAY_SECRET,action,data),client:clientFactory(credentials),store,isEnabled:()=>store.read('settings')?.enabled===true}):{ok:true,enabled:false,processed:0,waiting:0,issues:[]};if(store.read('settings')?.enabled)await notifyProblems(env,store,result.issues||[]);const socialfactory=await runSocialfactory({env,store,clientFactory});return json({...result,socialfactory});}
+   try{const result=store.read('settings')?.enabled?await runCycle({site:(action,data)=>parkingSite(env.ALIGO_RELAY_SECRET,action,data),client:clientFactory(credentials),store,isEnabled:()=>store.read('settings')?.enabled===true,onIssue:issue=>notifyProblems(env,store,[issue])}):{ok:true,enabled:false,processed:0,waiting:0,issues:[]};if(store.read('settings')?.enabled)await notifyProblems(env,store,result.issues||[]);const socialfactory=await runSocialfactory({env,store,clientFactory});return json({...result,socialfactory});}
    catch(error){const message=String(error?.message||'서버 처리 확인 필요').slice(0,180);store.save('last-run',{ok:false,error:message,finished_at:new Date().toISOString()});try{await notifyProblems(env,store,[{kind:'system',message}]);}catch{}const socialfactory=await runSocialfactory({env,store,clientFactory});return json({ok:false,error:'서버 자동 처리 확인 필요',alerts_handled:true,socialfactory},502);}
    finally{cycleBusy=false;}
   }

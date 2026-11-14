@@ -1,3 +1,4 @@
+import {wakeParkingServer} from '../../_lib/parking-automation.js';
 import {sweepUnpaidBookings} from '../../_lib/booking-checkout.js';
 import {prepareBookings} from '../../_lib/booking.js';
 import {runBookingNotifications} from '../../_lib/booking-notify.js';
@@ -19,6 +20,7 @@ export async function onRequestPost({ request, env }) {
   if (!byCron && !(await adminOk(request, env))) return json({ ok: false, error: "unauthorized" }, 401);
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   await ensureSchema(env);
+  const paidAdminTask=wakeParkingServer(env,'paid-notices');
   const bookingTask=(async()=>{
     await prepareBookings(env);
     await sweepUnpaidBookings(env);
@@ -33,5 +35,5 @@ export async function onRequestPost({ request, env }) {
   const {results}=await env.DB.prepare("SELECT p.payment_oid AS oid FROM parking_orders p JOIN orders o ON o.oid=p.payment_oid JOIN payapp_payments pg ON pg.oid=p.payment_oid WHERE (o.status='paid' AND pg.refunded_amount=0 AND NOT EXISTS(SELECT 1 FROM parking_events e WHERE e.oid=p.oid AND e.kind='paid')) OR (pg.refunded_amount>0 AND (p.vehicle_price=o.amount OR pg.refunded_amount>=o.amount) AND NOT EXISTS(SELECT 1 FROM parking_events e WHERE e.oid=p.oid AND e.kind='refund' AND e.refund_amount=pg.refunded_amount)) GROUP BY p.payment_oid ORDER BY MIN(p.created_at) LIMIT 100").all();
   for(const p of results)await syncParkingOrder(env,p.oid);
   const normal=await runQueue(env, { limit: 50 });
-  return json({...normal,parking:await runParkingQueue(env),booking:await bookingTask});
+  return json({...normal,paidAdmin:await paidAdminTask,parking:await runParkingQueue(env),booking:await bookingTask});
 }

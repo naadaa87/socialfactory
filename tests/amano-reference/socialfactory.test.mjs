@@ -1,4 +1,22 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createHmac} from 'node:crypto';import {socialfactoryControl,runSocialfactory,socialfactoryStore,socialfactorySite} from '../../deploy/amano-server/socialfactory.mjs';import {AmanoClient} from '../../deploy/amano-server/client.mjs';
+test('결제 직후 서명된 즉시 처리도 정기 실행과 같은 전역 잠금을 사용',async t=>{
+ const {amanoRequest}=await import('../../deploy/amano-server/server.mjs');
+ const f=fixture();f.env.ALIGO_RELAY_SECRET='local-megaspot-existing-key-32-characters';
+ await f.call({action:'settings',enabled:true,confirm_policy:true});
+ let release,entered;const gate=new Promise(resolve=>release=resolve),started=new Promise(resolve=>entered=resolve);
+ t.mock.method(globalThis,'fetch',async(url,opts)=>{
+  assert.equal(url,'https://socialfactory.co.kr/api/parking/automation/server');
+  const body=JSON.parse(opts.body);assert.equal(body.payment_oid,'SF261114210000ABCD');
+  entered();await gate;return Response.json({ok:true,operating:true,date:'2026-11-14',items:[]});
+ });
+ const request=()=>{
+  const body=JSON.stringify({action:'process',oid:'SF261114210000ABCD',time:Date.now()});
+  return amanoRequest(new Request('http://local/v1/socialfactory-amano',{method:'POST',headers:{
+   'X-Socialfactory-Signature':createHmac('sha256',f.env.SOCIALFACTORY_RELAY_SECRET).update(body).digest('hex')},body}),f.env,f.store,()=>({}));
+ };
+ const first=request();await started;assert.equal((await(await request()).json()).busy,true);
+ release();assert.equal((await(await first).json()).ok,true);
+});
 function fixture(){const memory={credentials:{username:'existing-operator',passwordHash:'a'.repeat(64)},settings:{enabled:true}},store={read:k=>memory[k],save:(k,v)=>memory[k]=v},env={SOCIALFACTORY_RELAY_SECRET:'local-socialfactory-signature-secret-43-characters'};let login=0;const call=async(b,secret=env.SOCIALFACTORY_RELAY_SECRET)=>{const body=JSON.stringify({time:Date.now(),...b}),r=await socialfactoryControl(new Request('https://relay.test/v1/socialfactory-amano',{method:'POST',headers:{'X-Socialfactory-Signature':createHmac('sha256',secret).update(body).digest('hex')},body}),env,store,()=>({login:async()=>login++}));return {status:r.status,body:await r.json()};};return {memory,store,env,call,logins:()=>login};}
 test('소셜팩토리 제어는 전용 서명·유효시간을 요구하고 기존 계정 자격증명을 내보내지 않음',async()=>{const f=fixture();assert.equal((await f.call({action:'status'},'wrong')).status,403);assert.equal((await f.call({action:'status',time:Date.now()-61000})).status,403);const r=await f.call({action:'status'});assert.equal(r.body.configured,true);assert.equal(r.body.enabled,false);assert(!JSON.stringify(r).includes('existing-operator'));assert(!JSON.stringify(r).includes('a'.repeat(64)));assert.equal((await f.call({action:'cycle'})).status,400);});
 test('소셜팩토리 연결·켜기·중지는 메가스팟 상태와 원장을 바꾸지 않음',async()=>{const f=fixture();const old=structuredClone(f.memory);assert.equal((await f.call({action:'check'})).status,200);assert.equal(f.logins(),1);assert.equal((await f.call({action:'settings',enabled:true,confirm_policy:true})).status,200);assert.equal(socialfactoryStore(f.store).read('settings').enabled,true);assert.deepEqual(f.memory.settings,old.settings);assert.deepEqual(f.memory.credentials,old.credentials);socialfactoryStore(f.store).save('operations',{SFTEST:{phase:'completed'}});assert.equal(f.memory.operations,undefined);await f.call({action:'settings',enabled:false});assert.equal(socialfactoryStore(f.store).read('settings').enabled,false);});
