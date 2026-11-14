@@ -15,7 +15,7 @@ export async function notifyProblems(env,store,issues=[],upstream=fetch,at=Date.
  if(!receivers.length)throw Error('관리자 오류 문자 수신 번호가 없습니다.');
  const journal=store.read('alert-journal')||{};
  for(const e of Object.values(journal))if(e.status==='sending'&&at-(e.updated_at||0)>=60000)e.status='unknown';
- for(const issue of issues){for(const receiver of receivers){const key=(profile.namespace?profile.namespace+':':'')+alertKey(issue,at)+':'+receiver;if(!journal[key])journal[key]={key,receiver,message:alertMessage(issue,profile),request_id:requestId(key),status:'queued',attempts:0,created_at:at};}}
+ for(const issue of issues){for(const receiver of receivers){const key=(profile.namespace?profile.namespace+':':'')+alertKey(issue,at)+':'+receiver;if(!journal[key])journal[key]={key,receiver,message:profile.formatMessage?profile.formatMessage(issue):alertMessage(issue,profile),request_id:requestId(key),status:'queued',attempts:0,created_at:at};}}
  store.save('alert-journal',journal);
  async function rpc(path,data,id){const body=JSON.stringify({path,data,request_id:id,time:Date.now()});const r=await upstream(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-Megaspot-Signature':createHmac('sha256',env.ALIGO_RELAY_SECRET).update(body).digest('hex')},body,redirect:'manual',signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error('문자 서버 응답 확인 필요');return r.json();}
  const messages=Object.values(journal).filter(e=>e.status==='queued'||e.status==='unknown'&&e.attempts<3&&at-(e.updated_at||0)>=60000);

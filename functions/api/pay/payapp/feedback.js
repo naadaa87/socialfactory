@@ -1,3 +1,4 @@
+import {wakeParkingServer} from '../../../_lib/parking-automation.js';
 import {syncParkingOrder} from '../../../_lib/parking.js';
 import {runParkingQueue} from '../../../_lib/parking-notify.js';
 import {syncWebsiteOrder} from "../../../_lib/website-passes.js";
@@ -51,7 +52,7 @@ export async function onRequestPost({request,env,waitUntil}) {
       await sql("UPDATE orders SET status='cancelled',fail_msg='페이앱 결제 요청 취소' WHERE oid=? AND status='pending'",oid).run();
     }
     await syncWebsiteOrder(env,oid);
-    if(row.product_id.startsWith("parking-")){await syncParkingOrder(env,oid);if(waitUntil)waitUntil(runParkingQueue(env));}
+    if(row.product_id.startsWith("parking-")){await syncParkingOrder(env,oid);if(waitUntil)waitUntil(Promise.allSettled([runParkingQueue(env),...(state==='4'?[wakeParkingServer(env,'paid-notices',oid),wakeParkingServer(env,'process',oid)]:[])]));}
     return response("SUCCESS");
   } catch { return response("FAIL",500); }
 }

@@ -21,10 +21,10 @@ def main():
         raise RuntimeError('Run as root on the existing Amano server')
     run('systemctl', 'is-active', '--quiet', 'megaspot-amano', TIMER)
     desired = SOURCE.read_bytes()
-    if desired.count(b'OnCalendar=') != 2 or b'OnCalendar=*-*-* *:00/5:00 Asia/Seoul' not in desired:
+    if desired.count(b'OnCalendar=') != 2 or b'OnCalendar=*-*-* *:*:00 Asia/Seoul' not in desired:
         raise RuntimeError('Unexpected timer configuration')
     # Validate the exact calendar with the host systemd before any write.
-    calendar = '*-*-* *:00/5:00 Asia/Seoul'
+    calendar = '*-*-* *:*:00 Asia/Seoul'
     checks = {}
     for at in ['2026-11-06 18:01:00 Asia/Seoul', '2026-11-07 01:31:00 Asia/Seoul',
                '2026-11-08 03:01:00 Asia/Seoul', '2026-12-25 22:31:00 Asia/Seoul']:
@@ -46,7 +46,7 @@ def main():
         run('systemctl', 'restart', TIMER)
         run('systemctl', 'is-active', '--quiet', 'megaspot-amano', TIMER)
         actual = run('systemctl', 'show', TIMER, '--property=TimersCalendar')
-        if '*-*-* *:00/5:00' not in actual or 'Mon..Fri' in actual:
+        if '*-*-* *:*:00' not in actual or 'Mon..Fri' in actual:
             raise RuntimeError('Unexpected active schedule')
     except Exception:
         if before is None:
