@@ -84,7 +84,7 @@ def main():
   if 'async paymentOid=>' not in (AMANO/'server.mjs').read_text():raise RuntimeError('Immediate processing route missing')
   # Activation verifies the deployed site's signed payment API without sending.
   body=json.dumps({'action':'payments','since':args.since+' 00:00:00','time':int(time.time()*1000)},separators=(',',':')).encode()
-  request=urllib.request.Request('https://socialfactory.co.kr/api/parking/automation/server',data=body,headers={'Content-Type':'application/json','X-Socialfactory-Signature':hmac.new(sf_secret.encode(),body,hashlib.sha256).hexdigest()})
+  request=urllib.request.Request('https://socialfactory.co.kr/api/parking/automation/server',data=body,headers={'Content-Type':'application/json','User-Agent':'SocialfactoryParking/1.0 (+https://socialfactory.co.kr)','X-Socialfactory-Signature':hmac.new(sf_secret.encode(),body,hashlib.sha256).hexdigest()})
   with urllib.request.urlopen(request,timeout=25) as response:feed=json.load(response)
   if not feed.get('ok'):raise RuntimeError('Payment feed is not ready')
  paths=[*sources,AMANO/'server.mjs',RELAY,ENV,TIMER]
