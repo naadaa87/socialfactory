@@ -36,9 +36,9 @@ export async function ensureParking(env){
  }
  await env.DB.batch(PARKING_SCHEMA.map(q=>env.DB.prepare(q)));
 }
-export const defaults={enabled:false,confirmed:false,daily_enabled:false,process_minutes:10,daily_details:"이용일 당일 23:59까지(한국시간). 입차 후 24시간권이 아닙니다. 재입차는 구매 전에 문의해 주세요. 결제 후 구매 내역에서 차량별 입차 등록을 요청해 주세요. 주말·공휴일·야간에도 자동 등록합니다. 익일·초과 정산: 자정 이후 계속 주차하려면 다음 날 날짜의 시간권 또는 일일권을 별도로 구매해야 합니다. 할인 적용 완료를 확인하고 출차해 주세요.",holidays:[]};
+export const defaults={enabled:false,confirmed:false,daily_enabled:false,process_minutes:10,daily_details:"이용일 당일 23:59까지(한국시간). 입차 후 24시간권이 아닙니다. 재입차는 구매 전에 문의해 주세요. 결제 승인 후 입차를 확인해 자동 등록합니다. 미입차 차량은 1분마다 재확인하며, 구매 내역의 ‘입차했어요’ 버튼으로 즉시 재확인을 요청할 수 있습니다. 주말·공휴일·야간에도 처리합니다. 익일·초과 정산: 자정 이후 계속 주차하려면 다음 날 날짜의 시간권 또는 일일권을 별도로 구매해야 합니다. 할인 적용 완료를 확인하고 출차해 주세요.",holidays:[]};
 export async function parkingSettings(env){const row=await env.DB.prepare('SELECT value FROM parking_settings WHERE id=1').first();let v={};try{v=JSON.parse(row?.value||'{}')}catch{}const s={...defaults,...v};return {...s,daily_details:registrationDetails(s.daily_details)};}
-export const registrationDetails=text=>String(text||'').replace('결제 후 입차 알림과 운영자의 등록이 필요합니다.','결제 후 구매 내역에서 차량별 입차 등록을 요청해 주세요. 주말·공휴일·야간에도 자동 등록합니다.').replace('야간·운영시간 외 등록·출차는 구매 전에 문의해 주세요.','할인 적용 완료를 확인하고 출차해 주세요.');
+export const registrationDetails=text=>String(text||'').replace('결제 후 입차 알림과 운영자의 등록이 필요합니다.','결제 승인 후 입차를 확인해 자동 등록합니다. 미입차 차량은 1분마다 재확인하며, 구매 내역의 ‘입차했어요’ 버튼으로 즉시 재확인을 요청할 수 있습니다. 주말·공휴일·야간에도 처리합니다.').replace('결제 후 구매 내역에서 차량별 입차 등록을 요청해 주세요. 주말·공휴일·야간에도 자동 등록합니다.','결제 승인 후 입차를 확인해 자동 등록합니다. 미입차 차량은 1분마다 재확인하며, 구매 내역의 ‘입차했어요’ 버튼으로 즉시 재확인을 요청할 수 있습니다. 주말·공휴일·야간에도 처리합니다.').replace('야간·운영시간 외 등록·출차는 구매 전에 문의해 주세요.','할인 적용 완료를 확인하고 출차해 주세요.');
 export const parkingPolicyTag=s=>sha256Hex(JSON.stringify([PARKING_POLICY,'24/7',s.process_minutes,s.daily_enabled,registrationDetails(s.daily_details),TICKETS]));
 export const hhmm=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
 export const operationText=s=>'자동 등록: 매일 24시간 (주말·공휴일·야간 포함). 결제 승인 후 바로 입차를 확인해 등록하며, 미입차 차량은 1분 간격으로 다시 확인합니다.';
