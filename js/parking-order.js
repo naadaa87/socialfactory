@@ -21,7 +21,7 @@
    else if(order.refundedAmount>0)say('환불이 반영된 결제입니다. 차량별 주차장 등록·사용 상태와 현장 요금은 별도로 확인해 주세요.');
    else if(order.status!=='paid')say('결제 상태를 확인해 주세요. 결제 완료된 주차권에서 입차 등록을 요청할 수 있습니다.');
    else if(vehicles.every(p=>p.status==='applied'))say('모든 차량의 주차 할인 적용이 완료됐습니다. 출차 전에 적용 내역을 확인해 주세요.');
-   else say('이용일에 입차한 차량마다 등록을 요청해 주세요. 각 차량의 할인 적용 완료를 확인하고 출차해 주세요.');
+   else say(order.parkingAutomation?'결제 후 자동으로 입차를 확인합니다. 미입차 차량은 1분마다 확인하며, ‘입차했어요’ 버튼으로 즉시 재확인을 요청할 수 있습니다. 할인 적용 완료를 확인하고 출차해 주세요.':'이용일에 입차한 차량마다 등록을 요청해 주세요. 각 차량의 할인 적용 완료를 확인하고 출차해 주세요.');
    if(order.status==='pending'||order.status==='paid'&&!order.refundedAmount&&vehicles.some(p=>p.status!=='applied'))timer=setTimeout(poll,15000);
   }catch{say('주문을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');}finally{loading=false;}
  }

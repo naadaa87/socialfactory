@@ -11,5 +11,6 @@
  box.addEventListener('click',async e=>{const b=e.target.closest('[data-pk-auto]');if(!b||busy)return;busy=true;box.querySelectorAll('button').forEach(x=>x.disabled=true);
   try{await api('/api/admin/parking-automation',{method:'POST',body:b.dataset.pkAuto==='check'?{action:'check'}:{action:'settings',enabled:b.dataset.pkAuto==='enable',confirm_policy:true}});await load();}catch(err){status.textContent=err.message;}finally{busy=false;$('#pk-automation-check').disabled=false;}
  });
+ $('#pk-admin-reload').addEventListener('click',load);
  const original=A.LOAD.parking;A.LOAD.parking=async()=>{await Promise.allSettled([original(),load()]);};
 })();
