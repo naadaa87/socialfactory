@@ -7,13 +7,17 @@ export function displayName(value) {
   // phone numbers or internal notes: use a neutral label instead of guessing a name.
   // Apply one masking rule regardless of language or what the name represents.
   // Do not expose raw calendar titles, phone-only values, URLs or internal notes.
-  if (/^[\p{L}\p{N} ]{1,40}$/u.test(name) && /\p{L}/u.test(name)) {
-    const chars = [...name.replace(/ /g, '')];
-    if(chars.length===1) return '○';
-    if(chars.length>=8) return chars.slice(0,3).join('')+'○○○'+chars.slice(-2).join('');
-    return chars.length === 2 ? chars[0] + '○' : chars[0] + '○'.repeat(chars.length - 2) + chars.at(-1);
+  const plain = /^[\p{L}\p{N} ]{1,40}$/u.test(name);
+  const alreadyMasked = /^[\p{L}\p{N}]{1,4}[*○●]{1,4}$/u.test(name);
+  if ((plain || alreadyMasked) && /\p{L}/u.test(name)) {
+    const chars = [...name.replace(/ /g, '').replace(/[*●]/g, '○')];
+    if (chars.length === 1) return '○';
+    if (chars.length === 2) return chars[0] + '○';
+    if (chars.length === 3) return chars[0] + '○' + chars[2];
+    if (chars.length === 4) return chars[0] + '○○' + chars[3];
+    // Five or more characters use the first three plus two masks, at most five total.
+    return chars.slice(0, 3).join('') + '○○';
   }
-  if (/^[\p{L}\p{N}]{1,4}[*○●]{1,4}$/u.test(name) && /\p{L}/u.test(name)) return name.replace(/[*●]/g, '○');
   return '예약 고객';
 }
 

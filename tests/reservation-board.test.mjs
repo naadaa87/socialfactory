@@ -25,14 +25,14 @@ function insert(env,changes={}) {
 }
 test('display names never pass composite calendar titles, contact numbers or internal notes to a monitor',()=>{
   assert.equal(displayName('김민수'),'김○수');assert.equal(displayName('이준'),'이○');
-  assert.equal(displayName('최정*'),'최정○');
+  assert.equal(displayName('최정*'),'최○○');
   for(const title of ['투자N 모임 010-1234-5678','01012345678','스페이스클라우드 예약 #123456','김민수 / 비밀번호 1234','<img onerror=alert(1)>','','a@b.com']) assert.equal(displayName(title),'예약 고객');
 });
 test('all supported names use the same masking without classifying personal or organization names',()=>{
-  for(const [name,masked] of [['투자N','투○N'],['ABC','A○C'],['이름123','이○○○3'],['John Doe','J○○○○○e'],
-    ['ABCDEFG','A○○○○○G'],['ABCDEFGH','ABC○○○GH'],['기반기술Seminar','기반기○○○ar'],
-    ['기반기술 Seminar','기반기○○○ar'],['가'.repeat(40),'가가가○○○가가'],
-    ['김','○'],['Li','L○'],['최정*','최정○'],['Kim*','Kim○']]) {
+  for(const [name,masked] of [['투자N','투○N'],['ABC','A○C'],['이름123','이름1○○'],['John Doe','Joh○○'],
+    ['ABCDEFG','ABC○○'],['ABCDEFGH','ABC○○'],['기반기술Seminar','기반기○○'],
+    ['기반기술 Seminar','기반기○○'],['가'.repeat(40),'가가가○○'],
+    ['김','○'],['Li','L○'],['최정*','최○○'],['Kim*','K○○○']]) {
     assert.equal(displayName(name),masked);
     assert.notEqual(masked,name);
   }
@@ -41,9 +41,20 @@ test('all supported names use the same masking without classifying personal or o
   assert.equal(roomSchedule(rows,'r5',at('14:00')).next.name,'투○N');
   assert.equal(roomSchedule(rows,'r5',at('15:00')).current[0].name,'투○N');
   const longRows=boardRows([{...base,space:'r5',customer_name:'기반기술Seminar',start_min:900,end_min:1020}],date);
-  assert.equal(roomSchedule(longRows,'r5',at('14:00')).next.name,'기반기○○○ar');
-  assert.equal(roomSchedule(longRows,'r5',at('15:00')).current[0].name,'기반기○○○ar');
+  assert.equal(roomSchedule(longRows,'r5',at('14:00')).next.name,'기반기○○');
+  assert.equal(roomSchedule(longRows,'r5',at('15:00')).current[0].name,'기반기○○');
   assert(!JSON.stringify(longRows).includes('기반기술Seminar'));
+});
+test('three and four character names mask the middle; five and longer names have a five character cap',()=>{
+  const cases=[['김민수','김○수'],['남궁민수','남○○수'],['가나다라마','가나다○○'],
+    ['가나다라마바사','가나다○○'],['ABCDEF','ABC○○'],['가나다라','가○○라'],
+    ['  가 나 다 라 마 바  ','가나다○○'],['김민수','김○수'],['ABCD****','ABC○○'],['최정●','최○○']];
+  for(const [name,expected] of cases) {
+    const masked=displayName(name);
+    assert.equal(masked,expected,name);
+    assert([...masked].length<=5,name);
+  }
+  for(let length=1;length<=40;length++) assert([...displayName('가'.repeat(length))].length<=5);
 });
 test('today projection clips overnight reservations and excludes cancelled, other rooms and invalid time slots',()=>{
   const rows=boardRows([base,{...base,code:'prev',date:'2026-10-29',start_min:1380,end_min:1500},
