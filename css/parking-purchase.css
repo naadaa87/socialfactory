@@ -5,3 +5,5 @@
 .parking-buy .pk-remove{width:auto;min-height:40px;padding:8px 16px}.pk-checks label>span{min-width:0;flex:1}
 
 .pk-layout>*,.pk-grid>*{min-width:0}.pk-request textarea{min-width:0;max-width:100%}
+/* Day and rolling-day products have different validity; keep both explanations readable. */
+.pk-tickets label:has(input[value="daily"]),.pk-tickets label:has(input[value="24h"]){grid-column:1/-1;align-items:flex-start}.pk-tickets label span{min-width:0;overflow-wrap:anywhere}
