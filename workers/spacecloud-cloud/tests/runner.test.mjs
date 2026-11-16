@@ -728,3 +728,22 @@ test('calendar API reads continue while a booking browser owns the runner lock a
  assert.deepEqual(calls.map(b=>b.action),['begin','sync']);assert.equal(lock(f).token,browserToken);assert.equal(f.counters.launches,0);
  assert.equal(f.sqlite.prepare('SELECT token FROM cloud_calendar_lock WHERE id=1').get().token,null);
 });
+
+test('host reconnect uses a shorter session inside the existing rolling allowance without raising caps',async()=>{
+ const f=await ready(fixture({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',CLOUD_PLAN_CONFIRMED_FREE:'false'}));
+ f.sqlite.prepare("INSERT INTO cloud_budget_reservations(id,day,month,reserved_ms,charged_ms,started_at,state,closed_at) VALUES('prior','2026-11-05','2026-11',7050000,7050000,?,'closed',?)").run(CLOCK-86400000,CLOCK-86400000);
+ f.sqlite.exec("UPDATE cloud_budget SET day='2026-11-06',month='2026-11',month_ms=7050000,day_ms=0 WHERE id=1");
+ const login=await f.runner.startLogin(f.env);
+ assert.equal(login.expires_at-f.now(),85000);
+ assert.equal(reservation(f).reserved_ms,145000);
+ assert(budget(f).month_ms<=7200000);
+ assert.equal(monthlyLimit(f.env),7200000);assert.equal(rollingLimit(f.env),7200000);
+ await f.runner.saveLogin(f.env,login.login_id,{cancel:true});
+ assert.equal(lock(f).token,null);
+});
+test('host reconnect stays closed when the remaining allowance cannot fit a minute and cleanup',async()=>{
+ const f=await ready(fixture({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',CLOUD_PLAN_CONFIRMED_FREE:'false'}));
+ f.sqlite.exec("UPDATE cloud_budget SET day='2026-11-06',month='2026-11',month_ms=7100000,day_ms=0 WHERE id=1");
+ await assert.rejects(f.runner.startLogin(f.env),{code:'daily-budget'});
+ assert.equal(f.counters.acquires,0);assert.equal(lock(f).token,null);
+});

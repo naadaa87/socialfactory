@@ -257,18 +257,22 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
     if(provider!==undefined && (!guest || provider!=='kakao'))throw problem('login-provider','지원하는 게스트 로그인 방식을 선택해 주세요.',400);
     const table=guest?'cloud_guest_login':'cloud_login';
     await ensureStore(env);await maintenance(env);configured(env);
-    const token=await lockRunner(env,{duration:LOGIN_MS+CLEANUP_MS+60000,now:now()});if(!token)throw problem('runner-busy','진행 중인 클라우드 작업이나 로그인을 먼저 완료해 주세요.');
+    const usage=await budgetStatus(env,{now:now()});
+    const remaining=Math.min(usage.daily_limit_ms-usage.daily_reserved_ms,usage.monthly_limit_ms-usage.monthly_reserved_ms,usage.rolling_32d_limit_ms-usage.rolling_32d_reserved_ms);
+    const loginMs=Math.min(LOGIN_MS,Math.floor((remaining-CLEANUP_MS-5000)/1000)*1000);
+    if(loginMs<60000)throw problem('daily-budget','로그인과 종료에 필요한 사용 시간이 부족합니다. 한도 안에서 연결을 보류합니다.',429);
+    const token=await lockRunner(env,{duration:loginMs+CLEANUP_MS+60000,now:now()});if(!token)throw problem('runner-busy','진행 중인 클라우드 작업이나 로그인을 먼저 완료해 주세요.');
     let budget,browser,sessionId,id,recorded=false,acquireAttempted=false,timer,deadlineReached=false;
     try {
-      budget=await reserveBudget(env,LOGIN_MS+CLEANUP_MS,{now:now()});
-      const expires=budget.started_at+LOGIN_MS;
+      budget=await reserveBudget(env,loginMs+CLEANUP_MS,{now:now()});
+      const expires=budget.started_at+loginMs;
       const setupExpires=budget.started_at+30000;
       const live=()=>{if(deadlineReached || now()>=setupExpires)throw problem('login-expired','로그인 화면 준비시간이 지났습니다. 다시 진행해 주세요.');};
       const timeout=new Promise((_,reject)=>{timer=setDeadline(()=>{deadlineReached=true;if(sessionId)void closeRemote(env,sessionId,browser);reject(problem('login-expired','로그인 화면 준비시간을 넘겨 자동 종료합니다.'));},Math.max(1,setupExpires-now()));});
       const work=(async()=>{
         live();acquireAttempted=true;
-        // Setup is capped at 30s; a lost acquisition then idles out within the reserved 360s.
-        const session=await env.BROWSER.acquire({keepAlive:240000,targets:true});sessionId=session.sessionId;
+        // Setup and idle expiry together stay inside the reserved login plus cleanup time.
+        const session=await env.BROWSER.acquire({keepAlive:Math.min(240000,loginMs),targets:true});sessionId=session.sessionId;
         if(!sessionId)throw problem('session-id','클라우드 로그인 화면을 열지 못했습니다.',503);
         if(deadlineReached || now()>=setupExpires){await closeRemote(env,sessionId,browser);throw problem('login-expired','늦게 도착한 로그인 브라우저를 종료했습니다.');}
         live();id=crypto.randomUUID();
