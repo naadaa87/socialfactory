@@ -1,7 +1,7 @@
 import {parkingPaidFeed} from './parking-paid.js';
 import {json,safeEqual} from './auth.js';
 import {kstNow} from './admin.js';
-import {ensureParking,parkingSettings,arrivalOpen,parkingOrder,parkingAction,PARKING_JOIN,TICKETS,plateOf,eventStmt} from './parking.js';
+import {ensureParking,parkingSettings,parkingRegistrationDateOpen,arrivalOpen,parkingOrder,parkingAction,PARKING_JOIN,TICKETS,plateOf,eventStmt} from './parking.js';
 export const AUTOMATION_SCHEMA=[
  `CREATE TABLE IF NOT EXISTS parking_automation_settings(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL DEFAULT 0,updated_at TEXT)`,
  `INSERT OR IGNORE INTO parking_automation_settings(id,enabled) VALUES(1,0)`,
@@ -25,11 +25,11 @@ export async function automaticParking({request,env,waitUntil}){
  if(b.action==='orders'){
   if(!operating)return json({ok:true,operating:false,date:today,items:[]});
   if(b.payment_oid!==undefined&&!/^SF[A-Z0-9]{16}$/.test(b.payment_oid))return json({ok:false},400);
-  const {results}=await env.DB.prepare(PARKING_JOIN+" WHERE p.visit_date=? AND (? IS NULL OR p.payment_oid=?) AND p.status IN ('waiting','requested') AND (p.request_at IS NULL OR p.reviewed_at IS NOT NULL) AND o.status='paid' AND o.test_mode=0 AND o.paid_at IS NOT NULL AND o.tid=pg.mul_no AND pg.refunded_amount=0 ORDER BY p.created_at,p.oid LIMIT 50").bind(today,b.payment_oid||null,b.payment_oid||null).all();
+  const {results}=await env.DB.prepare(PARKING_JOIN+" WHERE (p.visit_date=? OR (p.ticket='24h' AND p.visit_date=date(?,'-1 day'))) AND (? IS NULL OR p.payment_oid=?) AND p.status IN ('waiting','requested') AND (p.request_at IS NULL OR p.reviewed_at IS NOT NULL) AND o.status='paid' AND o.test_mode=0 AND o.paid_at IS NOT NULL AND o.tid=pg.mul_no AND pg.refunded_amount=0 ORDER BY p.created_at,p.oid LIMIT 50").bind(today,today,b.payment_oid||null,b.payment_oid||null).all();
   return json({ok:true,operating:true,date:today,items:results.map(p=>({oid:p.oid,plate:p.plate,visit_date:p.visit_date,ticket:p.ticket,hours:TICKETS[p.ticket].hours,status:p.status,price:p.amount}))});
  }
  if(!['order','claim','complete','issue'].includes(b.action)||!/^SF[A-Z0-9]{16}$/.test(b.oid||''))return json({ok:false},400);
- const p=await parkingOrder(env,b.oid);if(!p||p.test_mode||p.visit_date!==today)return json({ok:false,error:'당일의 실제 결제 주문만 처리할 수 있습니다.'},409);
+ const p=await parkingOrder(env,b.oid);if(!p||p.test_mode||!parkingRegistrationDateOpen(p))return json({ok:false,error:'당일의 실제 결제 주문만 처리할 수 있습니다.'},409);
  const claim=await env.DB.prepare('SELECT free_hours,paid_hours,cost FROM parking_automation_claims WHERE oid=?').bind(p.oid).first();
  if(b.action==='order')return json({ok:true,order:{oid:p.oid,plate:p.plate,visit_date:p.visit_date,ticket:p.ticket,hours:TICKETS[p.ticket].hours,status:p.status,price:p.amount,payment_status:p.payment_status,refunded_amount:p.refunded_amount,refund_pending:!operating||!!(p.request_at&&!p.reviewed_at),entry_id:p.entry_id,entry_at:p.entry_at,...(claim||{})}});
  const d=b.data||{};
@@ -39,7 +39,8 @@ export async function automaticParking({request,env,waitUntil}){
  if(!operating||p.payment_status!=='paid'||p.refunded_amount||p.request_at&&!p.reviewed_at||!p.paid_at)return json({ok:false,error:'운영 조건 또는 결제·환불 상태가 변경되었습니다.'},409);
  if(b.action==='claim'){
   const entry=String(d.entry_id||'').trim().slice(0,80),at=String(d.entry_at||'').replace('T',' ').slice(0,16)+':00',now=kstNow();
-  if(!['waiting','requested'].includes(p.status)||claim||plateOf(d.plate_confirm)!==p.plate||d.confirm_entry!==true||!entry||!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00$/.test(at)||at.slice(0,10)!==today||Number(at.slice(11,13))>23||Number(at.slice(14,16))>59||at>now||d.free_used!==true&&d.confirm_no_free!==true||d.free_used===true&&d.confirm_no_free===true)return json({ok:false,error:'당일 입차·무료 할인 이력을 확인해 주세요.'},409);
+  if(!['waiting','requested'].includes(p.status)||claim||plateOf(d.plate_confirm)!==p.plate||d.confirm_entry!==true||!entry||!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00$/.test(at)||at.slice(0,10)!==p.visit_date||Number(at.slice(11,13))>23||Number(at.slice(14,16))>59||at>now||d.free_used!==true&&d.confirm_no_free!==true||d.free_used===true&&d.confirm_no_free===true)return json({ok:false,error:'당일 입차·무료 할인 이력을 확인해 주세요.'},409);
+  if(p.ticket==='24h'&&Date.parse(at.replace(' ','T')+'+09:00')+864e5<=Date.now())return json({ok:false,error:'입차 후 24시간이 지난 차량입니다. 등록 상태를 확인해 주세요.'},409);
   const free=d.free_used?0:1,hours=TICKETS[p.ticket].hours,fullDay=['daily','24h'].includes(p.ticket),paid=fullDay?0:hours-free,cost=fullDay?20000:paid*3000;
   if(cost>p.amount||paid<0||paid>3)return json({ok:false},409);
   const operation=crypto.randomUUID(),version=p.version+1;

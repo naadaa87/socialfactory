@@ -123,3 +123,17 @@ test('결제 승인 응답의 백그라운드 작업은 관리자 문자와 즉�
  assert.deepEqual(calls.map(c=>c.action).sort(),['paid-notices','process']);
  assert(calls.every(c=>c.oid===o.oid));
 });
+
+test('자정 직전 입차한 24시간권은 다음 날에도 등록·알림이 가능하고 이미 지난 24시간은 차단',async t=>{
+ const f=await setup(t),o=await f.purchase(f.body({ticket:'24h'})),daily=await f.purchase(f.body({ticket:'daily',plate:'45나6789',plateConfirm:'45나6789'}));await f.cb(o);await f.cb(daily);
+ f.now(Date.parse('2026-11-04T15:01:00Z'));
+ assert.deepEqual((await f.call('orders')).body.items.map(p=>p.oid),[o.oid]);
+ const claim={entry_id:'late-entry',entry_at:'2026-11-04 23:59',plate_confirm:'123가4567',confirm_entry:true,free_used:false,confirm_no_free:true};
+ assert.equal((await f.call('claim',{oid:o.oid,data:{...claim,entry_at:'2026-11-04 00:00'}})).status,409);
+ assert.equal((await f.call('claim',{oid:o.oid,data:claim})).status,200);
+ assert.equal((await f.call('complete',{oid:o.oid,data:{cost:20000,confirm_paid_applied:true,confirm_free_applied:true}})).status,200);
+ assert.equal(publicParking(await parkingOrder(f.env,o.oid)).validUntil,'2026-11-05 23:59');
+ f.env.ALIGO_RELAY_URL='https://relay.naranhistory.com/socialfactory/aligo/send';
+ const {runParkingQueue}=await import('../functions/_lib/parking-notify.js');await runParkingQueue(f.env);
+ assert.equal(f.db.prepare("SELECT status FROM parking_events WHERE oid=? AND kind='applied'").get(o.oid).status,'accepted');
+});
