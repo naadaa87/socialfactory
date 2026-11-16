@@ -5,15 +5,23 @@ import {parkingTemplateStatus,runParkingQueue} from '../../_lib/parking-notify.j
 import {payConfig} from '../../_lib/shop.js';
 export async function onRequestGet({request,env}){
  const deny=await adminGate(request,env);if(deny)return deny;await ensureParking(env);
- const q=clean(new URL(request.url).searchParams.get('q'),60),filter=new URL(request.url).searchParams.get('filter')||'queue';let where='',args=[];
+ const params=new URL(request.url).searchParams,q=clean(params.get('q'),60),filter=params.get('filter')||'all',start=params.get('start')||'',end=params.get('end')||'',basis=params.get('basis')||'paid';
+ const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
+ if(start&&!validDate(start)||end&&!validDate(end)||start&&end&&start>end||!['paid','visit'].includes(basis))return json({ok:false,message:'조회 기간을 확인해 주세요.'},400);
+ let where='',args=[];
  if(filter==='queue')where=" AND o.status='paid' AND (p.status<>'applied' OR p.request_at IS NOT NULL AND p.reviewed_at IS NULL)";
  else if(filter==='paid')where=" AND o.status='paid'";
  else if(filter==='applied')where=" AND p.status='applied'";
  else if(filter==='requested')where=" AND p.arrival_at IS NOT NULL AND p.status<>'applied' AND o.status='paid'";
- if(q){where+=' AND (p.plate LIKE ? OR p.oid LIKE ? OR p.payment_oid LIKE ? OR o.buyer_phone LIKE ? OR o.buyer_name LIKE ?)';args=Array(5).fill('%'+q+'%');}
+ if(q){where+=' AND (p.plate LIKE ? OR p.oid LIKE ? OR p.payment_oid LIKE ? OR o.buyer_phone LIKE ? OR o.buyer_name LIKE ?)';args.push(...Array(5).fill('%'+q+'%'));}
+ const dateColumn=basis==='visit'?'p.visit_date':'o.paid_at';
+ if(start){where+=' AND '+dateColumn+'>=?';args.push(start);}
+ if(end){where+=' AND '+dateColumn+(basis==='visit'?'<=?':"<datetime(?,'+1 day')");args.push(end);}
+ const paid="o.test_mode=0 AND o.paid_at IS NOT NULL AND o.tid=pg.mul_no AND o.status IN ('paid','refunded')";
+ const summary=await env.DB.prepare("SELECT COUNT(*) AS matchedVehicles,COALESCE(SUM(CASE WHEN "+paid+" THEN 1 ELSE 0 END),0) AS paidVehicles,COUNT(DISTINCT CASE WHEN "+paid+" THEN p.payment_oid END) AS paymentCount,COALESCE(SUM(CASE WHEN "+paid+" THEN p.vehicle_price ELSE 0 END),0) AS paidAmount FROM parking_orders p JOIN orders o ON o.oid=p.payment_oid JOIN payapp_payments pg ON pg.oid=p.payment_oid WHERE 1=1"+where).bind(...args).first();
  const {results}=await env.DB.prepare(PARKING_JOIN+' WHERE 1=1'+where+" ORDER BY CASE WHEN p.request_at IS NOT NULL AND p.reviewed_at IS NULL THEN 0 WHEN p.arrival_at IS NOT NULL AND p.status<>'applied' THEN 1 ELSE 2 END,p.created_at DESC LIMIT 200").bind(...args).all();
  const {results:events}=await env.DB.prepare("SELECT id,oid,kind,status,message_id,last_error,created_at,sent_at FROM parking_events ORDER BY id DESC LIMIT 100").all();
- const s=await parkingSettings(env);return json({ok:true,settings:s,operation:operationText(s),templates:await parkingTemplateStatus(env),payReady:payConfig(env).ready,events,results:results.map(p=>({...publicParking(p,s),paidAt:p.paid_at,paymentAmount:p.payment_amount,name:p.buyer_name,phone:p.buyer_phone,entryId:p.entry_id,entryAt:p.entry_at,memo:p.memo,requestReason:p.request_reason}))});
+ const s=await parkingSettings(env);return json({ok:true,summary,period:{start,end,basis},settings:s,operation:operationText(s),templates:await parkingTemplateStatus(env),payReady:payConfig(env).ready,events,results:results.map(p=>({...publicParking(p,s),paidAt:p.paid_at,paymentAmount:p.payment_amount,name:p.buyer_name,phone:p.buyer_phone,entryId:p.entry_id,entryAt:p.entry_at,memo:p.memo,requestReason:p.request_reason}))});
 }
 export async function onRequestPost({request,env,waitUntil}){
  const deny=await adminGate(request,env);if(deny)return deny;if(!sameOrigin(request))return json({ok:false},403);
