@@ -196,3 +196,96 @@ test('unpaid cancellation uses ready-only mode and paid invoices cannot be silen
     await assert.rejects(cancelBookingPayment(env,{booking:{code:'OF-TEST-0001'}}),error=>error.code==='PAYAPP_REVIEW');assert.equal(calls,1);
   }finally{globalThis.fetch=previous;}
 });
+
+
+const guCredentials={userid:'guspacedev',linkkey:'test-gu-link-key',linkval:'test-gu-link-value',requestkey:'test-gu-request-key'};
+function activateGu(env) {
+  Object.assign(env,{PAYAPP_ACTIVE_ACCOUNT:'gu',PAYAPP_GU_USERID:guCredentials.userid,PAYAPP_GU_LINKKEY:guCredentials.linkkey,
+    PAYAPP_GU_LINKVAL:guCredentials.linkval,PAYAPP_GU_REQUESTKEY:guCredentials.requestkey});
+}
+async function signedBy(paymentRow,credentials,extra={}) {
+  const fields={userid:credentials.userid,linkkey:credentials.linkkey,linkval:credentials.linkval,responsedate:stamp(),
+    var1:paymentRow.code,var2:paymentRow.token,mul_no:paymentRow.mul_no,price:String(paymentRow.amount),pay_state:'4',pay_date:stamp(),...extra};
+  fields.hash=await sha256Hex(credentials.userid+fields.responsedate+credentials.requestkey);return fields;
+}
+test('merchant cutover pins each new invoice and retries preserve the original invoice without a second request',async()=>{
+  const env=fixture(),previous=globalThis.fetch,calls=[];
+  globalThis.fetch=async(url,options)=>{const f=new URLSearchParams(options.body);calls.push(f);return new Response('state=1&mul_no='+String(400000+calls.length)+'&payurl=https%3A%2F%2Fpayapp.kr%2Finvoice-'+calls.length);};
+  try {
+    const old=await createPayment(env,payment());assert.equal(row(env).merchant_account,'blank');assert.equal(row(env).merchant_userid,env.PAYAPP_USERID);
+    activateGu(env);const newer=payment({code:'OF-TEST-0002'});await createPayment(env,newer);
+    assert.equal(row(env,newer.code).merchant_account,'gu');assert.equal(row(env,newer.code).merchant_userid,'guspacedev');
+    assert.equal(calls[0].get('userid'),env.PAYAPP_USERID);assert.equal(calls[1].get('userid'),'guspacedev');
+    assert.equal(calls[1].get('hash'),await sha256Hex('guspacedev'+calls[1].get('requestdate')+guCredentials.requestkey));
+    assert.deepEqual(await createPayment(env,payment()),old);assert.equal(calls.length,2);
+    delete env.PAYAPP_GU_REQUESTKEY;
+    assert.deepEqual(await createPayment(env,payment()),old);assert.equal(calls.length,2);
+    await assert.rejects(createPayment(env,payment({code:'OF-TEST-0003'})),error=>error.code==='PAYAPP_NOT_CONFIGURED');
+    assert.equal(calls.length,2);assert.equal(row(env,'OF-TEST-0003'),undefined);
+    const details=await(await paymentStatus({request:new Request(ORIGIN+'/api/booking/payment-status?code='+newer.code+'&t='+row(env,newer.code).token),env})).json();
+    assert.equal(details.sellerName,'주식회사 지유공간개발');assert(!JSON.stringify(details).includes('test-gu-link'));
+  } finally {globalThis.fetch=previous;}
+});
+
+test('legacy room payment and partial/full refunds still settle after cutover and new issuance is disabled',async()=>{
+  const {env,code}=await roomFixture(),saved=row(env,code);activateGu(env);env.PAYAPP_ENABLED='0';
+  assert.equal(await(await deliver(env,await signed(env,saved,{pay_state:'1'}))).text(),'SUCCESS');
+  assert.equal(await(await deliver(env,await signed(env,saved))).text(),'SUCCESS');assert.equal((await getBooking(env,code)).status,'confirmed');
+  const partial=await signed(env,saved,{pay_state:'71',orig_mul_no:saved.mul_no,orig_price:String(saved.amount),mul_no:'410001',price:'5000'});
+  assert.equal(await(await deliver(env,partial)).text(),'SUCCESS');assert.equal(await(await deliver(env,partial)).text(),'SUCCESS');
+  assert.equal(row(env,code).refund_amount,5000);assert.equal((await getBooking(env,code)).refund_amount,5000);
+  assert.equal(await(await deliver(env,await signed(env,saved,{pay_state:'9'}))).text(),'SUCCESS');
+  assert.equal(row(env,code).status,'refunded');assert.equal((await getBooking(env,code)).status,'cancelled');
+  assert.equal(row(env,code).merchant_account,'blank');assert.equal(row(env,code).merchant_userid,env.PAYAPP_USERID);
+});
+
+test('unpaid cancellation uses the invoice account despite active merchant changes or issuance being disabled',async()=>{
+  const oldEnv=fixture();await issue(oldEnv);activateGu(oldEnv);delete oldEnv.PAYAPP_GU_REQUESTKEY;oldEnv.PAYAPP_ENABLED='0';
+  const newEnv=fixture();activateGu(newEnv);await issue(newEnv);newEnv.PAYAPP_ACTIVE_ACCOUNT='blank';newEnv.PAYAPP_ENABLED='0';
+  const previous=globalThis.fetch,calls=[];
+  globalThis.fetch=async(url,options)=>{const f=new URLSearchParams(options.body);calls.push(f);assert.equal(f.get('cmd'),'paycancel');return new Response('state=1');};
+  try {
+    await cancelBookingPayment(oldEnv,{booking:{code:'OF-TEST-0001'}});await cancelBookingPayment(newEnv,{booking:{code:'OF-TEST-0001'}});
+    assert.equal(calls.length,2);assert.equal(calls[0].get('userid'),oldEnv.PAYAPP_USERID);assert.equal(calls[1].get('userid'),'guspacedev');
+    assert.equal(calls[1].get('hash'),await sha256Hex('guspacedev'+calls[1].get('requestdate')+guCredentials.requestkey));
+    assert.equal(row(oldEnv).status,'cancelled');assert.equal(row(newEnv).status,'cancelled');
+  } finally {globalThis.fetch=previous;}
+});
+
+test('valid credentials cannot settle another merchant invoice and pinned seller identities reject configuration drift',async()=>{
+  const oldEnv=fixture();await issue(oldEnv);activateGu(oldEnv);
+  assert.equal((await deliver(oldEnv,await signedBy(row(oldEnv),guCredentials))).status,403);assert.equal(row(oldEnv).status,'requested');
+  const newEnv=fixture();activateGu(newEnv);await issue(newEnv);const newer=row(newEnv);
+  assert.equal((await deliver(newEnv,await signed(newEnv,newer))).status,403);assert.equal(row(newEnv).status,'requested');
+  assert.equal(await(await deliver(newEnv,await signedBy(newer,guCredentials))).text(),'SUCCESS');assert.equal(row(newEnv).status,'paid');
+  newEnv.PAYAPP_GU_USERID='different-gu-account';
+  assert.equal((await deliver(newEnv,await signedBy(newer,{...guCredentials,userid:'different-gu-account'},{pay_state:'9'}))).status,403);
+  assert.equal(row(newEnv).status,'paid');assert.equal(row(newEnv).merchant_userid,'guspacedev');
+});
+
+test('existing booking ledgers gain blank ownership without replacing their original payment and refund records',async()=>{
+  const env=fixture();
+  env.sqlite.exec('DROP TABLE booking_payapp_requests');
+  const oldSchema=readFileSync(new URL('../schema-upgrade-booking-payapp.sql',import.meta.url),'utf8')
+    .replace(/    merchant_account TEXT NOT NULL DEFAULT 'blank'[^\n]+\n/,'');
+  env.sqlite.exec(oldSchema);
+  env.sqlite.prepare("INSERT INTO booking_payapp_requests(code,kind,label,amount,token,mul_no,pay_url,status,refund_amount) VALUES('OF-OLD','office','old invoice',275000,'old-token','510001','https://payapp.kr/old','partial_refund',5000)").run();
+  env.sqlite.prepare("INSERT INTO booking_payapp_refunds(mul_no,code,amount) VALUES('510002','OF-OLD',5000)").run();
+  activateGu(env);await ensurePayappSchema(env);
+  const migrated=row(env,'OF-OLD');assert.equal(migrated.merchant_account,'blank');assert.equal(migrated.merchant_userid,env.PAYAPP_USERID);
+  assert.equal(migrated.mul_no,'510001');assert.equal(migrated.refund_amount,5000);assert.equal(migrated.token,'old-token');
+  assert.equal(env.sqlite.prepare("SELECT amount FROM booking_payapp_refunds WHERE mul_no='510002'").get().amount,5000);
+  assert.equal(await(await deliver(env,await signed(env,migrated,{pay_state:'9'}))).text(),'SUCCESS');
+  assert.equal(row(env,'OF-OLD').status,'refunded');
+});
+
+
+test('checkout requires the original merchant credentials while active-account setup never blocks another valid legacy invoice',async()=>{
+  const env=fixture(),issued=await issue(env),saved=row(env);activateGu(env);delete env.PAYAPP_GU_REQUESTKEY;
+  const req=()=>new Request(ORIGIN+'/api/booking/payment-status'+new URL(issued.url).search);
+  assert.equal((await(await paymentStatus({request:req(),env})).json()).can_pay,true);
+  delete env.PAYAPP_LINK_KEY;
+  const details=await(await paymentStatus({request:req(),env})).json();assert.equal(details.can_pay,false);assert.equal(details.can_start_payment,false);
+  assert.equal((await acceptPayment({request:post('/api/booking/payment-status',{code:saved.code,t:saved.token,consent:true}),env})).status,503);
+  assert.equal(row(env).status,'requested');assert.equal(row(env).mul_no,saved.mul_no);
+});

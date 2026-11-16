@@ -407,6 +407,7 @@ CREATE TABLE IF NOT EXISTS payapp_payments (
     oid TEXT PRIMARY KEY REFERENCES orders(oid), mul_no TEXT UNIQUE, nonce TEXT NOT NULL,
     request_id TEXT NOT NULL UNIQUE, request_hash TEXT NOT NULL, payurl TEXT,
     refunded_amount INTEGER NOT NULL DEFAULT 0,
+    merchant_account TEXT NOT NULL DEFAULT 'blank' CHECK(merchant_account IN ('blank','gu')), merchant_userid TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours'))
   );
 CREATE TABLE IF NOT EXISTS payapp_refunds (
@@ -510,6 +511,7 @@ CREATE TRIGGER IF NOT EXISTS reservation_booking_guard_update
 CREATE TABLE IF NOT EXISTS booking_payapp_requests (
     code TEXT PRIMARY KEY, kind TEXT NOT NULL, inquiry_id INTEGER, label TEXT NOT NULL,
     amount INTEGER NOT NULL, token TEXT NOT NULL, mul_no TEXT UNIQUE, pay_url TEXT,
+    merchant_account TEXT NOT NULL DEFAULT 'blank' CHECK(merchant_account IN ('blank','gu')), merchant_userid TEXT,
     status TEXT NOT NULL DEFAULT 'creating', provider_state TEXT, provider_stamp TEXT,
     paid_at TEXT, accepted_at TEXT, consent_version TEXT, refund_amount INTEGER NOT NULL DEFAULT 0, failure TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours')), updated_at TEXT);

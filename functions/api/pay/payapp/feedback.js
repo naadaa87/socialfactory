@@ -2,7 +2,7 @@ import {wakeParkingServer} from '../../../_lib/parking-automation.js';
 import {syncParkingOrder} from '../../../_lib/parking.js';
 import {runParkingQueue} from '../../../_lib/parking-notify.js';
 import {syncWebsiteOrder} from "../../../_lib/website-passes.js";
-import { payappConfig, validFeedback, equalSecret, ensurePayapp } from "../../../_lib/payapp.js";
+import { payappFeedbackConfig, payappPaymentMatches, equalSecret, ensurePayapp } from "../../../_lib/payapp.js";
 const response=(text,status=200)=>new Response(text,{status,headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-store"}});
 export async function onRequestPost({request,env,waitUntil}) {
   if (!env.DB) return response("FAIL",503);
@@ -12,13 +12,14 @@ export async function onRequestPost({request,env,waitUntil}) {
   const params=new URLSearchParams(raw);
   for (const k of params.keys()) if (params.getAll(k).length!==1) return response("FAIL",400);
   const f=Object.fromEntries(params);
-  if (!await validFeedback(payappConfig(env),f)) return response("FAIL",403);
+  const account = await payappFeedbackConfig(env,f);
+  if (!account) return response("FAIL",403);
   const state=f.pay_state,partial=["70","71"].includes(state);
   if (!["1","4","8","16","31","32","9","64","10","70","71"].includes(state) || !/^\d{1,30}$/.test(f.mul_no || "")) return response("FAIL",400);
   try {
     await ensurePayapp(env);
-    const row=await env.DB.prepare("SELECT o.*,p.nonce,p.mul_no AS payapp_no FROM orders o JOIN payapp_payments p ON p.oid=o.oid WHERE o.oid=?").bind(f.var1 || "").first();
-    if (!row || !equalSecret(f.var2,row.nonce)) return response("FAIL",403);
+    const row=await env.DB.prepare("SELECT o.*,p.nonce,p.mul_no AS payapp_no,p.merchant_account,p.merchant_userid FROM orders o JOIN payapp_payments p ON p.oid=o.oid WHERE o.oid=?").bind(f.var1 || "").first();
+    if (!row || !payappPaymentMatches(account,row) || !equalSecret(f.var2,row.nonce)) return response("FAIL",403);
     const amount=partial ? f.orig_price : f.price,no=partial ? f.orig_mul_no : f.mul_no;
     if (!/^\d+$/.test(amount || "") || Number(amount)!==row.amount || !/^\d{1,30}$/.test(no || "") || (row.payapp_no && row.payapp_no!==no)) return response("FAIL",400);
     if (partial && (!/^\d+$/.test(f.price || "") || Number(f.price)<=0 || Number(f.price)>row.amount || f.mul_no===no)) return response("FAIL",400);

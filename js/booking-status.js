@@ -25,6 +25,7 @@
   }
   function show(j){
     latest=j;detail.replaceChildren();item('접수·청구번호',j.code);item('결제 항목',j.label || '소셜팩토리 공간대관');item('청구금액',Number(j.amount).toLocaleString('ko-KR')+'원');detail.hidden=false;
+    if(j.sellerName)item('판매자',j.sellerName);
     if(j.refund_amount>0)item('환불금액',Number(j.refund_amount).toLocaleString('ko-KR')+'원');
     var paid=j.status==='paid',confirmed=j.booking && j.booking.status==='confirmed',sync=j.sync || {};
     var paidVerifying=j.status==='paid_verifying' || (j.booking && j.booking.payment_status==='paid_verifying');

@@ -1,4 +1,4 @@
-import {payappConfig,validFeedback} from '../../../_lib/payapp.js';
+import {payappFeedbackConfig} from '../../../_lib/payapp.js';
 import {ensurePayappSales,savePayappSales,payappTime} from '../../../_lib/payapp-sales.js';
 const reply=(body,status=200)=>new Response(body,{status,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
 export async function onRequestPost({request,env}){
@@ -6,8 +6,8 @@ export async function onRequestPost({request,env}){
   if(Number(request.headers.get('content-length'))>32768)return reply('FAIL',413);
   const raw=await request.text();if(raw.length>32768)return reply('FAIL',413);
   const params=new URLSearchParams(raw);for(const key of params.keys())if(params.getAll(key).length!==1)return reply('FAIL',400);
-  const f=Object.fromEntries(params),config=payappConfig(env);
-  if(!await validFeedback(config,f))return reply('FAIL',403);
+  const f=Object.fromEntries(params),config=await payappFeedbackConfig(env,f);
+  if(!config)return reply('FAIL',403);
   if(!['1','4','8','16','31','32','9','64','10','70','71'].includes(f.pay_state))return reply('FAIL',400);
   const partial=['70','71'].includes(f.pay_state),cancel=['9','64'].includes(f.pay_state),amount=partial?f.orig_price:f.price;
   if(!/^\d+$/.test(amount||'')||(partial&&!/^\d+$/.test(f.price||'')))return reply('FAIL',400);

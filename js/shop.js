@@ -331,6 +331,7 @@
         }
         show("[data-oc-detail]");
         set("[data-oc-d-oid]", o.oid); set("[data-oc-d-product]", o.productName); set("[data-oc-d-amount]", won(o.amount)); set("[data-oc-d-pay]", o.payMethod + (o.cardName ? " · " + o.cardName : ""));
+        if(o.sellerName){show("[data-oc-seller-row]");set("[data-oc-d-seller]",o.sellerName);}
         if (o.startDate) { show("[data-oc-d-start-row]"); set("[data-oc-d-start-label]", o.startLabel || "이용 시작일"); set("[data-oc-d-start]", o.startDate); }
         var activeLinked=(o.passes||[]).filter(function(p){return p.status==="active";});
         set("[data-oc-d-validity]", o.scheduledStart && activeLinked.length ? activeLinked[0].starts_at.slice(0,16)+" ~ "+activeLinked[activeLinked.length-1].ends_at.slice(0,16)+" (한국 시간)" : o.validity || "—"); set("[data-oc-d-buyer]", o.buyerName + " · " + o.buyerPhone + (o.buyerEmail ? " · " + o.buyerEmail : ""));

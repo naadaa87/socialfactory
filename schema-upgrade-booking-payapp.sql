@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS booking_payapp_requests (
     code TEXT PRIMARY KEY, kind TEXT NOT NULL, inquiry_id INTEGER, label TEXT NOT NULL,
     amount INTEGER NOT NULL, token TEXT NOT NULL, mul_no TEXT UNIQUE, pay_url TEXT,
+    merchant_account TEXT NOT NULL DEFAULT 'blank' CHECK(merchant_account IN ('blank','gu')), merchant_userid TEXT,
     status TEXT NOT NULL DEFAULT 'creating', provider_state TEXT, provider_stamp TEXT,
     paid_at TEXT, accepted_at TEXT, consent_version TEXT, refund_amount INTEGER NOT NULL DEFAULT 0, failure TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours')), updated_at TEXT);
