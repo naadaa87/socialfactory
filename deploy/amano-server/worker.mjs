@@ -7,10 +7,10 @@ export function freeCount(d){
  if(count>1)throw Error('무료 1시간 중복 이력 확인 필요');return count;
 }
 export function plan(d,p){
- const free=freeCount(d)===0,paid=p.ticket==='daily'?null:Number(p.hours)-(free?1:0),code=p.ticket==='daily'?'10':paid?codes(paid):null;
- if(p.ticket!=='daily'&&(![1,2,3].includes(Number(p.hours))||paid<0||paid>3)||code===undefined)throw Error('주차권 등록 구성 확인 필요');
+ const free=freeCount(d)===0,paid=['daily','24h'].includes(p.ticket)?null:Number(p.hours)-(free?1:0),code=['daily','24h'].includes(p.ticket)?'10':paid?codes(paid):null;
+ if(!['daily','24h'].includes(p.ticket)&&(![1,2,3].includes(Number(p.hours))||paid<0||paid>3)||code===undefined)throw Error('주차권 등록 구성 확인 필요');
  for(const id of ['1',...(code?[code]:[])]){const expected=DISCOUNTS[id],t=d.types.find(t=>t.id===id);if(!t||t.name!==expected.name||t.price!==expected.price||t.minutes!==expected.minutes)throw Error('할인 코드·가격·시간 변경 확인 필요');}
- const cost=code?DISCOUNTS[code].price:0,cap=p.ticket==='daily'?20000:Number(p.hours)*3000;
+ const cost=code?DISCOUNTS[code].price:0,cap=['daily','24h'].includes(p.ticket)?20000:Number(p.hours)*3000;
  if(cost>cap||cost>p.price)throw Error('승인 원가 한도 확인 필요');
  if(d.balance<cost)throw Error('아마노 잔액 부족: 필요 '+cost+'원, 현재 '+d.balance+'원');
  if(d.discounts.some(h=>h.memo===p.oid))throw Error('같은 주문의 아마노 할인 이력 존재 · 중복 방지 확인 필요');
@@ -38,7 +38,7 @@ export async function runCycle({site,client,store,maxOrders=10,now=()=>Date.now(
    save(p.oid,'claim_requested',{entry_id:e.id,cost:wanted.cost});
    await site('claim',{oid:p.oid,data:{entry_id:e.id,entry_at:e.entryAt.slice(0,16),plate_confirm:p.plate,confirm_entry:true,free_used:!wanted.free,confirm_no_free:wanted.free,memo:'입차·기존 무료 할인 이력 대조 완료'}});locked=true;
    let q=(await site('order',{oid:p.oid})).order;paid(q);
-   if(q.entry_id!==e.id||q.free_hours!==Number(wanted.free)||p.ticket!=='daily'&&q.paid_hours!==wanted.paid)throw Error('무료 1시간 배정과 아마노 이력 불일치');
+   if(q.entry_id!==e.id||q.free_hours!==Number(wanted.free)||!['daily','24h'].includes(p.ticket)&&q.paid_hours!==wanted.paid)throw Error('무료 1시간 배정과 아마노 이력 불일치');
    save(p.oid,'claimed');
    const apply=async(code)=>{
     if(!isEnabled())throw Error('관리자가 서버 자동 처리를 중지했습니다.');

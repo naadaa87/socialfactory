@@ -1,3 +1,4 @@
+import {publicParking,parkingOrder} from '../functions/_lib/parking.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fixture} from './helpers/parking-fixture.mjs';
@@ -39,10 +40,11 @@ test('결제 알림 조회는 결제일 기준으로 통합 결제 1건을 반�
  assert.equal((await f.call('payments',{since:'invalid'})).status,400);
 });
 
-test('수동 입차 요청 없이 실제 입차된 일일권 2대를 무료 1시간→일일권 순서로 등록하고 재호출은 중복 차감하지 않음',async t=>{
+for(const ticket of ['daily','24h'])test(ticket+' 2대를 무료 1시간→아마노 당일권 코드로 등록하고 재호출은 중복 차감하지 않음',async t=>{
  const f=await setup(t),o=await f.purchase(f.body({vehicles:[
-  {ticket:'daily',plate:'123가4567',plateConfirm:'123가4567'},
-  {ticket:'daily',plate:'45나6789',plateConfirm:'45나6789'}]}));
+  {ticket,plate:'123가4567',plateConfirm:'123가4567'},
+  {ticket,plate:'45나6789',plateConfirm:'45나6789'}]}));
+ assert.equal(o.amount,ticket==='24h'?80000:60000);
  await f.cb(o);
  const rows=f.db.prepare('SELECT * FROM parking_orders ORDER BY rowid').all();
  const memory={},store={read:key=>memory[key]?structuredClone(memory[key]):null,
@@ -65,6 +67,8 @@ test('수동 입차 요청 없이 실제 입차된 일일권 2대를 무료 1시
   }};
  assert.equal((await runCycle({site,client,store})).processed,2);
  assert.equal(balance,204000);
+ assert.equal(publicParking(await parkingOrder(f.env,rows[0].oid)).validUntil,ticket==='24h'?'2026-11-05 10:00':'2026-11-04 23:59');
+ assert(f.db.prepare('SELECT cost,paid_hours FROM parking_automation_claims').all().every(p=>p.cost===20000&&p.paid_hours===0));
  for(const row of rows)assert.deepEqual(registrations.filter(r=>r.plate===row.plate).map(r=>r.code),['1','10']);
  assert(f.db.prepare('SELECT status,arrival_at FROM parking_orders').all().every(p=>p.status==='applied'&&p.arrival_at));
  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM parking_events WHERE kind='arrival'").get().n,2);
@@ -118,4 +122,18 @@ test('결제 승인 응답의 백그라운드 작업은 관리자 문자와 즉�
  await Promise.all(jobs);
  assert.deepEqual(calls.map(c=>c.action).sort(),['paid-notices','process']);
  assert(calls.every(c=>c.oid===o.oid));
+});
+
+test('자정 직전 입차한 24시간권은 다음 날에도 등록·알림이 가능하고 이미 지난 24시간은 차단',async t=>{
+ const f=await setup(t),o=await f.purchase(f.body({ticket:'24h'})),daily=await f.purchase(f.body({ticket:'daily',plate:'45나6789',plateConfirm:'45나6789'}));await f.cb(o);await f.cb(daily);
+ f.now(Date.parse('2026-11-04T15:01:00Z'));
+ assert.deepEqual((await f.call('orders')).body.items.map(p=>p.oid),[o.oid]);
+ const claim={entry_id:'late-entry',entry_at:'2026-11-04 23:59',plate_confirm:'123가4567',confirm_entry:true,free_used:false,confirm_no_free:true};
+ assert.equal((await f.call('claim',{oid:o.oid,data:{...claim,entry_at:'2026-11-04 00:00'}})).status,409);
+ assert.equal((await f.call('claim',{oid:o.oid,data:claim})).status,200);
+ assert.equal((await f.call('complete',{oid:o.oid,data:{cost:20000,confirm_paid_applied:true,confirm_free_applied:true}})).status,200);
+ assert.equal(publicParking(await parkingOrder(f.env,o.oid)).validUntil,'2026-11-05 23:59');
+ f.env.ALIGO_RELAY_URL='https://relay.naranhistory.com/socialfactory/aligo/send';
+ const {runParkingQueue}=await import('../functions/_lib/parking-notify.js');await runParkingQueue(f.env);
+ assert.equal(f.db.prepare("SELECT status FROM parking_events WHERE oid=? AND kind='applied'").get(o.oid).status,'accepted');
 });
