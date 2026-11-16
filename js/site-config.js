@@ -41,6 +41,7 @@ window.SF_CONFIG = {
 
   /* 예약·상담 채널 — 주소가 비어 있으면 버튼이 숨겨집니다. */
   contact: {
+    inquiryEmail: "spaceblank0100@gmail.com", /* 푸터 이용/예약/제휴 문의 */
     phone: "",         /* 예: "010-0000-0000" */
     email: "guspacedev@gmail.com",   /* 문의 폼 저장이 안 될 때 메일 앱으로 보내는 데에도 쓰입니다 */
     kakao: "https://pf.kakao.com/_uTiFX", /* 카카오톡 문의채널 — 홈페이지의 모든 '카카오톡 문의' 버튼(헤더 · 오른쪽 아래 버튼 · 각 페이지)이 이 채널의 채팅방(/chat)으로 바로 연결됩니다. 바꾸면 images/kakao-qr.svg 도 새 주소로 다시 만들어야 합니다 */
