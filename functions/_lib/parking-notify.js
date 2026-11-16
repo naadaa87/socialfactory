@@ -1,9 +1,14 @@
-import {PARKING_TEMPLATES} from './parking-templates.js';
+import {PARKING_TEMPLATES,AUTOMATIC_PARKING_TEMPLATES} from './parking-templates.js';
 import {ensureParking,parkingOrder,parkingSettings,operationText,TICKETS} from './parking.js';
 import {approvedWebsiteTemplate,sendAligo,renderAligoMessage} from './aligo.js';
 import {orderToken} from './shop.js';
 import {kstNow} from './admin.js';
-export async function parkingTemplateStatus(env){const rows=await Promise.all(Object.entries(PARKING_TEMPLATES).map(async([kind,t])=>({kind,name:t.title,code:env[t.env]||t.code,approved:!!(env[t.env]||t.code)&&await approvedWebsiteTemplate(env,t)})));return rows;}
+export async function parkingDeliveryTemplate(env,kind){
+ const automatic=AUTOMATIC_PARKING_TEMPLATES[kind];
+ if(automatic&&await approvedWebsiteTemplate(env,automatic))return automatic;
+ return PARKING_TEMPLATES[kind];
+}
+export async function parkingTemplateStatus(env){return Promise.all(Object.entries(PARKING_TEMPLATES).map(async([kind,base])=>{const t=await parkingDeliveryTemplate(env,kind);return {kind,name:t.title,code:env[t.env]||t.code,approved:await approvedWebsiteTemplate(env,t)};}));}
 export const parkingMessage=renderAligoMessage;
 export async function runParkingQueue(env,{limit=20}={}){
  if(!env.DB)return {sent:0};await ensureParking(env);
@@ -13,7 +18,7 @@ export async function runParkingQueue(env,{limit=20}={}){
  if(!cfg.confirmed||env.ALIMTALK_ENABLED!=='1'||env.ALIMTALK_PROVIDER!=='aligo')return out;
  const {results}=await env.DB.prepare("SELECT * FROM parking_events WHERE status='queued' ORDER BY id LIMIT ?").bind(limit).all();
  for(const e of results){
-  const p=await parkingOrder(env,e.oid),t=PARKING_TEMPLATES[e.kind],now=kstNow();
+  const p=await parkingOrder(env,e.oid),t=await parkingDeliveryTemplate(env,e.kind),now=kstNow();
   const stale=!p||!t||p.test_mode||e.created_at<new Date(Date.now()+9*3600e3-864e5).toISOString().slice(0,19).replace('T',' ')||(e.kind!=='refund'&&(p.payment_status!=='paid'||p.refunded_amount>0||p.visit_date<now.slice(0,10)))||(e.kind==='arrival'&&(!p.arrival_at||p.status==='applied'))||(e.kind==='applied'&&!p.applied_at)||(e.kind==='refund'&&p.refunded_amount!==e.refund_amount);
   if(stale){await env.DB.prepare("UPDATE parking_events SET status='cancelled' WHERE id=? AND status='queued'").bind(e.id).run();out.cancelled++;continue;}
   if(!(await approvedWebsiteTemplate(env,t))){out.waiting++;continue;}
