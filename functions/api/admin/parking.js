@@ -2,12 +2,15 @@ import {adminGate} from '../../_lib/admin.js';
 import {json,sameOrigin,clean} from '../../_lib/auth.js';
 import {ensureParking,parkingSettings,parkingOrder,parkingAction,PARKING_JOIN,publicParking,operationText} from '../../_lib/parking.js';
 import {parkingTemplateStatus,runParkingQueue} from '../../_lib/parking-notify.js';
+import {parkingWorkbook} from '../../_lib/parking-xlsx.js';
 import {payConfig} from '../../_lib/shop.js';
 export async function onRequestGet({request,env}){
  const deny=await adminGate(request,env);if(deny)return deny;await ensureParking(env);
  const params=new URL(request.url).searchParams,q=clean(params.get('q'),60),filter=params.get('filter')||'all',start=params.get('start')||'',end=params.get('end')||'',basis=params.get('basis')||'paid';
  const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
  if(start&&!validDate(start)||end&&!validDate(end)||start&&end&&start>end||!['paid','visit'].includes(basis))return json({ok:false,message:'조회 기간을 확인해 주세요.'},400);
+ const exporting=params.get('export')==='xlsx';
+ if(params.has('export')&&!exporting)return json({ok:false,message:'지원하지 않는 파일 형식입니다.'},400);
  let where='',args=[];
  if(filter==='queue')where=" AND o.status='paid' AND (p.status<>'applied' OR p.request_at IS NOT NULL AND p.reviewed_at IS NULL)";
  else if(filter==='paid')where=" AND o.status='paid'";
@@ -22,9 +25,15 @@ export async function onRequestGet({request,env}){
  // 환불은 통합 결제 단위 원장이므로 차량별로 나누거나 중복 차감하지 않습니다.
  const settlement=await env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS paidAmount,COALESCE(SUM(refunded),0) AS refundedAmount,COALESCE(SUM(amount-refunded),0) AS netAmount FROM (SELECT o.oid,o.amount,MAX(pg.refunded_amount) AS refunded FROM parking_orders p JOIN orders o ON o.oid=p.payment_oid JOIN payapp_payments pg ON pg.oid=p.payment_oid WHERE "+paid+where+" GROUP BY o.oid,o.amount)").bind(...args).first();
  Object.assign(summary,settlement);
- const {results}=await env.DB.prepare(PARKING_JOIN+' WHERE 1=1'+where+" ORDER BY CASE WHEN p.request_at IS NOT NULL AND p.reviewed_at IS NULL THEN 0 WHEN p.arrival_at IS NOT NULL AND p.status<>'applied' THEN 1 ELSE 2 END,p.created_at DESC LIMIT 200").bind(...args).all();
+ const {results}=await env.DB.prepare(PARKING_JOIN+' WHERE 1=1'+where+" ORDER BY CASE WHEN p.request_at IS NOT NULL AND p.reviewed_at IS NULL THEN 0 WHEN p.arrival_at IS NOT NULL AND p.status<>'applied' THEN 1 ELSE 2 END,p.created_at DESC"+(exporting?"":" LIMIT 200")).bind(...args).all();
+ if(exporting){
+  const {results:payments}=await env.DB.prepare("SELECT o.oid,o.paid_at AS paidAt,o.buyer_name AS name,o.buyer_phone AS phone,o.status,o.amount,MAX(pg.refunded_amount) AS refundedAmount,COUNT(*) AS vehicleCount FROM parking_orders p JOIN orders o ON o.oid=p.payment_oid JOIN payapp_payments pg ON pg.oid=p.payment_oid WHERE "+paid+where+" GROUP BY o.oid ORDER BY o.paid_at DESC,o.oid").bind(...args).all();
+  const s=await parkingSettings(env),vehicles=results.map(p=>({...publicParking(p,s),name:p.buyer_name,phone:p.buyer_phone,paidAt:p.paid_at,testMode:!!p.test_mode}));
+  const body=parkingWorkbook({vehicles,payments,summary,period:{start,end,basis},filter,q,generatedAt:new Date(Date.now()+9*3600e3).toISOString().slice(0,19).replace('T',' ')});
+  return new Response(body,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':'attachment; filename="parking-'+(start||'all')+'_'+(end||'all')+'.xlsx"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+ }
  const {results:events}=await env.DB.prepare("SELECT id,oid,kind,status,message_id,last_error,created_at,sent_at FROM parking_events ORDER BY id DESC LIMIT 100").all();
- const s=await parkingSettings(env);return json({ok:true,summary,period:{start,end,basis},settings:s,operation:operationText(s),templates:await parkingTemplateStatus(env),payReady:payConfig(env).ready,events,results:results.map(p=>({...publicParking(p,s),paidAt:p.paid_at,paymentAmount:p.payment_amount,name:p.buyer_name,phone:p.buyer_phone,entryId:p.entry_id,entryAt:p.entry_at,memo:p.memo,requestReason:p.request_reason}))});
+ const s=await parkingSettings(env);return json({ok:true,queryFilter:filter,queryText:q,summary,period:{start,end,basis},settings:s,operation:operationText(s),templates:await parkingTemplateStatus(env),payReady:payConfig(env).ready,events,results:results.map(p=>({...publicParking(p,s),paidAt:p.paid_at,paymentAmount:p.payment_amount,name:p.buyer_name,phone:p.buyer_phone,entryId:p.entry_id,entryAt:p.entry_at,memo:p.memo,requestReason:p.request_reason}))});
 }
 export async function onRequestPost({request,env,waitUntil}){
  const deny=await adminGate(request,env);if(deny)return deny;if(!sameOrigin(request))return json({ok:false},403);
