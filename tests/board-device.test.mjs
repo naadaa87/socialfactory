@@ -50,6 +50,7 @@ test('schedule output exposes no contact details, payment, notes, reservation id
   // A fresh monitor needs neither an administrator session nor a device cookie.
   const response=await schedule({request:request('/api/board/schedule'),env});assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
   assert.match(response.headers.get('x-robots-tag'),/noindex/);
+  assert.equal(response.headers.get('x-sf-board-name-format'),'20261116-source-mask');
   const data=await response.json();assert.equal(data.reservations[0].name,'김○수');assert.equal(data.reservations.length,1);
   const raw=JSON.stringify(data);for(const secret of ['010-1234','내부 메모','PRIVATE-123','김민수','"amount":','"monitor":','token_hash',paired.token,created.code])assert(!raw.includes(secret));
 });
