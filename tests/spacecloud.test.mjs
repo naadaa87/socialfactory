@@ -897,3 +897,21 @@ test('next-month padding does not keep the previous date when a paid booking mov
  await finishHostCalendar(e,{observed_at:now,complete:true,snapshots:plan.scopes.map(s=>({...s,paid_ids:s.space==='r1'?['123']:[],events:s.space==='r1'&&s.month==='2026-12'?[{id:'123',date:'2026-12-01',start_min:600,end_min:720,title:'예약자*',kind:'reservation'}]:[]}))});
  const result=await loadSpacecloud(e,{fetcher,force:true,now:now+1000});assert.deepEqual(result.results.map(r=>r.date),['2026-12-01']);e.sqlite.close();
 });
+
+
+test('verified masked detail names survive source sync and reach the board without storing or returning full names',async()=>{
+ const {beginHostCalendar,finishHostCalendar}=await import('../functions/_lib/spacecloud-host-calendar.js');
+ const {boardRows}=await import('../functions/_lib/reservation-board.js');
+ const e=env(Object.fromEntries([1,2,3,4,5].map(n=>['r'+n,url(n)]))),now=Date.parse('2026-11-16T03:00:00Z');
+ const fetcher=async()=>response(calendar());await loadSpacecloud(e,{fetcher,now});
+ const plan=await beginHostCalendar(e,{now:now+1000});
+ const snapshots=plan.scopes.map(s=>({...s,paid_ids:s.space==='r1'&&s.month==='2026-11'?['123']:[],events:s.space==='r1'&&s.month==='2026-11'?[{id:'123',date:'2026-11-16',start_min:600,end_min:720,title:'김**',kind:'reservation',board_name:'김○수'}]:[]}));
+ const bad=structuredClone(snapshots);bad.find(s=>s.events.length).events[0].board_name='김민수';
+ await assert.rejects(()=>finishHostCalendar(e,{observed_at:plan.observed_at,complete:true,snapshots:bad}),{code:'host-calendar-board-name'});
+ await finishHostCalendar(e,{observed_at:plan.observed_at,complete:true,snapshots});
+ const external=await loadSpacecloud(e,{fetcher,now:now+2000,from:'2026-11-16',to:'2026-11-16'});
+ assert.equal(external.results[0].customer_name,'김**');assert.equal(external.results[0].board_name,'김○수');
+ const board=boardRows(external.results,'2026-11-16');assert.equal(board[0].name,'김○수');
+ const payload=JSON.stringify(board);assert(!payload.includes('board_name'));assert(!payload.includes('source_url'));assert(!payload.includes('김민수'));
+ assert.equal(e.sqlite.prepare('SELECT COUNT(*) count FROM reservations').get().count,0);e.sqlite.close();
+});

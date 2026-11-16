@@ -1,3 +1,4 @@
+import { validBoardName } from './reservation-board-name.js';
 import { readFeedConfig, calendarRows } from './spacecloud.js';
 import { calendarEventIdentity } from './spacecloud-identity.js';
 import { sha256Hex } from './auth.js';
@@ -6,7 +7,7 @@ const INTERVAL=10000, FIRST='2026-10', KST=9*3600000;
 const day=ms=>new Date(ms+KST).toISOString().slice(0,10);
 const nextMonth=m=>new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),1)).toISOString().slice(0,7);
 const problem=code=>Object.assign(new Error(code),{code,status:409});
-const interval=r=>{const midnight=Date.parse(r.date+'T00:00:00+09:00');return {start:midnight+r.start_min*60000,end:midnight+r.end_min*60000,title:r.title,source_url:r.reservation_id?`https://partner.spacecloud.kr/reservation/${r.reservation_id}`:''};};
+const interval=r=>{const midnight=Date.parse(r.date+'T00:00:00+09:00');return {start:midnight+r.start_min*60000,end:midnight+r.end_min*60000,title:r.title,...(validBoardName(r.board_name)?{board_name:r.board_name}:{}),source_url:r.reservation_id?`https://partner.spacecloud.kr/reservation/${r.reservation_id}`:''};};
 const paidId=event=>/^https:\/\/partner\.spacecloud\.kr\/reservation\/(\d+)\/?$/.exec(event.source_url||'')?.[1]||null;
 export async function ensureHostCalendar(env){
  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS spacecloud_host_calendar_state(id INTEGER PRIMARY KEY CHECK(id=1),requested_at INTEGER NOT NULL DEFAULT 0,last_attempt INTEGER NOT NULL DEFAULT 0,last_success INTEGER,status TEXT,plan_json TEXT,counts TEXT,error TEXT)`).run();
@@ -66,8 +67,9 @@ export async function finishHostCalendar(env,body){
     || !/^\d{4}-\d{2}-\d{2}$/.test(r.date) || r.date.slice(0,7)!==scope.month || !Number.isFinite(Date.parse(r.date+'T00:00:00Z'))
     || !Number.isInteger(r.start_min) || !Number.isInteger(r.end_min) || r.start_min<0 || r.start_min>=1440 || r.start_min%30 || r.end_min%30 || r.end_min<=r.start_min || r.end_min-r.start_min>1440)throw problem('host-calendar-event');
    if(r.kind!==undefined && r.kind!=='reservation')throw problem('host-calendar-kind');
+   if(r.board_name!==undefined && (r.kind!=='reservation' || !validBoardName(r.board_name)))throw problem('host-calendar-board-name');
    if(r.kind==='reservation' && !snapshot.paid_ids?.includes(String(r.id)))throw problem('host-calendar-paid-ids');
-   const item={id:String(r.id),date:r.date,start_min:r.start_min,end_min:r.end_min,title:r.title.normalize('NFC').trim(),...(r.kind==='reservation'?{reservation_id:String(r.id)}:{})};
+   const item={id:String(r.id),date:r.date,start_min:r.start_min,end_min:r.end_min,title:r.title.normalize('NFC').trim(),...(r.kind==='reservation'?{reservation_id:String(r.id),...(r.board_name!==undefined?{board_name:r.board_name}:{})}:{})};
    const identity=calendarEventIdentity(interval(item));if(seen.has(identity))continue;seen.add(identity);events.push(item);
   }
   snapshots.set(key,{...scope,events,paid_ids:snapshot.paid_ids});

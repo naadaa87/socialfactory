@@ -1,3 +1,4 @@
+import { enrichBoardNames } from './board-names.mjs';
 import { QueueClient } from '../../integrations/spacecloud-worker/queue.mjs';
 import { SpacecloudUI } from '../../integrations/spacecloud-worker/spacecloud-ui.mjs';
 import { collectHostPayments, paymentRequest } from './payments.mjs';
@@ -212,6 +213,8 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       try {direct=await collectCalendarAPI(storageState,plan,{live});}
       catch(error){if(error.code!=='host-calendar-login')throw error;}
       if(direct){
+        live();
+        await enrichBoardNames(env,direct.snapshots,direct.state,{now:now(),live});
         live();
         if(direct.changed)await saveRefreshedHostState(env,direct.state,saved.version,{guard:live});
         live();

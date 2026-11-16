@@ -1,25 +1,8 @@
 // Only visitor-safe fields cross the display API boundary. Never return raw calendar titles.
 import { ROOM_KEYS, addDaysIso, isIsoDate } from './admin.js';
 
-export function displayName(value) {
-  const name = String(value || '').normalize('NFC').trim();
-  // Calendar names can already have hidden suffixes. Preserve the supplied mask:
-  // applying a middle mask as well would hide both the middle and final character.
-  // Composite titles, phone-only values, URLs and internal notes use a neutral label.
-  const plain = /^[\p{L}\p{N} ]{1,40}$/u.test(name);
-  const alreadyMasked = /^[\p{L}\p{N}]{1,4}[*○●]{1,4}$/u.test(name);
-  if ((plain || alreadyMasked) && /\p{L}/u.test(name)) {
-    const chars = [...name.replace(/ /g, '').replace(/[*●]/g, '○')];
-    if (alreadyMasked && chars.length < 5) return chars.join('');
-    if (chars.length === 1) return '○';
-    if (chars.length === 2) return chars[0] + '○';
-    if (chars.length === 3) return chars[0] + '○' + chars[2];
-    if (chars.length === 4) return chars[0] + '○○' + chars[3];
-    // Five or more characters use the first three plus two masks, at most five total.
-    return chars.slice(0, 3).join('') + '○○';
-  }
-  return '예약 고객';
-}
+import { displayName, validBoardName } from './reservation-board-name.js';
+export { displayName } from './reservation-board-name.js';
 
 export function boardRows(rows, today) {
   const start = Date.parse(today + 'T00:00:00+09:00'), end = start + 86400000;
@@ -33,7 +16,7 @@ export function boardRows(rows, today) {
     const key = [row.code, row.space, from, to].join('|');
     if (seen.has(key)) return [];
     seen.add(key);
-    return [{ room: row.space, name: displayName(row.customer_name), start: Math.max(start, from), end: Math.min(end, to),
+    return [{ room: row.space, name: validBoardName(row.board_name) ? row.board_name : displayName(row.customer_name), start: Math.max(start, from), end: Math.min(end, to),
       continued: from < start, continues: to > end }];
   }).sort((a, b) => a.start - b.start || a.room.localeCompare(b.room));
 }

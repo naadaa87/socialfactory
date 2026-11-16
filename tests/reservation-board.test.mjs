@@ -104,3 +104,9 @@ test('API requires administrator authentication and never returns private reserv
   const result=await authenticated.json();assert.equal(result.rooms.length,5);
   assert(!JSON.stringify(result).includes('010-1234'));assert(!JSON.stringify(result).includes('memo'));
 });
+
+test('only validated compact detail masks can override the original calendar display name',()=>{
+ assert.equal(boardRows([{...base,customer_name:'김**',board_name:'김○수'}],date)[0].name,'김○수');
+ for(const board_name of ['김민수','김민수 010-1234-5678','김○○○○수','<b>김○수</b>'])
+   assert.equal(boardRows([{...base,customer_name:'김**',board_name}],date)[0].name,'김○○');
+});
