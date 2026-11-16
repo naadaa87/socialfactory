@@ -3,14 +3,14 @@ import { ROOM_KEYS, addDaysIso, isIsoDate } from './admin.js';
 
 export function displayName(value) {
   const name = String(value || '').normalize('NFC').trim();
-  // Calendar names can already be masked (e.g. 김석*). Composite titles may contain
-  // phone numbers or internal notes: use a neutral label instead of guessing a name.
-  // Apply one masking rule regardless of language or what the name represents.
-  // Do not expose raw calendar titles, phone-only values, URLs or internal notes.
+  // Calendar names can already have hidden suffixes. Preserve the supplied mask:
+  // applying a middle mask as well would hide both the middle and final character.
+  // Composite titles, phone-only values, URLs and internal notes use a neutral label.
   const plain = /^[\p{L}\p{N} ]{1,40}$/u.test(name);
   const alreadyMasked = /^[\p{L}\p{N}]{1,4}[*○●]{1,4}$/u.test(name);
   if ((plain || alreadyMasked) && /\p{L}/u.test(name)) {
     const chars = [...name.replace(/ /g, '').replace(/[*●]/g, '○')];
+    if (alreadyMasked && chars.length < 5) return chars.join('');
     if (chars.length === 1) return '○';
     if (chars.length === 2) return chars[0] + '○';
     if (chars.length === 3) return chars[0] + '○' + chars[2];
