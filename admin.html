@@ -11,6 +11,7 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="/css/admin.css?v=mobile-inputs-20261106">
+  <link rel="stylesheet" href="/css/admin-kpi.css?v=kpi-20261116">
   <link rel="stylesheet" href="/css/admin-kiosk-ui.css?v=d24708b714">
 </head>
 <body class="adm">
@@ -41,6 +42,7 @@
     <nav class="side-nav" id="nav" aria-label="관리 메뉴">
       <span class="nav-cap">운영</span>
       <button type="button" data-view="dash">대시보드</button>
+      <button type="button" data-view="kpi">KPI</button>
       <button type="button" data-view="board">예약 현황</button>
       <button type="button" data-view="booking">예약 신청 · 페이앱</button>
       <button type="button" data-view="list">일자별 예약<em data-count="unpaid" title="결제 전 예약" hidden></em></button>
@@ -81,6 +83,78 @@
     </section>
 
     <!-- 예약 현황 (룸별 시간표 · 달력) -->
+    <section class="view" id="view-kpi" hidden>
+      <header class="vh"><div><h1>KPI</h1><p class="muted small">본사용 핵심 지표입니다. 룸 매출 · 예약률 · 이용인원 · 취소율과 홈페이지 방문을 같은 기간으로 묶어 보고, 직전 같은 길이의 기간과 비교합니다.</p></div>
+        <div class="acts"><button class="btn btn-light btn-sm" type="button" id="kpi-csv">CSV 내려받기</button><button class="btn btn-light btn-sm" type="button" id="kpi-reload">새로고침</button></div></header>
+      <div class="kpi-bar">
+        <div class="chips" id="kpi-presets" role="group" aria-label="기간"><button type="button" class="chip on" data-preset="month">이번 달</button><button type="button" class="chip" data-preset="prev">지난달</button><button type="button" class="chip" data-preset="d30">최근 30일</button><button type="button" class="chip" data-preset="q3">최근 3개월</button><button type="button" class="chip" data-preset="year">올해</button><button type="button" class="chip" data-preset="y12">최근 12개월</button></div>
+        <div class="kpi-range-in"><input class="input" type="date" id="kpi-from" aria-label="시작일"><span>–</span><input class="input" type="date" id="kpi-to" aria-label="종료일"><button class="btn btn-light btn-sm" type="button" id="kpi-apply">기간 적용</button></div>
+        <div class="seg" id="kpi-basis" role="group" aria-label="매출 기준"><button type="button" class="on" data-basis="use">이용일 기준</button><button type="button" data-basis="paid">결제일 기준</button></div>
+      </div>
+      <p class="small muted" id="kpi-range"></p>
+      <p class="note" id="kpi-status" role="status" aria-live="polite">KPI 메뉴를 열면 계산합니다.</p>
+      <div id="kpi-body" hidden>
+        <div class="kpi-tiles" id="kpi-tiles"></div>
+
+        <section class="card kpi-sec" id="kpi-sec-sales">
+          <h2 class="ch"><span>매출 <small id="kpi-basis-note"></small></span></h2>
+          <div class="kpi-grid2">
+            <div><p class="kpi-cap">기간별 매출 (룸별 + 그 외)</p><div class="kpi-chart" id="kpi-sales-chart"></div></div>
+            <div><p class="kpi-cap">룸별 매출 · 비중 · 예약 1시간당 매출</p><div id="kpi-sales-rooms"></div></div>
+          </div>
+          <div class="kpi-grid2 mt">
+            <div><p class="kpi-cap">매출 구성</p><div id="kpi-sales-cats"></div></div>
+            <div><p class="kpi-cap">기간별 표 (원)</p><div class="kpi-scroll" id="kpi-sales-table"></div></div>
+          </div>
+        </section>
+
+        <section class="card kpi-sec" id="kpi-sec-occ">
+          <h2 class="ch"><span>예약률 <small>1~5번룸 × 24시간 × 기간 일수 중 확정 예약이 차지한 시간 (스페이스클라우드 일정 포함)</small></span></h2>
+          <p class="note small" id="kpi-occ-note" hidden></p>
+          <div class="kpi-grid2">
+            <div><p class="kpi-cap">룸별 예약률</p><div id="kpi-occ-rooms"></div></div>
+            <div><p class="kpi-cap">기간별 예약률 (전체)</p><div class="kpi-chart" id="kpi-occ-chart"></div></div>
+          </div>
+          <p class="kpi-cap mt">요일 · 시간대별 예약률 (1~5번룸 평균)</p>
+          <div id="kpi-heat"></div>
+        </section>
+
+        <section class="card kpi-sec" id="kpi-sec-people">
+          <h2 class="ch"><span>이용인원 <small>인원이 기록되지 않은 예약은 그 방 최대 인원의 절반으로 셉니다 (빗금)</small></span></h2>
+          <div class="kpi-minis" id="kpi-people-sum"></div>
+          <div class="kpi-grid2">
+            <div><p class="kpi-cap">기간별 이용인원</p><div class="kpi-chart" id="kpi-people-chart"></div></div>
+            <div><p class="kpi-cap">룸별</p><div class="kpi-scroll" id="kpi-people-table"></div></div>
+          </div>
+        </section>
+
+        <section class="card kpi-sec" id="kpi-sec-cancel">
+          <h2 class="ch"><span>취소 <small>이용일이 기간 안인 예약 기준 · 스페이스클라우드는 전액 환불 건을 취소로 봅니다</small></span></h2>
+          <div class="kpi-grid2">
+            <div><p class="kpi-cap">기간별 예약 · 취소 건수</p><div class="kpi-chart" id="kpi-cancel-chart"></div></div>
+            <div><p class="kpi-cap">예약 경로 · 룸별 취소율</p><div class="kpi-scroll" id="kpi-cancel-table"></div></div>
+          </div>
+          <p class="kpi-cap mt">홈페이지 예약 신청 흐름 (신청일 기준)</p>
+          <div id="kpi-webbooking"></div>
+        </section>
+
+        <section class="card kpi-sec" id="kpi-sec-web">
+          <h2 class="ch"><span>홈페이지 <small>자체 방문 기록 · 쿠키 없이 하루 단위로 방문자를 셉니다 · 관리자 화면을 연 브라우저는 빠집니다</small></span></h2>
+          <div class="kpi-minis six" id="kpi-web-tiles"></div>
+          <div class="kpi-grid2">
+            <div><p class="kpi-cap">기간별 방문</p><div class="kpi-chart" id="kpi-web-chart"></div></div>
+            <div><p class="kpi-cap">방문 → 예약 전환</p><div id="kpi-funnel"></div></div>
+          </div>
+          <div class="kpi-grid2 mt">
+            <div><p class="kpi-cap">자주 보는 페이지</p><div class="kpi-scroll" id="kpi-pages"></div></div>
+            <div><p class="kpi-cap">들어온 경로 (방문 첫 페이지 기준)</p><div id="kpi-sources"></div><p class="kpi-cap mt">기기</p><div id="kpi-devices"></div></div>
+          </div>
+          <p class="kpi-cap mt">링크 · 버튼 클릭</p>
+          <div id="kpi-clicks"></div>
+        </section>
+      </div>
+    </section>
+
     <section class="view" id="view-board" hidden>
       <header class="vh">
         <div><h1>예약 현황</h1><p class="muted small">룸별 시간표로 하루 예약을 봅니다. 빈 칸을 누르면 그 룸 · 시간으로 예약 등록 창이 열리고, 예약을 누르면 상세 내용이 열립니다.</p></div>
@@ -688,5 +762,6 @@
 <script src="/js/admin-passes.js?v=guest20261103"></script>
 <script src="/js/admin-kiosk-products.js?v=20261030-products-submenu"></script>
 <script src="/js/admin-board-devices.js?v=20261031-direct"></script>
+<script src="/js/admin-kpi.js?v=kpi-20261116"></script>
 <script src="/js/parking-periods.js?v=20261116"></script><script src="/js/admin-parking.js?v=period-24h-20261116"></script><script src="/js/admin-parking-automation.js?v=instant-guidance-20261114"></script></body>
 </html>
