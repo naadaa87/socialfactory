@@ -703,4 +703,13 @@
       el.addEventListener("blur", function () { set(false); });
     });
   });
+
+  /* ---------- 방문 통계 (관리자 KPI) — js/visit.js 를 늦게 불러와 화면 표시를 막지 않습니다 ---------- */
+  (function () {
+    if (window.__sfVisitLoader) return;
+    window.__sfVisitLoader = true;
+    var s = document.createElement("script");
+    s.src = "/js/visit.js?v=20261116"; s.async = true; s.defer = true;
+    (document.head || document.documentElement).appendChild(s);
+  })();
 })();
