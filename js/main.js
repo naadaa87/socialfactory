@@ -228,6 +228,12 @@
     a.target = "_blank"; a.rel = "noopener";
   });
 
+  // 푸터 문의 목적에 따라 이메일을 분리합니다.
+  $$("[data-footer-email]").forEach(function (a) {
+    var address = text(get(a.getAttribute("data-footer-email") === "inquiry" ? "contact.inquiryEmail" : "company.email"));
+    if (address) { a.href = "mailto:" + address; a.textContent = address; }
+  });
+
   // 푸터 회사 정보
   var comp = CFG.company || {};
   var compLine = [comp.name, comp.ceo, comp.regNo, comp.address].map(text).filter(Boolean).join(" · ");
