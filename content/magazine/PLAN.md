@@ -28,10 +28,10 @@
 - [x] 2026-11-13 · /magazine/year-end-gathering-without-drinks · 술 없는 송년회, 건대에서 여는 연말 모임 아이디어 다섯 가지
 - [x] 2026-11-14 · /magazine/solo-founder-office-checklist · 건대 1인 사무실 고르기, 1인 창업자가 계약 전에 볼 다섯 가지
 - [x] 2026-11-15 · /magazine/class-no-show-reminder-messages · 클래스 노쇼 줄이기, 수강생에게 보낼 안내 메시지 네 번
+- [x] 2026-11-16 · /magazine/socialfactory-slogan-meaning · 모이면 만들어진다, 소셜팩토리 슬로건이 공간에 남긴 것
 
 ## 다음 주제
 
-- [ ] story | 모이면 만들어진다, 슬로건이 생긴 이야기 | 소셜팩토리 슬로건 | about · story 페이지 범위 안에서
 - [ ] space | 1번룸 소개 — 정기 클래스와 교육에 맞춘 방 | 건대 강의실, 건대 교육장 대관 | 룸 소개 시리즈 2
 - [ ] meeting | 독서모임 첫 모임 진행표 | 독서모임 장소, 독서모임 진행 방법 | 3번룸 회의형
 - [ ] work | 시험 준비 기간, 자리를 정하면 루틴이 생깁니다 | 공부 장소 고르기, 건대 스터디카페 | 코워킹 이용권 계산
