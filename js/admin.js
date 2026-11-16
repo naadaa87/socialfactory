@@ -1076,7 +1076,8 @@
       $("#set-pay").innerHTML =
         li(st.paymentReady && st.paymentProvider === "payapp", "온라인 결제 · 페이앱", st.paymentReady && st.paymentProvider === "payapp" ? "결제창을 사용할 수 있습니다." : "결제 설정이 완료되면 주문서에서 결제할 수 있습니다.")
         + li(st.payappConfigured, "페이앱 연동키", st.payappConfigured ? "서버에 설정되어 있습니다. 비밀값은 화면에 표시하지 않습니다." : "판매자 아이디 · 연동 KEY · 연동 VALUE · 결제 KEY 설정이 필요합니다.", st.paymentProvider !== "payapp")
-        + li(st.payappEnabled, "페이앱 결제 사용", st.payappEnabled ? "승인 · 취소 결과를 주문 내역에 자동 반영합니다. 실제 환불은 페이앱 판매자센터에서 처리하세요." : "현재 페이앱 결제 요청이 꺼져 있거나 키가 준비되지 않았습니다.", st.paymentProvider !== "payapp");
+        + li(st.payappEnabled, "신규 결제 판매자", st.payappEnabled ? (st.payappAccount === "gu" ? "주식회사 지유공간개발" : "주식회사 블랭크") + " 계정으로 새 결제를 발급합니다." : "현재 페이앱 결제 요청이 꺼져 있거나 선택한 계정의 키가 준비되지 않았습니다.", st.paymentProvider !== "payapp")
+        + li((st.payappAccounts || []).some(function(c){return c.account === "blank" && c.configured;}), "기존 블랭크 거래 · 환불", "기존 거래는 발급 당시 계정으로 처리합니다. 실제 환불은 해당 페이앱 판매자센터에서 진행해 주세요.");
       $("#set-opt").innerHTML =
         li(st.ipSalt, "IP 해시 소금값 (<code>IP_SALT</code>)", "접속 IP 를 그대로 저장하지 않기 위한 값입니다. 없어도 동작합니다.", true)
         + li(st.webhook, "알림 웹훅 (<code>NOTIFY_WEBHOOK</code>)", st.webhook ? "새 문의 · 결제 완료가 웹훅으로 전달됩니다." : "슬랙 · 디스코드 웹훅 주소를 넣으면 새 문의와 결제 완료를 바로 받을 수 있습니다.", true);

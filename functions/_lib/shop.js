@@ -20,7 +20,7 @@ export const sha512b64 = async (s) => btoa(String.fromCharCode(...new Uint8Array
 export function payConfig(env) {
   const mid = (env.INICIS_MID || "").trim(), signKey = (env.INICIS_SIGN_KEY || "").trim(), mobileKey = (env.INICIS_MOBILE_HASH_KEY || "").trim();
   const payapp = payappConfig(env);
-  const provider = env.SHOP_PAYMENT_PROVIDER || (payapp.configured ? "payapp" : "inicis");
+  const provider = env.SHOP_PAYMENT_PROVIDER || (env.PAYAPP_ACTIVE_ACCOUNT || payapp.configured ? "payapp" : "inicis");
   return { provider, payapp, ready: provider === "payapp" ? payapp.live && !!env.SESSION_SECRET : provider === "inicis" && !!(mid && signKey),
     mid, signKey, mobileKey, test: provider === "inicis" && (env.INICIS_TEST === "1" || /test/i.test(mid)) };
 }

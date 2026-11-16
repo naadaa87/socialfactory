@@ -42,7 +42,7 @@ window.SF_CONFIG = {
   /* 예약·상담 채널 — 주소가 비어 있으면 버튼이 숨겨집니다. */
   contact: {
     phone: "",         /* 예: "010-0000-0000" */
-    email: "spaceblank0100@gmail.com",   /* 문의 폼 저장이 안 될 때 메일 앱으로 보내는 데에도 쓰입니다 */
+    email: "guspacedev@gmail.com",   /* 문의 폼 저장이 안 될 때 메일 앱으로 보내는 데에도 쓰입니다 */
     kakao: "https://pf.kakao.com/_uTiFX", /* 카카오톡 문의채널 — 홈페이지의 모든 '카카오톡 문의' 버튼(헤더 · 오른쪽 아래 버튼 · 각 페이지)이 이 채널의 채팅방(/chat)으로 바로 연결됩니다. 바꾸면 images/kakao-qr.svg 도 새 주소로 다시 만들어야 합니다 */
     naver: "",         /* 예: "https://booking.naver.com/booking/..." */
     spacecloud: "",    /* 예: "https://www.spacecloud.kr/space/00000" */
@@ -109,12 +109,12 @@ window.SF_CONFIG = {
   /* 사업자 정보 — 모든 페이지 맨 아래와 이용약관 · 개인정보 처리방침, 주문서에 표기됩니다.
      사업자등록증과 글자 하나까지 같아야 합니다 (결제 심사 조건). 판매 상품은 functions/_lib/products.js 에서 고칩니다. */
   company: {
-    name: "주식회사 블랭크",
+    name: "주식회사 지유공간개발",
     ceo: "최시준",
-    regNo: "161-86-03494",                                   /* 사업자등록번호 */
-    address: "서울특별시 강남구 영동대로 602, 6층 제트71 (삼성동, 삼성동 미켈란 107)",   /* 사업장 소재지 (사업자등록증 기준) */
+    regNo: "757-86-04159",                                   /* 사업자등록번호 */
+    address: "경기도 화성시 병점구 경기대로 1014, 6층 603호 1023번",   /* 사업장 소재지 (사업자등록증 기준) */
     phone: "010-2384-9580",                                  /* 대표 연락처 */
-    email: "spaceblank0100@gmail.com",
+    email: "guspacedev@gmail.com",
     mailOrderNo: "",                                         /* 통신판매업 신고번호 — 신고 후 입력 (예: "2026-서울강남-01234") */
     privacyOfficer: "최시준"                                 /* 개인정보 보호책임자 */
   },

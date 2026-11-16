@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS payapp_payments (
     oid TEXT PRIMARY KEY REFERENCES orders(oid), mul_no TEXT UNIQUE, nonce TEXT NOT NULL,
     request_id TEXT NOT NULL UNIQUE, request_hash TEXT NOT NULL, payurl TEXT,
     refunded_amount INTEGER NOT NULL DEFAULT 0,
+    merchant_account TEXT NOT NULL DEFAULT 'blank' CHECK(merchant_account IN ('blank','gu')), merchant_userid TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now', '+9 hours'))
   );
 CREATE TABLE IF NOT EXISTS payapp_refunds (

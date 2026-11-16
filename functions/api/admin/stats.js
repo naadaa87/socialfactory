@@ -1,4 +1,4 @@
-import { ensurePayapp, netOrderAmount } from "../../_lib/payapp.js";
+import { ensurePayapp, netOrderAmount, payappAccounts } from "../../_lib/payapp.js";
 // GET /api/admin/stats — 대시보드 숫자 (오늘 · 7일 · 30일) 와 설정 상태
 import { json } from "../../_lib/auth.js";
 import { adminGate } from "../../_lib/admin.js";
@@ -11,7 +11,7 @@ export async function onRequestGet({ request, env }) {
   const setup = {
     db: !!env.DB, adminKey: !!env.ADMIN_KEY, sessionSecret: !!env.SESSION_SECRET, ipSalt: !!env.IP_SALT, webhook: !!env.NOTIFY_WEBHOOK,
     paymentProvider:cfg.provider,paymentReady:cfg.ready,payappConfigured:cfg.payapp.configured,payappEnabled:cfg.payapp.live, inicis: !!(cfg.mid && cfg.signKey), inicisMid: cfg.mid ? cfg.mid.slice(0, 3) + "…" + cfg.mid.slice(-2) : "", inicisMobile: !!cfg.mobileKey, inicisTest: cfg.test,
-    tables: {}
+    payappAccount:cfg.payapp.account,payappAccounts:payappAccounts(env).map(c=>({account:c.account,configured:c.configured})),tables: {}
   };
   const out = { ok: true, setup, periods: {}, recent: { inquiries: [], orders: [] }, products: PRODUCTS.map((p) => ({ id: p.id, name: p.name, price: p.price, category: p.category, sold: 0, sales: 0 })) };
   if (!env.DB) return json(out);

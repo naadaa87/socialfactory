@@ -1,4 +1,4 @@
-import {ensurePayapp,payappConfig} from './payapp.js';
+import {ensurePayapp,payappAccounts,payappConfig} from './payapp.js';
 import {stamp} from './toss-sales.js';
 import {ensureBookingPayappSchema,OFFICE_SALES_FROM} from './booking-payapp.js';
 
@@ -19,6 +19,19 @@ export async function ensurePayappSales(env){
 }
 const text=(v,n)=>typeof v==='string'?v.trim().slice(0,n):'';
 const number=v=>Number.isSafeInteger(v)&&v>=0&&v<=100000000;
+const sqlText=value=>"'"+String(value||'').replace(/'/g,"''")+"'";
+export function payappSellers(env){
+  return payappAccounts(env).filter(c=>c.configured).filter((c,i,rows)=>rows.findIndex(r=>r.userid===c.userid)===i)
+    .map(c=>({id:c.userid,account:c.account,label:c.account==='gu'?'지유공간개발':'블랭크'}));
+}
+export function payappSellerSql(env,alias){
+  // Unpinned historical rows belong only to the original account, never to the active account.
+  return `COALESCE(NULLIF(${alias}.merchant_userid,''),CASE WHEN ${alias}.merchant_account='blank' THEN ${sqlText(payappConfig(env,'blank').userid)} ELSE '' END)`;
+}
+export function payappWebsiteMatch(env){
+  return `(EXISTS(SELECT 1 FROM payapp_payments p WHERE p.mul_no=s.mul_no AND ${payappSellerSql(env,'p')}=s.seller_id)
+    OR EXISTS(SELECT 1 FROM booking_payapp_requests b WHERE b.mul_no=s.mul_no AND ${payappSellerSql(env,'b')}=s.seller_id))`;
+}
 export function payappTime(v){
   if(!v)return null;
   const s=/^\d{14}$/.test(v)?`${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}T${v.slice(8,10)}:${v.slice(10,12)}:${v.slice(12,14)}+09:00`:String(v).replace(' ','T');
@@ -31,12 +44,12 @@ export function normalizePayappSale(raw,seller){
   return {seller,mulNo:raw.mulNo,productName:text(raw.productName,200)||'상품명 없음',state:raw.state,amount:raw.amount,refund:raw.refundAmount,paid,requested,approval:text(raw.approvalNo,40),method:text(raw.method,80)};
 }
 export async function savePayappSales(env,raw,origin='import',partial=null){
-  const seller=payappConfig(env).userid;
+  const sellers=payappSellers(env).map(s=>s.id);
   if(!Array.isArray(raw)||!raw.length||raw.length>200)throw Error('1~200건의 페이앱 내역을 선택해 주세요.');
-  const rows=raw.map(r=>normalizePayappSale(r,seller));
-  if(new Set(rows.map(r=>r.mulNo)).size!==rows.length)throw Error('같은 페이앱 결제번호가 여러 번 있습니다.');
+  const rows=raw.map(r=>normalizePayappSale(r,sellers.includes(r?.sellerId)?r.sellerId:''));
+  if(new Set(rows.map(r=>r.seller+':'+r.mulNo)).size!==rows.length)throw Error('같은 판매자의 페이앱 결제번호가 여러 번 있습니다.');
   for(const r of rows){
-    const before=await env.DB.prepare('SELECT amount,approval_no FROM payapp_sales WHERE seller_id=? AND mul_no=?').bind(seller,r.mulNo).first();
+    const before=await env.DB.prepare('SELECT amount,approval_no FROM payapp_sales WHERE seller_id=? AND mul_no=?').bind(r.seller,r.mulNo).first();
     if(before&&(before.amount!==r.amount||(before.approval_no&&r.approval&&before.approval_no!==r.approval)))throw Error('저장된 원거래와 다른 결제입니다. 반영을 중지했습니다.');
   }
   const statements=rows.map(r=>env.DB.prepare(`INSERT INTO payapp_sales(seller_id,mul_no,product_name,state,amount,refund_amount,requested_at,paid_at,approval_no,method,origin) VALUES(?,?,?,?,?,?,?,?,?,?,?)
@@ -47,9 +60,9 @@ export async function savePayappSales(env,raw,origin='import',partial=null){
       approval_no=CASE WHEN excluded.approval_no='' THEN payapp_sales.approval_no ELSE excluded.approval_no END,method=CASE WHEN excluded.method='' THEN payapp_sales.method ELSE excluded.method END,
       origin=excluded.origin,received_at=datetime('now','+9 hours')
     WHERE payapp_sales.amount=excluded.amount AND (payapp_sales.approval_no='' OR excluded.approval_no='' OR payapp_sales.approval_no=excluded.approval_no)`)
-    .bind(seller,r.mulNo,r.productName,r.state,r.amount,r.refund,r.requested,r.paid,r.approval,r.method,origin));
+    .bind(r.seller,r.mulNo,r.productName,r.state,r.amount,r.refund,r.requested,r.paid,r.approval,r.method,origin));
   if(partial){
-    const r=rows[0];
+    const r=rows[0],seller=r.seller;
     if(rows.length!==1||!/^\d{1,30}$/.test(partial.id)||partial.id===r.mulNo||!number(partial.amount)||partial.amount<=0||partial.amount>r.amount)throw Error('부분 환불 내역을 확인해 주세요.');
     const before=await env.DB.prepare('SELECT mul_no,amount FROM payapp_sales_refunds WHERE seller_id=? AND event_no=?').bind(seller,partial.id).first();
     if(before&&(before.mul_no!==r.mulNo||before.amount!==partial.amount))throw Error('기존 부분 환불과 다른 내역입니다.');
@@ -58,12 +71,10 @@ export async function savePayappSales(env,raw,origin='import',partial=null){
   }
   await env.DB.batch(statements);return rows.length;
 }
-// Website orders already contribute revenue. Collecting the common notification must not count them twice.
-export const PAYAPP_WEBSITE_MATCH=`(EXISTS(SELECT 1 FROM payapp_payments p WHERE p.mul_no=s.mul_no)
-  OR EXISTS(SELECT 1 FROM booking_payapp_requests b WHERE b.mul_no=s.mul_no))`;
+// Website orders already contribute revenue. Match both merchant and transaction before deduplicating.
 export function payappSource(env,withReservationDuplicates=false){
-  const seller=payappConfig(env).userid.replace(/'/g,"''");
-  return `(SELECT s.* FROM payapp_sales s WHERE s.seller_id='${seller}' AND s.review_state IN (${withReservationDuplicates?"'include','duplicate'":"'include'"}) AND s.state IN ('paid','refunded') AND s.paid_at IS NOT NULL AND NOT ${PAYAPP_WEBSITE_MATCH})`;
+  const sellers=payappSellers(env).map(s=>sqlText(s.id)).join(',')||"''";
+  return `(SELECT s.* FROM payapp_sales s WHERE s.seller_id IN (${sellers}) AND s.review_state IN (${withReservationDuplicates?"'include','duplicate'":"'include'"}) AND s.state IN ('paid','refunded') AND s.paid_at IS NOT NULL AND NOT ${payappWebsiteMatch(env)})`;
 }
 
 export async function payappOnlySummary(env,year,today){

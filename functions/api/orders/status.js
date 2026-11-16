@@ -6,7 +6,7 @@ import { PRODUCT_MAP } from "../../_lib/products.js";
 import { json, clean, safeEqual, getMember } from "../../_lib/auth.js";
 import {getGuest,ownsGuestOrder} from "../../_lib/guest-orders.js";
 import {websiteSchedule,publicSchedule} from "../../_lib/website-reschedule.js";
-import { ensurePayapp } from "../../_lib/payapp.js";
+import { ensurePayapp, payappPaymentConfig } from "../../_lib/payapp.js";
 export async function onRequestGet({ request, env }) {
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   const url = new URL(request.url);
@@ -18,14 +18,15 @@ export async function onRequestGet({ request, env }) {
   const allowed = safeEqual(t, await orderToken(env, oid)) || (member && o.member_id === member.id) || ownsGuestOrder(await getGuest(request,env),o);
   if (!allowed) return json({ ok: false, error: "forbidden" }, 403);
   await ensurePayapp(env);
-  const payment=await env.DB.prepare("SELECT refunded_amount,payurl FROM payapp_payments WHERE oid=?").bind(oid).first();
+  const payment=await env.DB.prepare("SELECT refunded_amount,payurl,merchant_account,merchant_userid FROM payapp_payments WHERE oid=?").bind(oid).first();
+  const canPay = payment && payappPaymentConfig(env,payment).configured;
   const linked=await env.DB.prepare("SELECT p.code,p.status,p.starts_at,p.ends_at FROM website_order_passes w JOIN pass_payments pp ON pp.payment_key=w.payment_key JOIN passes p ON p.payment_id=pp.id WHERE w.oid=? ORDER BY w.unit").bind(oid).all().catch(()=>({results:[]}));
   let parking=null,parkingVehicles=[];if(o.product_id.startsWith("parking-")){await ensureParking(env);const settings=await parkingSettings(env);parkingVehicles=(await parkingItems(env,oid)).map(p=>publicParking(p,settings));parking=parkingVehicles[0]||null;}
   const p = PRODUCT_MAP[o.product_id] || {};
   const scheduledStart=/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00$/.test(o.start_date||"");
   const legacyReady=linked.results.some(p=>p.status==="ready");
   return json({ ok: true, order: {
-    parking, parkingVehicles, parkingAutomation:parking?await automationEnabled(env):false, passes:linked.results, schedule:publicSchedule(await websiteSchedule(env,o)), scheduledStart, oid: o.oid, provider:payment ? "payapp" : "inicis", refundedAmount:payment ? payment.refunded_amount : 0, payurl:payment && o.status === "pending" ? payment.payurl : null, status: o.status, statusLabel: ORDER_STATUS[o.status] || o.status, productId: o.product_id, productName: o.product_name, qty: o.qty, amount: o.amount,
+    parking, parkingVehicles, parkingAutomation:parking?await automationEnabled(env):false, passes:linked.results, schedule:publicSchedule(await websiteSchedule(env,o)), scheduledStart, oid: o.oid, provider:payment ? "payapp" : "inicis", sellerName:payment ? (payment.merchant_account === 'gu' ? '주식회사 지유공간개발' : '주식회사 블랭크') : '', refundedAmount:payment ? payment.refunded_amount : 0, payurl:canPay && o.status === "pending" ? payment.payurl : null, status: o.status, statusLabel: ORDER_STATUS[o.status] || o.status, productId: o.product_id, productName: o.product_name, qty: o.qty, amount: o.amount,
     buyerName: o.buyer_name, buyerPhone: o.buyer_phone, buyerEmail: o.buyer_email || "", startDate: o.start_date || "", startLabel: scheduledStart ? "이용 시작 일시 (한국 시간)" : p.startLabel || "",
     payMethod: PAY_METHOD[o.pg_method] || (payment ? "페이앱" : o.pg_method) || (o.pay_method === "bank" ? "실시간 계좌이체" : "신용 · 체크카드"), paidAt: o.paid_at || "", tid: o.tid || "",
     cardName: o.card_name || "", failMsg: o.fail_msg || "", createdAt: o.created_at, test: !!o.test_mode, validity: legacyReady ? "구매일로부터 90일 안에 입실 시작" : p.validity || ""

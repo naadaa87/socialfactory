@@ -10,7 +10,7 @@ function fixture(handler){
  const $=s=>{assert(ids.has(s.slice(1)));if(!nodes.has(s))nodes.set(s,{value:s==='#pa-filter'?'all':'',textContent:'',innerHTML:'',hidden:true,disabled:false,events:{},focus(){},addEventListener(k,fn){this.events[k]=fn;}});return nodes.get(s);};
  const A={$,esc:v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),num:String,won:n=>n+'원',guard:()=>false,LOAD:{sales(){prior++;}},async api(path,opt){calls.push({path,body:opt?.body});return handler(opt?.body,path);}};
  vm.runInNewContext(readFileSync(new URL('../js/admin-payapp-sales.js',import.meta.url),'utf8'),{window:{SF_ADMIN:A},Set,JSON});
- return {$,A,calls,get prior(){return prior;},click(id,decision){$('#pa-rows').events.click({target:{closest:()=>({dataset:{paId:id,paDecision:decision}})}});}};
+ return {$,A,calls,get prior(){return prior;},click(id,decision,sellerId){$('#pa-rows').events.click({target:{closest:()=>({dataset:{paId:id,paDecision:decision,paSeller:sellerId}})}});}};
 }
 test('PayApp panel filters requests, escapes labels, and keeps website payment controls read-only',async()=>{
  const f=fixture(()=>response([row({product_name:'<script>title</script>'}),row({mul_no:'2',disposition:'website'})]));f.A.LOAD.sales();await tick();
@@ -29,4 +29,11 @@ test('history import validates JSON and refreshes saved data without automatical
  const f=fixture(b=>b?{ok:true,changed:1}:response([row()]));f.$('#pa-json').value='invalid';await f.$('#pa-import-form').events.submit({preventDefault(){}});assert(!f.calls.length);
  f.$('#pa-json').value=JSON.stringify([row()]);await f.$('#pa-import-form').events.submit({preventDefault(){}});
  assert.equal(f.calls.find(c=>c.body).body.action,'import');assert(!f.calls.some(c=>c.body?.action==='review'));assert.equal(f.$('#pa-json').value,'');assert(f.$('#pa-review-status').textContent.includes('확인 후 합산'));
+});
+test('review identifies both merchant and transaction when two accounts have the same number',async()=>{
+ const f=fixture(b=>b?{ok:true}:response([row({seller_id:'old-seller',product_name:'기존 결제'}),row({seller_id:'guspacedev',product_name:'새 법인 결제'})]));
+ f.A.LOAD.sales();await tick();assert(f.$('#pa-rows').innerHTML.includes('data-pa-seller="guspacedev"'));
+ f.click('119000001','include','guspacedev');assert.match(f.$('#pa-review-title').textContent,/guspacedev · 새 법인 결제/);
+ f.$('#pa-note').value='새 법인 매출 확인';await f.$('#pa-review-form').events.submit({preventDefault(){}});
+ const sent=f.calls.find(c=>c.body)?.body;assert.equal(sent.sellerId,'guspacedev');assert.equal(sent.mulNo,'119000001');
 });

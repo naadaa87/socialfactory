@@ -1,5 +1,6 @@
 /** PayApp server REST integration. Secrets never leave the server; no automatic SMS. */
 import { clean, randomToken, safeEqual, sha256Hex } from './auth.js';
+import { payappConfig as merchantConfig, payappPaymentConfig, payappFeedbackConfig, ensurePayappMerchantColumns } from './payapp.js';
 
 const API = 'https://api.payapp.kr/oapi/v2';
 export const OFFICE_SALES_FROM = `FROM (SELECT amount,COALESCE(refund_amount,0) AS refund_amount,CASE
@@ -12,6 +13,7 @@ export const PAYAPP_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS booking_payapp_requests (
     code TEXT PRIMARY KEY, kind TEXT NOT NULL, inquiry_id INTEGER, label TEXT NOT NULL,
     amount INTEGER NOT NULL, token TEXT NOT NULL, mul_no TEXT UNIQUE, pay_url TEXT,
+    merchant_account TEXT NOT NULL DEFAULT 'blank' CHECK(merchant_account IN ('blank','gu')), merchant_userid TEXT,
     status TEXT NOT NULL DEFAULT 'creating', provider_state TEXT, provider_stamp TEXT,
     paid_at TEXT, accepted_at TEXT, consent_version TEXT, refund_amount INTEGER NOT NULL DEFAULT 0, failure TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now','+9 hours')), updated_at TEXT)`,
@@ -22,20 +24,20 @@ export const PAYAPP_SCHEMA = [
 export function paymentError(code, message, status = 409) {
   return Object.assign(new Error(message), { code, status });
 }
-export function payappConfig(env) {
-  const userid = String(env.PAYAPP_USERID || '').trim();
-  const linkkey = String(env.PAYAPP_LINK_KEY || env.PAYAPP_LINKKEY || '').trim();
-  const linkval = String(env.PAYAPP_LINK_VALUE || env.PAYAPP_LINKVAL || '').trim();
-  const requestkey = String(env.PAYAPP_REQUEST_KEY || env.PAYAPP_REQUESTKEY || '').trim();
+export function payappConfig(env, account) {
+  const cfg = merchantConfig(env, account);
   const origin = String(env.PAYAPP_SITE_URL || '').replace(/\/$/, '');
   let validOrigin = false;
   try { const u = new URL(origin); validOrigin = u.protocol === 'https:' && u.origin === origin && !u.username && !u.password; } catch {}
-  return { ready: !!(userid && linkkey && linkval && requestkey && validOrigin && env.PAYAPP_ENABLED === '1'), userid, linkkey, linkval, requestkey, origin };
+  return { ...cfg, ready: !!(cfg.live && validOrigin), origin, validOrigin };
 }
 export async function ensurePayappSchema(env) {
   if (!env.DB) throw paymentError('NO_DB', '데이터베이스 연결이 필요합니다.', 503);
   if (!readyDatabases.has(env.DB)) {
-    const task=env.DB.batch(PAYAPP_SCHEMA.map(sql=>env.DB.prepare(sql)));
+    const task=(async()=>{
+      await env.DB.batch(PAYAPP_SCHEMA.map(sql=>env.DB.prepare(sql)));
+      await ensurePayappMerchantColumns(env, 'booking_payapp_requests');
+    })();
     readyDatabases.set(env.DB,task);
     task.catch(()=>readyDatabases.delete(env.DB));
   }
@@ -45,10 +47,13 @@ const stamp = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 19)
 export function validPayappUrl(value) {
   try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && (u.hostname === 'payapp.kr' || u.hostname.endsWith('.payapp.kr')); } catch { return false; }
 }
-export const checkoutUrl = (env,row) => payappConfig(env).origin + '/booking-status?code=' + encodeURIComponent(row.code) + '&t=' + encodeURIComponent(row.token);
-async function callPayapp(env, fields) {
+export function checkoutUrl(env,row) {
   const cfg = payappConfig(env);
-  if (!cfg.ready) throw paymentError('PAYAPP_NOT_CONFIGURED', '페이앱 연결 설정을 먼저 완료해 주세요.', 503);
+  if (!cfg.validOrigin) throw paymentError('PAYAPP_NOT_CONFIGURED', '정식 HTTPS 홈페이지 주소를 확인해 주세요.', 503);
+  return cfg.origin + '/booking-status?code=' + encodeURIComponent(row.code) + '&t=' + encodeURIComponent(row.token);
+}
+async function callPayapp(env, fields, cfg = payappConfig(env), requireLive = true) {
+  if (!(requireLive ? cfg.ready : cfg.configured)) throw paymentError('PAYAPP_NOT_CONFIGURED', '페이앱 연결 설정을 먼저 완료해 주세요.', 503);
   const requestdate = stamp();
   const form = new URLSearchParams({ ...fields, userid: cfg.userid, linkkey: cfg.linkkey, requestdate,
     hash: await sha256Hex(cfg.userid + requestdate + cfg.requestkey) });
@@ -67,26 +72,30 @@ async function callPayapp(env, fields) {
     throw paymentError('PAYAPP_UNCERTAIN', '페이앱 처리 결과를 확인하지 못했습니다. 중복 발급 전에 판매자 결제내역을 확인해 주세요.', 502);
   } finally { clearTimeout(timer); }
 }
+// A retry always retains the original invoice, even while the new account is not ready.
+function existingPayment(env, row, {amount, kind}) {
+  if (row.amount !== amount || row.kind !== kind) throw paymentError('PAYMENT_MISMATCH', '이미 생성한 청구 내용과 다릅니다. 기존 결제내역을 확인해 주세요.');
+  if (row.mul_no && validPayappUrl(row.pay_url) && ['requested','pending','paid'].includes(row.status)) return { id: row.mul_no, url: checkoutUrl(env,row) };
+  throw paymentError('PAYAPP_REVIEW', '이미 결제요청을 처리한 기록이 있습니다. 페이앱 판매자 결제내역을 확인해 주세요.');
+}
 export async function createPayment(env, { code, kind, label, amount, phone, email = '', inquiry_id = null }) {
   await ensurePayappSchema(env);
-  const cfg = payappConfig(env);
-  if (!cfg.ready) throw paymentError('PAYAPP_NOT_CONFIGURED', '페이앱 연결 설정을 먼저 완료해 주세요.', 503);
   if (!/^[A-Za-z0-9_-]{4,64}$/.test(code) || !['room','office'].includes(kind) || !Number.isSafeInteger(amount) || amount < 1000 || amount > 100000000 || !/^0\d{8,10}$/.test(phone.replace(/\D/g, '')))
     throw paymentError('INVALID_PAYMENT', '청구금액과 연락처를 확인해 주세요.', 400);
+  const existing = await env.DB.prepare('SELECT * FROM booking_payapp_requests WHERE code=?1').bind(code).first();
+  if (existing) return existingPayment(env, existing, {amount, kind});
+  const cfg = payappConfig(env);
+  if (!cfg.ready) throw paymentError('PAYAPP_NOT_CONFIGURED', '페이앱 연결 설정을 먼저 완료해 주세요.', 503);
   const token = randomToken(32);
-  await env.DB.prepare('INSERT OR IGNORE INTO booking_payapp_requests (code,kind,inquiry_id,label,amount,token) VALUES (?1,?2,?3,?4,?5,?6)')
-    .bind(code, kind, inquiry_id, clean(label, 80), amount, token).run();
+  await env.DB.prepare('INSERT OR IGNORE INTO booking_payapp_requests (code,kind,inquiry_id,label,amount,token,merchant_account,merchant_userid) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)')
+    .bind(code, kind, inquiry_id, clean(label, 80), amount, token, cfg.account, cfg.userid).run();
   let row = await env.DB.prepare('SELECT * FROM booking_payapp_requests WHERE code=?1').bind(code).first();
-  if (row.amount !== amount || row.kind !== kind) throw paymentError('PAYMENT_MISMATCH', '이미 생성한 청구 내용과 다릅니다. 기존 결제내역을 확인해 주세요.');
-  if (row.token !== token) {
-    if (row.mul_no && validPayappUrl(row.pay_url) && ['requested','pending','paid'].includes(row.status)) return { id: row.mul_no, url: checkoutUrl(env,row) };
-    throw paymentError('PAYAPP_REVIEW', '이미 결제요청을 처리한 기록이 있습니다. 페이앱 판매자 결제내역을 확인해 주세요.');
-  }
+  if (row.token !== token) return existingPayment(env, row, {amount, kind});
   try {
     const result = await callPayapp(env, { cmd: 'payrequest', goodname: row.label, price: String(amount), recvphone: phone.replace(/\D/g, ''),
       recvemail: email, reqaddr: '0', feedbackurl: cfg.origin + '/api/booking/payapp-feedback', var1: code, var2: token,
       smsuse: 'n', checkretry: 'y', openpaytype: 'card,kakaopay,naverpay,applepay,tosspay,rbank',
-      returnurl: cfg.origin + '/booking-status?code=' + encodeURIComponent(code) + '&t=' + encodeURIComponent(token) });
+      returnurl: cfg.origin + '/booking-status?code=' + encodeURIComponent(code) + '&t=' + encodeURIComponent(token) }, cfg);
     if (!/^\d+$/.test(result.mul_no || '') || !validPayappUrl(result.payurl)) throw paymentError('PAYAPP_UNCERTAIN', '결제요청 결과 확인이 필요합니다.', 502);
     if (row.mul_no && row.mul_no !== result.mul_no) throw paymentError('PAYAPP_UNCERTAIN', '결제번호 확인이 필요합니다.', 502);
     await env.DB.prepare("UPDATE booking_payapp_requests SET mul_no=COALESCE(mul_no,?1),pay_url=?2,status=CASE WHEN status='creating' THEN 'requested' ELSE status END,updated_at=datetime('now','+9 hours') WHERE code=?3 AND (mul_no IS NULL OR mul_no=?1)")
@@ -113,7 +122,8 @@ export async function cancelBookingPayment(env, { booking }) {
     return {ok:true};
   }
   if (!row.mul_no || ['paid','refunded','partial_refund','review'].includes(row.status)) throw paymentError('PAYAPP_REVIEW', '페이앱 결제내역을 확인해야 합니다. 시간은 계속 확보됩니다.');
-  await callPayapp(env, { cmd: 'paycancel', mul_no: row.mul_no, cancelmemo: '예약 신청 취소', cancelmode: 'ready', partcancel: '0' });
+  const cfg = payappPaymentConfig(env, row);
+  await callPayapp(env, { cmd: 'paycancel', mul_no: row.mul_no, cancelmemo: '예약 신청 취소', cancelmode: 'ready', partcancel: '0' }, cfg, false);
   await env.DB.prepare("UPDATE booking_payapp_requests SET status='cancelled',updated_at=datetime('now','+9 hours') WHERE code=?1 AND status IN ('creating','requested','pending','cancelled')").bind(row.code).run();
   const latest = await env.DB.prepare('SELECT status FROM booking_payapp_requests WHERE code=?1').bind(row.code).first();
   if (latest.status !== 'cancelled') throw paymentError('PAYAPP_REVIEW', '결제 상태가 변경되었습니다. 판매자 내역을 확인해 주세요.');
@@ -126,14 +136,14 @@ export function parseProviderTime(value) {
   return Number.isFinite(n) && new Date(n + 9 * 3600e3).toISOString().slice(0,19).replace(/\D/g,'') === value ? n : null;
 }
 export async function validateFeedback(env, fields) {
-  const cfg = payappConfig(env);
-  if (!cfg.ready) throw paymentError('PAYAPP_NOT_CONFIGURED', '페이앱 설정이 필요합니다.', 503);
-  const ms = parseProviderTime(fields.responsedate);
-  if (ms === null || Math.abs(Date.now() - ms) > 15 * 60e3 || !safeEqual(fields.userid || '',cfg.userid) || !safeEqual(fields.linkkey || '',cfg.linkkey) || !safeEqual(fields.linkval || '',cfg.linkval)
-    || !safeEqual(String(fields.hash || '').toLowerCase(),await sha256Hex(cfg.userid + fields.responsedate + cfg.requestkey))) throw paymentError('INVALID_FEEDBACK','결제통보 인증 실패',403);
+  const cfg = await payappFeedbackConfig(env, fields);
+  if (!cfg) throw paymentError('INVALID_FEEDBACK','결제통보 인증 실패',403);
   await ensurePayappSchema(env);
   const row = await env.DB.prepare('SELECT * FROM booking_payapp_requests WHERE code=?1').bind(clean(fields.var1,64)).first();
   if (!row || !safeEqual(fields.var2 || '', row.token)) throw paymentError('INVALID_FEEDBACK','결제요청 연결 실패',403);
+  const owner = payappPaymentConfig(env, row);
+  if (!owner.configured || cfg.account !== owner.account || !safeEqual(cfg.userid, owner.userid))
+    throw paymentError('INVALID_FEEDBACK','결제 판매자 불일치',403);
   const partial = ['70','71'].includes(fields.pay_state);
   const id = partial ? fields.orig_mul_no : fields.mul_no;
   const expected = partial ? fields.orig_price : fields.price;

@@ -3,6 +3,36 @@
 2015년 홍대에서 시작한 모임공간 소셜팩토리의 공식 홈페이지입니다. 현재 공간은 소셜팩토리 건대(서울 광진구 화양동 10-1 한아름건물 4층)입니다.
 빌드 과정이 없는 정적 사이트라 GitHub에 올리고 Cloudflare Pages에 연결하면 바로 배포됩니다.
 
+## 페이앱 법인 전환: 블랭크 → 지유공간개발
+
+신규 결제는 설정 완료 후 배포 시점부터 지유공간개발(`guspacedev`)로 발급합니다. 기존 `PAYAPP_*`는 블랭크 계정으로 **그대로 유지**하고, 신규 계정은 `PAYAPP_GU_*`로 별도 추가합니다. 이 절차는 소셜팩토리 Pages 프로젝트에만 적용합니다. 메가스팟은 별도 프로젝트입니다.
+
+Cloudflare Pages → 소셜팩토리 프로젝트 → Settings → Variables and Secrets → **Production**에 아래를 설정합니다. 키는 페이앱 판매자센터의 설정 → 연동정보에서 확인하여 서버의 Secret에 직접 입력합니다.
+
+| 이름 | 값 · 역할 |
+| --- | --- |
+| `PAYAPP_USERID`, `PAYAPP_LINKKEY`, `PAYAPP_LINKVAL`, `PAYAPP_REQUESTKEY` | 기존 블랭크 설정을 수정·삭제하지 않습니다. 기존 승인·취소·부분/전액환불 통보에 계속 필요합니다. |
+| `PAYAPP_GU_USERID` | `guspacedev` |
+| `PAYAPP_GU_LINKKEY` | 지유공간개발 계정의 연동 KEY (Secret) |
+| `PAYAPP_GU_LINKVAL` | 지유공간개발 계정의 연동 VALUE (Secret) |
+| `PAYAPP_GU_REQUESTKEY` | 지유공간개발 계정의 결제 KEY (Secret) |
+| `PAYAPP_ACTIVE_ACCOUNT` | 신규 계정 준비 후 `gu`로 지정합니다. 미설정 시 기존 `blank`를 유지합니다. |
+| `PAYAPP_ENABLED` | `1`. `0`은 신규 발급만 중지하며 기존 통보·미결제 청구 취소는 계속 처리합니다. |
+| `SHOP_PAYMENT_PROVIDER` | `payapp` 유지 |
+| `PAYAPP_SITE_URL` | `https://socialfactory.co.kr` 유지 |
+| `SESSION_SECRET` | 기존 값 유지. 기존 주문 조회 링크 서명에 사용됩니다. |
+
+1. 구·신 계정 설정을 함께 둔 상태에서 이 코드를 배포합니다. 전환은 **새 환경값을 포함한 배포**부터 적용됩니다. Production의 DB와 설정을 Preview에 복사하지 않습니다.
+2. 관리자 설정 상태에서 신규 판매자 `주식회사 지유공간개발`과 기존 블랭크 연결을 확인합니다. 실제 청구의 판매자·승인·환불 확인은 운영자가 수행합니다. 자동 테스트는 모의 API를 사용합니다.
+3. 주차권·홈페이지 주문과 대관·사무실 원장에 발급 당시 `merchant_account`·`merchant_userid`가 고정됩니다. 구 DB는 첫 요청 때 필요한 두 컬럼을 추가하고 기존 거래를 `blank`로 보존합니다. 기존 거래번호·결제 링크·토큰·환불 원장은 바꾸지 않습니다. 스키마 전체 재실행이나 거래 재발급은 필요하지 않습니다.
+4. 전환 전에 발급된 미결제 청구도 원 계정·원 링크를 유지합니다. 같은 요청의 재시도로 새 계정 청구를 중복 생성하지 않습니다. 승인 후 부분·전액환불도 원 계정에서 처리하며 홈페이지 통보가 자동 반영됩니다.
+5. `gu`를 선택한 뒤 신규 키가 빠지면 새 발급을 중지합니다. 블랭크나 이니시스로 우회하지 않습니다. 구·신 계정의 매출은 판매자와 거래번호를 함께 구분하며, 기존 직접 결제 매출의 검토·환불 기록도 유지합니다.
+6. 요청별 통보 주소는 주차·주문 `/api/pay/payapp/feedback`, 대관·사무실 `/api/booking/payapp-feedback` 그대로입니다. 공통 매출 통보 `/api/pay/payapp/sales-feedback`도 양 계정을 검증합니다. 다른 사이트가 쓰는 **기존 공통 통보 URL은 덮어쓰지 않습니다**. 새 계정의 직접 결제 매출까지 공통 통보로 받고 싶다면 현재 수신 사이트를 먼저 확인합니다.
+
+홈페이지 사업자 표시는 주식회사 지유공간개발·대표 최시준·사업자번호 757-86-04159 및 제공받은 본점 주소·이메일로 변경했습니다. 거래별 결제 상세에는 실제 결제 판매자를 별도로 표시합니다. 기존 토스프론트·이니시스 키와 과거 계좌이체 장부 분류는 이 전환과 별개로 유지됩니다.
+
+전환 검증: `node --test tests/payapp-merchant-migration.test.mjs tests/payapp.test.mjs tests/booking-cloud-payapp.test.mjs tests/payapp-sales.test.mjs tests/payapp-sales-ui.test.mjs tests/parking.test.mjs`.
+
 ## 폴더 구성
 
 ```

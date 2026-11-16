@@ -55,7 +55,9 @@
     $('#booking-request-list').textContent='불러오는 중…';
     return Promise.all([api('/api/admin/booking-requests'),api('/api/admin/booking-payapp')]).then(function(results){
       var bookings=results[0],payments=results[1];rows=bookings.results || [];ready=!!payments.ready;syncEnabled=!!(bookings.sync && bookings.sync.enabled);syncReady=!!(bookings.sync && bookings.sync.ready);
-      $('#payapp-ready').textContent=ready?'페이앱 연결 설정이 준비되어 있습니다. 결제 완료는 서버 통보 확인 후 반영됩니다.':'페이앱 연결 설정이 필요합니다. Cloudflare 비밀값 PAYAPP_USERID · PAYAPP_LINK_KEY · PAYAPP_LINK_VALUE · PAYAPP_REQUEST_KEY와 PAYAPP_SITE_URL을 설정해 주세요.';
+      var sellerName=payments.account==='gu'?'지유공간개발':'블랭크';
+      $('#payapp-ready').textContent=ready?'새 청구는 '+sellerName+' 계정으로 발급합니다. 기존 청구의 결제·환불은 발급 당시 계정으로 처리합니다.':sellerName+' 페이앱 연결 설정을 확인해 주세요. PAYAPP_ACTIVE_ACCOUNT와 해당 계정의 판매자 ID·연동 KEY/VALUE·결제 KEY, PAYAPP_SITE_URL이 필요합니다.';
+      if(payments.account==='gu' && !payments.legacyConfigured)$('#payapp-ready').textContent+=' 기존 블랭크 거래의 결제·환불 처리를 위해 구 계정 설정도 유지해 주세요.';
       $('#office-invoice-submit').disabled=!ready;
       if(syncEnabled)$('#payapp-ready').textContent+=' '+(syncReady?'공간대관은 외부 시간 확보 후 결제 링크를 준비합니다.':'스페이스클라우드 자동 일정 확인 연결을 점검해 주세요. 확인 전에는 결제가 진행되지 않습니다.');
       showRows();
@@ -64,7 +66,7 @@
       var selected=$('#office-inquiry').value;
       $('#office-inquiry').innerHTML='<option value="">상담 접수 내역 선택</option>'+(payments.inquiries || []).map(function(i){return '<option value="'+i.id+'">'+esc(i.receipt+' · '+i.name+' · '+i.phone+(i.company?' · '+i.company:''))+'</option>';}).join('');
       $('#office-inquiry').value=selected;
-      $('#office-invoice-list').innerHTML=(payments.results || []).map(function(p){return '<div class="card mt"><b>'+esc(p.label)+'</b><p>'+esc(p.name || '')+' · '+A.won(p.amount)+' · '+esc(p.status==='requested'?'결제 대기':labels[p.status] || p.status)+'</p>'+paymentLink(p.pay_url)+(['requested','pending','failed'].includes(p.status)?'<button type="button" class="btn btn-light btn-sm" data-office-cancel="'+esc(p.code)+'">미결제 청구 취소</button>':'')+'</div>';}).join('') || A.emptyMsg('독립사무실 청구 내역이 없습니다.');
+      $('#office-invoice-list').innerHTML=(payments.results || []).map(function(p){return '<div class="card mt"><b>'+esc(p.label)+'</b><p>'+esc(p.name || '')+' · '+esc(p.merchant_account==='gu'?'지유공간개발':'블랭크')+' · '+A.won(p.amount)+' · '+esc(p.status==='requested'?'결제 대기':labels[p.status] || p.status)+'</p>'+paymentLink(p.pay_url)+(['requested','pending','failed'].includes(p.status)?'<button type="button" class="btn btn-light btn-sm" data-office-cancel="'+esc(p.code)+'">미결제 청구 취소</button>':'')+'</div>';}).join('') || A.emptyMsg('독립사무실 청구 내역이 없습니다.');
     }).catch(function(e){$('#booking-request-list').textContent=(e.data && e.data.message) || e.message;err(e);});
   }
   $('#booking-test-sms')?.addEventListener('click',function(event){

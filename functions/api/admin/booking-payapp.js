@@ -5,11 +5,12 @@ import { payappConfig, ensurePayappSchema, createPayment, cancelBookingPayment, 
 export async function onRequestGet({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
   await ensurePayappSchema(env);
-  const rows = await env.DB.prepare(`SELECT p.code,p.kind,p.inquiry_id,p.label,p.amount,p.mul_no,p.token,p.pay_url,p.status,p.paid_at,p.refund_amount,p.failure,p.created_at,
+  const rows = await env.DB.prepare(`SELECT p.code,p.kind,p.inquiry_id,p.label,p.amount,p.mul_no,p.token,p.pay_url,p.status,p.paid_at,p.refund_amount,p.failure,p.created_at,p.merchant_account,p.merchant_userid,
     i.name,i.phone,i.company,i.receipt FROM booking_payapp_requests p LEFT JOIN inquiries i ON i.id=p.inquiry_id WHERE p.kind='office' ORDER BY p.created_at DESC LIMIT 300`).all();
   const inquiries = await env.DB.prepare("SELECT id,receipt,name,phone,company,when_text,status FROM inquiries WHERE purpose='office' ORDER BY id DESC LIMIT 300").all();
   const results=(rows.results || []).map(row=>{row.pay_url=checkoutUrl(env,row);delete row.token;return row;});
-  return json({ ok:true, ready:payappConfig(env).ready, results, inquiries:inquiries.results || [] });
+  const cfg = payappConfig(env);
+  return json({ ok:true, ready:cfg.ready, account:cfg.account, legacyConfigured:payappConfig(env, 'blank').configured, results, inquiries:inquiries.results || [] });
 }
 export async function onRequestPost({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;

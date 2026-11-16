@@ -74,3 +74,46 @@ test('immutable transactions, seller isolation and pagination apply to the entir
  await f.review(rows[0].mulNo,'exclude');assert.equal((await f.list('?filter=exclude')).total,1);assert.equal((await f.list('?filter=review')).total,54);
  f.env.PAYAPP_USERID='other';assert.equal((await f.list()).total,0);assert.equal((await f.review(rows[0].mulNo)).status,400);
 });
+function activateGu(env){Object.assign(env,{PAYAPP_GU_USERID:'guspacedev',PAYAPP_GU_LINKKEY:'gu-key',PAYAPP_GU_LINKVAL:'gu-value',PAYAPP_GU_REQUESTKEY:'gu-request',PAYAPP_ACTIVE_ACCOUNT:'gu'});}
+function signedGu(extra={}){const responsedate=kstStamp();return {userid:'guspacedev',linkkey:'gu-key',linkval:'gu-value',responsedate,hash:createHash('sha256').update('guspacedev'+responsedate+'gu-request').digest('hex'),goodname:'신규 법인 공간대여',price:'15000',mul_no:'119000001',pay_state:'4',pay_date:at,reqdate:at,pay_type:'1',payauthcode:'76543210',...extra};}
+const deliver=(f,fields)=>feedback({env:f.env,request:new Request('https://example.test/api/pay/payapp/sales-feedback',{method:'POST',body:new URLSearchParams(fields)})});
+const reviewSeller=(f,sellerId,mulNo,decision='include')=>post({env:f.env,request:f.req('/api/admin/payapp-sales',{action:'review',sellerId,mulNo,decision,note:'법인별 매출 확인'})});
+test('merchant switch retains old sales and authenticated refunds while separating new sales with the same transaction number',async t=>{
+ const f=fixture(t);assert.equal((await f.save([sale()])).status,200);assert.equal((await f.review('119000001')).status,200);
+ activateGu(f.env);assert.equal((await f.list()).total,1);assert.equal((await f.summary()).total,15000);
+ const oldPartial={pay_state:'70',mul_no:'119000002',orig_mul_no:'119000001',price:'3000',orig_price:'15000'};
+ assert.equal((await f.send(oldPartial)).status,200);assert.equal((await f.summary()).total,12000);
+ assert.equal((await deliver(f,signedGu())).status,200);
+ const list=await f.list();assert.equal(list.total,2);assert.deepEqual(new Set(list.rows.map(r=>r.seller_id)),new Set(['seller','guspacedev']));
+ assert.equal((await f.review('119000001')).status,400);assert.equal((await reviewSeller(f,'guspacedev','119000001')).status,200);
+ assert.equal((await f.summary('payapp')).total,27000);
+ assert.equal((await f.send({pay_state:'64'})).status,200);assert.equal((await f.summary()).total,15000);
+ assert.equal((await deliver(f,signedGu({...oldPartial,price:'2000'}))).status,200);assert.equal((await f.summary()).total,13000);
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM payapp_sales_refunds').get().n,2);
+ assert.equal((await deliver(f,signedGu({userid:'seller'}))).status,403);
+ await f.send();assert.equal((await f.summary()).total,13000);
+ assert.equal((await f.list('?sellerId=guspacedev')).total,1);assert.equal((await f.list('?sellerId=seller')).total,1);
+ assert.equal((await get({env:f.env,request:f.req('/api/admin/payapp-sales?sellerId=foreign')})).status,400);
+ const d=await(await dashboard({env:f.env,request:f.req('/api/admin/dashboard')})).json();assert.equal(d.month.payapp,13000);
+});
+test('website deduplication includes the merchant identity and mixed-account imports remain atomic',async t=>{
+ const f=fixture(t);activateGu(f.env);await ensurePayappSales(f.env);
+ f.db.prepare("INSERT INTO orders(oid,status,product_id,product_name,amount,buyer_name,buyer_phone,paid_at,test_mode,pg_method) VALUES('SF1','paid','cowork-2h','구 법인 홈페이지',15000,'test','',?,0,'payapp:1')").run(at);
+ f.db.exec("INSERT INTO payapp_payments(oid,mul_no,nonce,request_id,request_hash,merchant_account,merchant_userid) VALUES('SF1','119000001','n','r','h','blank','seller')");
+ assert.equal((await f.save([sale(),sale({sellerId:'guspacedev',approvalNo:'76543210'})])).status,200);
+ let rows=(await f.list()).rows;assert.equal(rows.length,2);assert.equal(rows.find(r=>r.seller_id==='seller').disposition,'website');assert.equal(rows.find(r=>r.seller_id==='guspacedev').disposition,'review');
+ assert.equal((await reviewSeller(f,'guspacedev','119000001')).status,200);assert.equal((await f.summary('payapp')).total,30000);
+ assert.equal((await reviewSeller(f,'seller','119000001')).status,400);
+ f.db.prepare("INSERT INTO booking_payapp_requests(code,kind,label,amount,token,mul_no,merchant_account,merchant_userid) VALUES('OF-OLD','office','구 법인 청구',10000,'token','119000003','blank','seller')").run();
+ assert.equal((await f.save([sale({sellerId:'guspacedev',mulNo:'119000003',amount:10000})])).status,200);assert.equal((await reviewSeller(f,'guspacedev','119000003')).status,200);
+ assert.equal((await f.summary('payapp')).total,40000);
+ assert.equal((await f.save([sale({sellerId:'guspacedev',mulNo:'119000004'}),sale({sellerId:'foreign',mulNo:'119000005'})])).status,400);
+ assert.equal(f.db.prepare("SELECT COUNT(*) n FROM payapp_sales WHERE mul_no IN ('119000004','119000005')").get().n,0);
+});
+test('old sales and refunds remain available when new payment configuration is incomplete or disabled',async t=>{
+ const f=fixture(t);await f.save([sale()]);await f.review('119000001');
+ f.env.PAYAPP_ACTIVE_ACCOUNT='gu';f.env.PAYAPP_ENABLED='0';
+ assert.equal((await f.list()).total,1);assert.equal((await f.summary()).total,15000);
+ assert.equal((await f.save([sale({sellerId:'guspacedev'})])).status,400);
+ assert.equal((await f.send({pay_state:'64'})).status,200);assert.equal((await f.summary()).total,0);
+});

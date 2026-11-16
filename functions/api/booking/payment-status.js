@@ -1,5 +1,6 @@
 import { json,clean,safeEqual,sameOrigin } from '../../_lib/auth.js';
 import { ensurePayappSchema,validPayappUrl } from '../../_lib/booking-payapp.js';
+import { payappPaymentConfig } from '../../_lib/payapp.js';
 import { prepareBookings,getBooking,externalBookingConflict } from '../../_lib/booking.js';
 import { getSync,requireVerifiedBlock,enqueueSync } from '../../_lib/booking-spacecloud-sync.js';
 import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
@@ -28,7 +29,7 @@ export async function onRequestGet({request,env}) {
   const context=await paymentContext(env,code,token);
   if(!context)return json({ok:false,message:'결제 확인 링크를 확인해 주세요.'},404);
   const {row,block,booking}=context;
-  const eligible=!!(row && ['requested','pending'].includes(row.status) && validPayappUrl(row.pay_url)
+  const eligible=!!(row && payappPaymentConfig(env,row).configured && ['requested','pending'].includes(row.status) && validPayappUrl(row.pay_url)
     && (row.kind!=='room' || bookingPaymentOpen(env,booking,!!block)) && (!block || (block.state==='blocked' && !block.cancel_requested)));
   let fresh=!block;
   if(block && eligible) {try{await requireVerifiedBlock(env,booking);fresh=true;}catch{}}
@@ -42,6 +43,7 @@ export async function onRequestGet({request,env}) {
   const canCancel=!!(booking && block && ['requested','awaiting_payment'].includes(booking.status)
     && !['creating','paid','paid_verifying','cancelling','review','refund_pending'].includes(booking.payment_status) && !['review','released','releasing','conflict'].includes(block.state));
   return json({ok:true,code,kind:row?.kind || 'room',label:row?.label || `소셜팩토리 ${booking.room.replace('r','')}번룸 ${booking.date}`,
+    sellerName:row ? (row.merchant_account==='gu'?'주식회사 지유공간개발':'주식회사 블랭크') : null,
     amount:row?.amount ?? booking.amount,refund_amount:row?.refund_amount || 0,status,paid_at:row?.paid_at || null,
     booking:booking ? {room:booking.room,date:booking.date,start_min:booking.start_min,end_min:booking.end_min,people:booking.people,status:booking.status,payment_status:booking.payment_status} : null,
     sync:publicSync(block),can_start_payment:eligible,can_pay:eligible && fresh,can_cancel:canCancel});
@@ -56,6 +58,7 @@ export async function onRequestPost({request,env,waitUntil}) {
   if(!context)return json({ok:false,message:'결제 확인 링크를 확인해 주세요.'},404);
   const {row,block,booking}=context;
   if(!row || !['requested','pending'].includes(row.status) || !validPayappUrl(row.pay_url))return json({ok:false,message:'현재 결제를 진행할 수 없습니다. 담당자에게 확인해 주세요.'},409);
+  if(!payappPaymentConfig(env,row).configured)return json({ok:false,message:'결제 연결 설정을 확인하고 있습니다. 담당자에게 문의해 주세요.'},503);
   if(row.kind==='room') {
     if(!bookingPaymentOpen(env,booking,!!block))return json({ok:false,message:'예약 상태나 이용시간이 변경되었습니다. 담당자에게 확인해 주세요.'},409);
     if(block) {

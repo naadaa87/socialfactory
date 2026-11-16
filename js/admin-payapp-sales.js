@@ -9,8 +9,9 @@
   function lock(value){busy=value;['#pa-filter','#pa-refresh','#pa-import','#pa-save'].forEach(function(s){$(s).disabled=value;});}
   function draw(){
     $('#pa-rows').innerHTML='<table class="tbl"><thead><tr><th>결제일시 · 거래번호</th><th>상품명</th><th>상태 · 수단</th><th>결제금액</th><th>환불금액</th><th>매출 합산</th></tr></thead><tbody>'+rows.map(function(r){
-      var controls=r.disposition==='website'?'':(['paid','refunded'].includes(r.state)?'<div class="acts">'+(r.disposition!=='include'?'<button type="button" class="btn btn-light btn-xs" data-pa-id="'+esc(r.mul_no)+'" data-pa-decision="include">합산</button>':'')+(r.disposition!=='duplicate'?'<button type="button" class="btn btn-light btn-xs" data-pa-id="'+esc(r.mul_no)+'" data-pa-decision="duplicate">기존 예약 중복</button>':'')+(r.disposition!=='exclude'?'<button type="button" class="btn btn-light btn-xs" data-pa-id="'+esc(r.mul_no)+'" data-pa-decision="exclude">매출에서 제외</button>':'')+(r.disposition!=='review'?'<button type="button" class="btn btn-light btn-xs" data-pa-id="'+esc(r.mul_no)+'" data-pa-decision="review">확인 보류</button>':'')+'</div>':'');
-      return '<tr><td>'+esc(r.paid_at||r.requested_at||'승인일시 없음')+'<br><small class="mono">'+esc(r.mul_no)+'</small></td><td>'+esc(r.product_name)+'</td><td>'+esc(states[r.state]||r.state)+'<br><small>'+esc(methods[r.method]||r.method||'—')+'</small></td><td>'+A.won(r.amount)+'</td><td>'+A.won(r.refund_amount)+'</td><td>'+esc(decisions[r.disposition]||r.disposition)+(r.review_note?'<br><small>'+esc(r.review_note)+'</small>':'')+controls+'</td></tr>';
+      var identity=' data-pa-id="'+esc(r.mul_no)+'" data-pa-seller="'+esc(r.seller_id||'')+'"';
+      var controls=r.disposition==='website'?'':(['paid','refunded'].includes(r.state)?'<div class="acts">'+(r.disposition!=='include'?'<button type="button" class="btn btn-light btn-xs"'+identity+' data-pa-decision="include">합산</button>':'')+(r.disposition!=='duplicate'?'<button type="button" class="btn btn-light btn-xs"'+identity+' data-pa-decision="duplicate">기존 예약 중복</button>':'')+(r.disposition!=='exclude'?'<button type="button" class="btn btn-light btn-xs"'+identity+' data-pa-decision="exclude">매출에서 제외</button>':'')+(r.disposition!=='review'?'<button type="button" class="btn btn-light btn-xs"'+identity+' data-pa-decision="review">확인 보류</button>':'')+'</div>':'');
+      return '<tr><td>'+esc(r.paid_at||r.requested_at||'승인일시 없음')+'<br><small class="mono">'+esc(r.seller_id||'')+' · '+esc(r.mul_no)+'</small></td><td>'+esc(r.product_name)+'</td><td>'+esc(states[r.state]||r.state)+'<br><small>'+esc(methods[r.method]||r.method||'—')+'</small></td><td>'+A.won(r.amount)+'</td><td>'+A.won(r.refund_amount)+'</td><td>'+esc(decisions[r.disposition]||r.disposition)+(r.review_note?'<br><small>'+esc(r.review_note)+'</small>':'')+controls+'</td></tr>';
     }).join('')+(!rows.length?'<tr><td colspan="6">조건에 맞는 페이앱 내역이 없습니다.</td></tr>':'')+'</tbody></table>';
   }
   async function load(){
@@ -30,15 +31,15 @@
   $('#pa-next').addEventListener('click',function(){if(!busy&&!this.disabled){page++;load();}});
   $('#pa-rows').addEventListener('click',function(e){
     var b=e.target.closest('[data-pa-id]');if(!b||busy)return;
-    var row=rows.find(function(r){return r.mul_no===b.dataset.paId&&r.disposition!=='website';});if(!row||!['include','exclude','duplicate','review'].includes(b.dataset.paDecision))return;
-    review={id:row.mul_no,decision:b.dataset.paDecision};$('#pa-review-title').textContent=row.product_name+' · '+A.won(row.amount)+' · '+decisions[review.decision];
+    var row=rows.find(function(r){return r.mul_no===b.dataset.paId&&(r.seller_id||'')===(b.dataset.paSeller||'')&&r.disposition!=='website';});if(!row||!['include','exclude','duplicate','review'].includes(b.dataset.paDecision))return;
+    review={id:row.mul_no,seller:row.seller_id,decision:b.dataset.paDecision};$('#pa-review-title').textContent=(row.seller_id?row.seller_id+' · ':'')+row.product_name+' · '+A.won(row.amount)+' · '+decisions[review.decision];
     $('#pa-note').value=row.review_note||'';$('#pa-review-form').hidden=false;$('#pa-note').focus();
   });
   $('#pa-cancel').addEventListener('click',function(){if(!busy)close();});
   $('#pa-review-form').addEventListener('submit',async function(e){
     e.preventDefault();if(busy||!review)return;var note=$('#pa-note').value.trim(),target=review;
     if(note.length<3||note.length>300){$('#pa-review-status').textContent='사유를 3~300자로 적어주세요.';return;}
-    lock(true);try{await request({action:'review',mulNo:target.id,decision:target.decision,note:note});$('#pa-review-status').textContent='페이앱 매출 합산 여부를 저장했습니다.';await load();previous();}catch(ex){error(ex);}finally{lock(false);}
+    lock(true);try{await request({action:'review',sellerId:target.seller,mulNo:target.id,decision:target.decision,note:note});$('#pa-review-status').textContent='페이앱 매출 합산 여부를 저장했습니다.';await load();previous();}catch(ex){error(ex);}finally{lock(false);}
   });
   $('#pa-import-form').addEventListener('submit',async function(e){
     e.preventDefault();if(busy)return;var raw;try{raw=JSON.parse($('#pa-json').value);}catch{$('#pa-review-status').textContent='페이앱 JSON 배열을 확인해 주세요.';return;}
