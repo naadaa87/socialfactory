@@ -40,7 +40,7 @@ export async function automaticParking({request,env,waitUntil}){
  if(b.action==='claim'){
   const entry=String(d.entry_id||'').trim().slice(0,80),at=String(d.entry_at||'').replace('T',' ').slice(0,16)+':00',now=kstNow();
   if(!['waiting','requested'].includes(p.status)||claim||plateOf(d.plate_confirm)!==p.plate||d.confirm_entry!==true||!entry||!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00$/.test(at)||at.slice(0,10)!==today||Number(at.slice(11,13))>23||Number(at.slice(14,16))>59||at>now||d.free_used!==true&&d.confirm_no_free!==true||d.free_used===true&&d.confirm_no_free===true)return json({ok:false,error:'당일 입차·무료 할인 이력을 확인해 주세요.'},409);
-  const free=d.free_used?0:1,hours=TICKETS[p.ticket].hours,paid=hours===null?0:hours-free,cost=p.ticket==='daily'?20000:paid*3000;
+  const free=d.free_used?0:1,hours=TICKETS[p.ticket].hours,fullDay=['daily','24h'].includes(p.ticket),paid=fullDay?0:hours-free,cost=fullDay?20000:paid*3000;
   if(cost>p.amount||paid<0||paid>3)return json({ok:false},409);
   const operation=crypto.randomUUID(),version=p.version+1;
   const result=await env.DB.batch([

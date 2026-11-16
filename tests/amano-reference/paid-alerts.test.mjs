@@ -78,9 +78,9 @@ test('허용되지 않은 번호·중지·현재 환불된 결제에는 신규 �
 });
 
 test('최대 10대 결제 문자는 LMS 한도 안에서 전체 차량을 표시',()=>{
- const vehicles=Array.from({length:10},(_,i)=>({plate:'123가'+String(1000+i),date:'2026-11-14',ticket:'daily',price:30000}));
+ const vehicles=Array.from({length:10},(_,i)=>({plate:'서울123가'+String(1000+i),date:'2026-11-14',ticket:'24h',price:40000}));
  const text=paymentMessage({oid:'SF261114210001EFGH',amount:300000,paid_at:'2026-11-14 21:00:01',vehicles});
- assert(text.includes('차량 10대'));assert(text.includes('123가1009'));assert(text.length<=600);assert(Buffer.byteLength(text,'utf8')<=2000);
+ assert(text.includes('차량 10대'));assert(text.includes('서울123가1009'));assert(text.includes('24시간권(입차 후 24시간)'));assert(text.length<=600);assert(Buffer.byteLength(text,'utf8')<=2000);
 });
 
 test('동시에 들어온 결제 알림 요청은 하나의 발송 루틴만 진행',async t=>{
