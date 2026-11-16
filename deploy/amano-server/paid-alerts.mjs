@@ -1,6 +1,6 @@
 import {notifyProblems} from './alerts.mjs';
 
-const TICKETS={'1h':'1시간권','2h':'2시간권','3h':'3시간권',daily:'일일권'};
+const TICKETS={'1h':'1시간권','2h':'2시간권','3h':'3시간권',daily:'당일권(자정 종료)'};
 const PROFILE={namespace:'socialfactory-paid',path:'socialfactory-paid-admin/send',
  receiverKey:'SOCIALFACTORY_PARKING_PAID_ADMIN_RECEIVERS',formatMessage:issue=>issue.message};
 let busy=false;
