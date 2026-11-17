@@ -2246,3 +2246,11 @@ body select:not([multiple]):not([size]), body select:not([multiple])[size="1"] {
     background-image: none;
   }
 }
+
+/* 머리글 메뉴에 '커뮤니티'를 더하면서 넓은 화면의 메뉴 간격을 조금 좁혔습니다 (로그인하면 '마이페이지'까지 한 줄에 들어가도록) */
+@media (min-width: 1281px) {
+  .nav { gap: 12px; }
+  .nav-links { gap: 2px; }
+  .nav-links a { padding: 10px 6px; }
+  .nav-links .nav-cta a.btn { padding: 9px 12px; }
+}
