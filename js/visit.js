@@ -83,6 +83,7 @@
     var u; try { u = new URL(href, loc.href); } catch (e) { return null; }
     var host = u.hostname.replace(/^www\./, ""), target = u.hostname === loc.hostname ? u.pathname : host + u.pathname;
     target = target.replace(/\.html$/, "").slice(0, 120);
+    if (el.closest("[data-cm-post], [data-cm-comments]") && u.hostname !== loc.hostname) return ["community", target];
     if (el.getAttribute("data-channel") === "kakao" || /(^|\.)kakao\.com$/.test(host)) return ["kakao", target];
     if (/map\.naver\.com|naver\.me|map\.kakao\.com|kko\.to|maps\.google|google\.[a-z.]+\/maps/i.test(u.hostname + u.pathname)) return ["map", target];
     if (/\.(pdf|zip|pptx?|xlsx?|docx?)$/i.test(u.pathname)) return ["download", target];
