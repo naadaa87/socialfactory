@@ -40,7 +40,7 @@ export const VISIT_KEEP_DAYS = 400;
 export const CLICK_KINDS = {
   kakao: '카카오톡 문의', tel: '전화', mail: '이메일', booking: '예약 페이지로 이동', booking_submit: '예약 신청 버튼',
   inquiry: '문의 페이지로 이동', inquiry_submit: '문의 보내기 버튼', quote: '견적서 PDF', shop: '이용권 · 결제',
-  map: '지도 · 길찾기', family: '패밀리 사이트', external: '다른 사이트', internal: '홈페이지 안 이동', download: '파일 내려받기', button: '기타 버튼'
+  map: '지도 · 길찾기', family: '패밀리 사이트', external: '다른 사이트', internal: '홈페이지 안 이동', download: '파일 내려받기', community: '커뮤니티 모임 · 문의 링크', button: '기타 버튼'
 };
 export const REF_TYPES = {
   direct: '직접 방문 · 북마크', naver: '네이버', google: '구글', daum: '다음 · 카카오 검색', kakao: '카카오톡', instagram: '인스타그램',
