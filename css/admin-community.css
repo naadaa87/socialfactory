@@ -1,0 +1,70 @@
+/* 소셜팩토리 관리자 — 커뮤니티 메뉴 전용 (admin.html 에서 admin.css 다음에 불러옴, 기존 화면 스타일은 건드리지 않음) */
+.cmm-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.cmm-tile { background: #fff; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; display: grid; gap: 2px; text-align: left; min-width: 0; cursor: default; }
+.cmm-tile[data-cmm-goto] { cursor: pointer; }
+.cmm-tile[data-cmm-goto]:hover { border-color: var(--blue); }
+.cmm-tile span { font-size: 12px; font-weight: 700; color: var(--muted); }
+.cmm-tile b { font-size: 20px; font-weight: 800; color: var(--navy); font-variant-numeric: tabular-nums; }
+.cmm-tile small { font-size: 11.5px; color: var(--muted); }
+.cmm-tile.warn { border-color: #F2C48D; background: #FFFBF5; }
+.cmm-tabs { margin-bottom: 14px; }
+.cmm-tabs em { font-style: normal; background: var(--red); color: #fff; border-radius: 999px; font-size: 11px; padding: 0 6px; margin-left: 4px; }
+.cmm-tbl td b { color: var(--navy); }
+.cmm-tbl .cmm-acts { white-space: nowrap; }
+.cmm-tbl .cmm-cbody { max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmm-pager { display: flex; gap: 6px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.cmm-wide { width: min(760px, 100%); }
+.cmm-v-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cmm-v-top p { width: 100%; margin: 4px 0 0; }
+.cmm-v-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 12px 14px; }
+.cmm-v-meta div { display: grid; gap: 2px; min-width: 0; }
+.cmm-v-meta span { font-size: 11.5px; color: var(--muted); font-weight: 700; }
+.cmm-v-meta small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.cmm-red { color: var(--red); }
+.cmm-info th { width: 110px; background: #FAFBFD; }
+.cmm-info td { overflow-wrap: anywhere; }
+.cmm-v-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; padding: 14px 16px; border-radius: var(--r); background: #FAFBFD; border: 1px solid var(--line); }
+.cmm-v-text a, .cmm-info a, .cmm-clist a { color: var(--blue); }
+.cmm-v-imgs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cmm-v-imgs img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.cmm-row { display: flex; gap: 8px; }
+.cmm-h { font-size: 14px; margin: 6px 0 0; }
+.cmm-clist, .cmm-rlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cmm-clist li { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; font-size: 13px; }
+.cmm-clist li.off { background: #FAFBFD; color: var(--muted); }
+.cmm-clist li > div { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cmm-clist li p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmm-c-acts { margin-left: auto; display: inline-flex; gap: 4px; }
+.cmm-rlist li { font-size: 12.5px; color: var(--navy-80); }
+.cmm-rlist li p { margin: 2px 0 0; color: var(--muted); }
+.cmm-reply { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; }
+.cmm-reports { display: grid; gap: 10px; }
+.cmm-report { display: grid; gap: 8px; }
+.cmm-report-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13.5px; }
+.cmm-report-head small { color: var(--muted); }
+.cmm-report-ex { margin: 0; padding: 10px 12px; background: #FAFBFD; border-radius: var(--r); font-size: 13px; color: var(--navy-80); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmm-settings { display: grid; gap: 14px; max-width: 720px; }
+.cmm-switches { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 14px; font-weight: 600; }
+.cmm-g { display: grid; gap: 14px; }
+.cmm-g[hidden] { display: none; }
+.cmm-publish { display: grid; gap: 12px; padding: 14px; border-radius: var(--r-lg); background: #FAFBFD; border: 1px solid var(--line); }
+.cmm-publish .f .chk { font-size: 13px; }
+.cmm-photos { display: flex; flex-wrap: wrap; gap: 8px; }
+.cmm-ph, .cmm-ph-add { width: 88px; height: 88px; border-radius: 10px; position: relative; overflow: hidden; }
+.cmm-ph { border: 1px solid var(--line); background: #F4F6F9; }
+.cmm-ph img { width: 100%; height: 100%; object-fit: cover; }
+.cmm-ph em { position: absolute; left: 4px; top: 4px; font-style: normal; font-size: 10.5px; font-weight: 800; background: var(--navy); color: #fff; border-radius: 999px; padding: 1px 6px; }
+.cmm-ph span { position: absolute; right: 3px; bottom: 3px; display: flex; gap: 3px; }
+.cmm-ph button { width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(24, 35, 58, .8); color: #fff; font-size: 13px; line-height: 1; cursor: pointer; }
+.cmm-ph.busy::after { content: "올리는 중"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, .75); font-size: 11.5px; font-weight: 700; }
+.cmm-ph-add { border: 1.5px dashed var(--line); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; background: #fff; }
+.cmm-ph-add:hover { border-color: var(--blue); color: var(--blue); }
+.cmm-ph-add input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+@media (max-width: 1180px) { .cmm-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .cmm-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cmm-v-meta { grid-template-columns: 1fr; }
+  .cmm-v-imgs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cmm-tabs { display: flex; overflow-x: auto; }
+  .cmm-tabs button { flex: none; }
+}
