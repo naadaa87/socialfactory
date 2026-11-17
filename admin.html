@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="/css/admin.css?v=mobile-inputs-20261106">
   <link rel="stylesheet" href="/css/admin-kpi.css?v=kpi-20261116">
+  <link rel="stylesheet" href="/css/admin-community.css?v=cm-20261117">
   <link rel="stylesheet" href="/css/admin-kiosk-ui.css?v=d24708b714">
 </head>
 <body class="adm">
@@ -53,6 +54,7 @@
       <button type="button" data-view="parking">주차권 관리</button>
       <button type="button" data-view="ord">주문 · 결제<em data-count="ord" hidden></em></button>
       <button type="button" data-view="mem">회원</button>
+      <button type="button" data-view="community">커뮤니티<em data-count="community" title="처리할 신고" hidden></em></button>
       <span class="nav-cap">설정</span>
       <button type="button" data-view="prod">상품</button>
       <button type="button" data-view="set">설정 상태</button>
@@ -550,6 +552,108 @@
       <p class="tiny muted mt">임시 비밀번호는 발급 직후 한 번만 보입니다. 회원은 로그인 뒤 마이페이지에서 새 비밀번호로 바꾸게 됩니다.</p>
     </section>
 
+    <!-- 커뮤니티 (모임 소개 · 자유게시판) -->
+    <section class="view" id="view-community" hidden>
+      <header class="vh"><div><h1>커뮤니티</h1><p class="muted small">모임 소개 · 자유게시판의 글과 댓글, 신고를 관리합니다. 회원이 올린 글은 바로 공개되며, 문제가 있는 글은 여기서 숨기거나 지웁니다. 운영자 공지 · 추천 모임 · 예약 발행도 여기서 합니다.</p></div>
+        <div class="acts"><a class="btn btn-light btn-sm" href="/community" target="_blank" rel="noopener">커뮤니티 열기 ↗</a><button class="btn btn-light btn-sm" type="button" id="cmm-reload">새로고침</button><button class="btn btn-primary btn-sm" type="button" id="cmm-new">+ 운영자 글 쓰기</button></div></header>
+      <div class="cmm-tiles" id="cmm-tiles"></div>
+      <div class="seg cmm-tabs" id="cmm-tabs" role="tablist" aria-label="커뮤니티 관리">
+        <button type="button" class="on" data-cmm-tab="posts">게시글</button><button type="button" data-cmm-tab="comments">댓글</button><button type="button" data-cmm-tab="reports">신고<em id="cmm-rep-n" hidden></em></button><button type="button" data-cmm-tab="members">회원</button><button type="button" data-cmm-tab="settings">설정</button>
+      </div>
+      <div class="cmm-pane" id="cmm-pane-posts">
+        <div class="filters">
+          <select class="select select-sm" id="cmm-p-board" aria-label="게시판"><option value="">전체 게시판</option><option value="groups">모임 소개</option><option value="free">자유게시판</option></select>
+          <select class="select select-sm" id="cmm-p-status" aria-label="상태"><option value="active">삭제 제외 전체</option><option value="published">공개 중</option><option value="scheduled">예약 발행</option><option value="draft">임시 저장</option><option value="hidden">숨김</option><option value="deleted">작성자가 삭제</option></select>
+          <input class="input" id="cmm-p-q" type="search" placeholder="제목 · 내용 · 닉네임 · 글 번호" aria-label="검색">
+          <label class="chk small"><input type="checkbox" id="cmm-p-reported"> 신고 있는 글만</label>
+          <label class="chk small"><input type="checkbox" id="cmm-p-pinned"> 고정 · 추천 글만</label>
+          <button class="btn btn-light btn-sm" type="button" id="cmm-p-go">검색</button>
+        </div>
+        <p class="small muted" id="cmm-p-count"></p>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl cmm-tbl"><thead><tr><th>번호</th><th>게시판 · 분류</th><th>제목 · 작성자</th><th>상태</th><th class="r">조회 · 관심 · 댓글</th><th class="r">신고</th><th>올린 때</th><th>관리</th></tr></thead><tbody id="cmm-p-rows"></tbody></table></div></div>
+        <div class="cmm-pager" id="cmm-p-pager"></div>
+      </div>
+      <div class="cmm-pane" id="cmm-pane-comments" hidden>
+        <div class="filters">
+          <select class="select select-sm" id="cmm-c-status" aria-label="상태"><option value="active">삭제 제외 전체</option><option value="published">공개 중</option><option value="hidden">숨김</option><option value="deleted">작성자가 삭제</option></select>
+          <input class="input" id="cmm-c-q" type="search" placeholder="댓글 내용 · 닉네임" aria-label="검색">
+          <label class="chk small"><input type="checkbox" id="cmm-c-reported"> 신고 있는 댓글만</label>
+          <button class="btn btn-light btn-sm" type="button" id="cmm-c-go">검색</button>
+        </div>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl cmm-tbl"><thead><tr><th>번호</th><th>댓글 · 글</th><th>작성자</th><th>상태</th><th class="r">신고</th><th>남긴 때</th><th>관리</th></tr></thead><tbody id="cmm-c-rows"></tbody></table></div></div>
+        <div class="cmm-pager" id="cmm-c-pager"></div>
+      </div>
+      <div class="cmm-pane" id="cmm-pane-reports" hidden>
+        <div class="filters"><select class="select select-sm" id="cmm-r-status" aria-label="신고 상태"><option value="open">처리 전</option><option value="resolved">숨김 처리함</option><option value="dismissed">문제 없음으로 넘김</option><option value="all">전체</option></select></div>
+        <p class="note small">같은 글 · 댓글에 들어온 신고를 묶어 보여 줍니다. <b>숨기기</b>를 누르면 대상이 홈페이지에서 내려가고 신고가 처리됩니다. 문제가 없으면 <b>문제 없음</b>으로 넘겨 주세요.</p>
+        <div class="cmm-reports mt" id="cmm-r-list"></div>
+      </div>
+      <div class="cmm-pane" id="cmm-pane-members" hidden>
+        <div class="filters">
+          <input class="input" id="cmm-m-q" type="search" placeholder="닉네임 · 이름 · 이메일" aria-label="검색">
+          <label class="chk small"><input type="checkbox" id="cmm-m-banned"> 글쓰기 제한한 회원만</label>
+          <button class="btn btn-light btn-sm" type="button" id="cmm-m-go">검색</button>
+        </div>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl cmm-tbl"><thead><tr><th>닉네임</th><th>회원 정보</th><th class="r">글</th><th class="r">댓글</th><th class="r">받은 신고</th><th>상태</th><th>관리</th></tr></thead><tbody id="cmm-m-rows"></tbody></table></div></div>
+        <p class="tiny muted mt">글쓰기를 제한하면 그 회원은 글 · 댓글 · 사진을 올릴 수 없습니다(읽기는 됩니다). 이미 올린 글은 게시글 탭에서 따로 숨겨 주세요.</p>
+      </div>
+      <div class="cmm-pane" id="cmm-pane-settings" hidden>
+        <form class="card cmm-settings" id="cmm-s-form">
+          <h2 class="ch"><span>게시판 설정</span></h2>
+          <div class="cmm-switches">
+            <label class="chk"><input type="checkbox" id="cmm-s-groups"> 모임 소개 새 글 받기</label>
+            <label class="chk"><input type="checkbox" id="cmm-s-free"> 자유게시판 새 글 받기</label>
+            <label class="chk"><input type="checkbox" id="cmm-s-comments"> 댓글 받기</label>
+          </div>
+          <div class="f"><label for="cmm-s-notice">게시판 위 안내 문구</label><textarea class="textarea" id="cmm-s-notice" maxlength="300" rows="3" placeholder="예) 12월 한 달 동안 모임 소개를 올리면 추천 모임으로 소개해 드립니다."></textarea><small class="muted">비워 두면 보이지 않습니다.</small></div>
+          <div class="f"><label for="cmm-s-words">금지어</label><textarea class="textarea" id="cmm-s-words" rows="3" placeholder="쉼표나 줄바꿈으로 구분 — 예) 대출, 도박, 카지노"></textarea><small class="muted">이 말이 들어간 글 · 댓글은 올라가지 않고 작성자에게 알려 줍니다.</small></div>
+          <div class="f"><label for="cmm-s-auto">신고 자동 숨김</label><select class="select" id="cmm-s-auto"><option value="0">쓰지 않음 (운영자가 직접 확인)</option><option value="3">신고 3건이면 자동으로 숨김</option><option value="5">신고 5건이면 자동으로 숨김</option><option value="10">신고 10건이면 자동으로 숨김</option></select></div>
+          <p class="form-note" id="cmm-s-msg" hidden></p>
+          <div class="acts"><button class="btn btn-primary" type="submit">설정 저장</button></div>
+        </form>
+        <div class="card mt"><h2 class="ch"><span>사진 저장 공간</span></h2><p class="small" id="cmm-s-images"></p><p class="tiny muted">사진은 데이터베이스(D1)에 저장합니다. 글이 지워지면 사진도 함께 지워지고, 글에 붙지 않은 사진은 하루 뒤 정리됩니다.</p></div>
+      </div>
+
+      <div class="drawer" id="dr-cmm-view" hidden>
+        <div class="drawer-bg" data-close></div>
+        <div class="drawer-panel cmm-wide" role="dialog" aria-modal="true" aria-labelledby="cmm-v-title">
+          <div class="drawer-head"><h2 id="cmm-v-title">글 보기</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+          <div class="drawer-body" id="cmm-v-body"></div>
+        </div>
+      </div>
+      <div class="drawer" id="dr-cmm-form" hidden>
+        <div class="drawer-bg" data-close></div>
+        <div class="drawer-panel cmm-wide" role="dialog" aria-modal="true" aria-labelledby="cmm-f-head">
+          <div class="drawer-head"><h2 id="cmm-f-head">운영자 글 쓰기</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+          <form class="drawer-body form" id="cmm-f" novalidate>
+            <input type="hidden" id="cmm-f-id">
+            <div class="frow"><div class="f"><label for="cmm-f-board">게시판</label><select class="select" id="cmm-f-board"><option value="groups">모임 소개</option><option value="free">자유게시판</option></select></div>
+              <div class="f"><label for="cmm-f-category">분류</label><select class="select" id="cmm-f-category"></select></div></div>
+            <div class="f"><label for="cmm-f-title">제목 · 모임 이름</label><input class="input" id="cmm-f-title" maxlength="80" required></div>
+            <div class="cmm-g" data-cmm-for="groups">
+              <div class="f"><label for="cmm-f-summary">한 줄 소개</label><input class="input" id="cmm-f-summary" maxlength="80"></div>
+              <div class="frow"><div class="f"><label for="cmm-f-recruit">모집 상태</label><select class="select" id="cmm-f-recruit"></select></div><div class="f"><label for="cmm-f-room">모임 장소</label><select class="select" id="cmm-f-room"></select></div></div>
+              <div class="frow"><div class="f"><label for="cmm-f-schedule">정기 일정</label><input class="input" id="cmm-f-schedule" maxlength="60"></div><div class="f"><label for="cmm-f-nextDate">다음 모임 날짜</label><input class="input" id="cmm-f-nextDate" type="date"></div></div>
+              <div class="frow"><div class="f"><label for="cmm-f-audience">대상 · 인원</label><input class="input" id="cmm-f-audience" maxlength="60"></div><div class="f"><label for="cmm-f-fee">참가비</label><input class="input" id="cmm-f-fee" maxlength="40"></div></div>
+              <div class="frow"><div class="f"><label for="cmm-f-joinUrl">참여 신청 링크</label><input class="input" id="cmm-f-joinUrl" maxlength="300"></div><div class="f"><label for="cmm-f-contactUrl">문의 링크</label><input class="input" id="cmm-f-contactUrl" maxlength="300"></div></div>
+              <div class="frow"><div class="f"><label for="cmm-f-contactText">문의 연락처</label><input class="input" id="cmm-f-contactText" maxlength="80"></div><div class="f"><label for="cmm-f-snsUrl">SNS · 홈페이지</label><input class="input" id="cmm-f-snsUrl" maxlength="300"></div></div>
+            </div>
+            <div class="f"><label for="cmm-f-body">본문</label><textarea class="textarea" id="cmm-f-body" rows="10" maxlength="5000" required></textarea></div>
+            <div class="f"><label>사진 (첫 사진이 대표)</label><div class="cmm-photos" id="cmm-f-photos"></div></div>
+            <div class="cmm-publish">
+              <div class="frow"><div class="f"><label for="cmm-f-status">발행</label><select class="select" id="cmm-f-status"><option value="published">바로 공개</option><option value="scheduled">예약 발행</option><option value="draft">임시 저장 (비공개)</option><option value="hidden">숨김</option></select></div>
+                <div class="f" id="cmm-f-at-wrap" hidden><label for="cmm-f-at">공개할 때 (한국 시간)</label><input class="input" id="cmm-f-at" type="datetime-local"></div></div>
+              <div class="frow"><div class="f" id="cmm-f-author-wrap"><label for="cmm-f-author">작성자 표시 이름</label><input class="input" id="cmm-f-author" maxlength="20" placeholder="소셜팩토리"></div>
+                <div class="f"><label class="lbl">노출</label><label class="chk small"><input type="checkbox" id="cmm-f-pinned"> 자유게시판 맨 위 고정</label><label class="chk small"><input type="checkbox" id="cmm-f-featured"> 추천 모임 (목록 · 메인 위쪽)</label></div></div>
+              <div class="f"><label for="cmm-f-memo">운영 메모 (관리자만 봄)</label><input class="input" id="cmm-f-memo" maxlength="500"></div>
+            </div>
+            <p class="form-note" id="cmm-f-msg" role="status" hidden></p>
+            <div class="drawer-actions"><button class="btn btn-primary" type="submit" id="cmm-f-save">저장</button><button class="btn btn-light" type="button" data-close>취소</button></div>
+          </form>
+        </div>
+      </div>
+    </section>
+
     <!-- 상품 -->
 <section class="view" id="view-booking" hidden>
       <header class="vh"><div><h1>예약 신청 · 페이앱</h1><p class="muted small">공간대관은 외부 일정을 확인하고 시간을 확보한 뒤 결제를 안내합니다. 독립사무실은 상담한 조건으로 청구합니다.</p></div><button class="btn btn-light" type="button" id="booking-admin-reload">새로고침</button></header>
@@ -763,5 +867,6 @@
 <script src="/js/admin-kiosk-products.js?v=20261030-products-submenu"></script>
 <script src="/js/admin-board-devices.js?v=20261031-direct"></script>
 <script src="/js/admin-kpi.js?v=kpi-20261116"></script>
+<script src="/js/admin-community.js?v=cm-20261117"></script>
 <script src="/js/parking-periods.js?v=20261116"></script><script src="/js/admin-parking.js?v=period-24h-20261116"></script><script src="/js/admin-parking-automation.js?v=instant-guidance-20261114"></script></body>
 </html>
