@@ -1,4 +1,5 @@
 import { enrichBoardNames } from './board-names.mjs';
+import { isMeteredPlan, isMeteredBudget } from '../../functions/_lib/cloud-budget-policy.js';
 import { QueueClient } from '../../integrations/spacecloud-worker/queue.mjs';
 import { SpacecloudUI } from '../../integrations/spacecloud-worker/spacecloud-ui.mjs';
 import { collectHostPayments, paymentRequest } from './payments.mjs';
@@ -36,7 +37,7 @@ function guestDiagnostic(value) {
 function configured(env){
   availabilityMode(env);
   if(!env.BROWSER)throw problem('browser-binding','클라우드 브라우저 연결이 필요합니다.',503);
-  if(!(paidIncluded(env) || (env.CLOUD_PLAN_MODE!=='paid-included' && env.CLOUD_PLAN_CONFIRMED_FREE==='true')))
+  if(!(paidIncluded(env) || isMeteredPlan(env) || (!['paid-included','paid-metered'].includes(env.CLOUD_PLAN_MODE) && env.CLOUD_PLAN_CONFIRMED_FREE==='true')))
     throw problem('cost-not-confirmed','요금제와 포함 사용량 확인 전에는 클라우드 브라우저를 실행하지 않습니다.',503);
   if(env.LOGIN_CLEANUP_SCHEDULED!=='true')throw problem('cleanup-not-scheduled','브라우저 자동 종료 스케줄을 먼저 연결해야 합니다.',503);
   if(String(env.SESSION_ENCRYPTION_KEY || '').length<32)throw problem('encryption-key','로그인 암호화 키를 먼저 설정해야 합니다.',503);
@@ -258,7 +259,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
     const table=guest?'cloud_guest_login':'cloud_login';
     await ensureStore(env);await maintenance(env);configured(env);
     const usage=await budgetStatus(env,{now:now()});
-    const remaining=Math.min(usage.daily_limit_ms-usage.daily_reserved_ms,usage.monthly_limit_ms-usage.monthly_reserved_ms,usage.rolling_32d_limit_ms-usage.rolling_32d_reserved_ms);
+    const remaining=isMeteredBudget(usage)?Infinity:Math.min(usage.daily_limit_ms-usage.daily_reserved_ms,usage.monthly_limit_ms-usage.monthly_reserved_ms,usage.rolling_32d_limit_ms-usage.rolling_32d_reserved_ms);
     const loginMs=Math.min(LOGIN_MS,Math.floor((remaining-CLEANUP_MS-5000)/1000)*1000);
     if(loginMs<60000)throw problem('daily-budget','로그인과 종료에 필요한 사용 시간이 부족합니다. 한도 안에서 연결을 보류합니다.',429);
     const token=await lockRunner(env,{duration:loginMs+CLEANUP_MS+60000,now:now()});if(!token)throw problem('runner-busy','진행 중인 클라우드 작업이나 로그인을 먼저 완료해 주세요.');

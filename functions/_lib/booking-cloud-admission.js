@@ -1,5 +1,5 @@
 import { cloudRunnerOrigin } from './spacecloud-runner.js';
-import { AUTOMATIC_BROWSER_TOTAL_MS } from './cloud-budget-policy.js';
+import { AUTOMATIC_BROWSER_TOTAL_MS, isMeteredBudget } from './cloud-budget-policy.js';
 
 // One room needs an initial block, checkout verification and post-payment
 // verification. This is admission headroom, not a reservation of future usage.
@@ -24,6 +24,9 @@ function ready(data,now) {
     || !data.runner || data.runner.review!==false || typeof data.runner.busy!=='boolean' || !data.budget)return false;
   const budget=data.budget,day=new Date(now).toISOString().slice(0,10);
   if(budget.utc_day!==day || budget.utc_month!==day.slice(0,7))return false;
+  if(budget.mode==='metered')return isMeteredBudget(budget)
+    && ['daily_reserved_ms','monthly_reserved_ms','rolling_32d_reserved_ms'].every(key=>integer(budget[key]));
+  if(budget.mode!==undefined && budget.mode!=='capped')return false;
   return [
     ['daily_limit_ms','daily_reserved_ms',5400000],
     ['monthly_limit_ms','monthly_reserved_ms',AUTOMATIC_BROWSER_TOTAL_MS],
