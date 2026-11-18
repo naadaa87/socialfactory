@@ -7,8 +7,9 @@ time: 01:20
 category: meeting
 description: 스터디 모임이 몇 주 만에 흐지부지되는 이유와, 처음 세 번의 모임에서 정해 두면 좋은 장소 · 시간 · 역할 · 규칙을 정리했습니다. 건대에서 스터디룸을 고르는 기준과 1인당 비용 계산법도 함께 담았습니다.
 lead: 스터디는 시작하기는 쉬워도 이어 가기가 어렵습니다. 모임이 오래 가느냐는 첫 모임의 분위기보다, 처음 몇 번 동안 무엇을 정해 두었느냐에 달려 있습니다.
-cover: images/space/room-3-02-meeting.webp
-coverAlt: 소셜팩토리 건대 3번룸 — 두 개의 테이블 모둠을 배치한 회의형 전경, 대형 모니터와 벽면 화이트보드
+cover: images/space/room-3-02-front-20261118.webp
+coverAlt: 3번룸 긴 회의 테이블을 정면에서 바라본 구도, 양옆 회색 의자와 안쪽 칠판
+ogImage: images/og/study-group-that-lasts-20261118.jpg
 tags: ["스터디 모임 운영", "건대 스터디룸", "건대입구 스터디 장소", "스터디 규칙", "소셜팩토리 건대"]
 related: ["coworking-vs-private-office", "room-rate-by-time"]
 cta: rooms

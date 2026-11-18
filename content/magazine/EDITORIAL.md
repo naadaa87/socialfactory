@@ -85,7 +85,7 @@ time: "12:00"
 category: space
 description: 검색 결과 아래에 보일 설명 60~160자. 무엇을 알 수 있는지 구체적으로.
 lead: 제목 아래 첫 문단 한두 문장 (선택)
-cover: images/space/room-3-02-meeting.webp
+cover: images/space/room-3-02-front-20261118.webp
 coverAlt: 이미지 설명 (5장 목록의 설명을 그대로 써도 됩니다)
 coverNote: 공간 활용 예시 이미지입니다.   ← images/scenes/ 를 쓸 때만
 tags: ["검색어 1", "검색어 2", "검색어 3"]
@@ -107,7 +107,7 @@ cta: rooms
 
 - 1번룸 `images/space/room-1-01-lecture-rear.webp` · `room-1-02-u-shape.webp` · `room-1-03-lecture-front.webp` · `room-1-20261030-0{1,2,3}.webp`(세로)
 - 2번룸 `room-2-01-lecture-angle.webp` · `room-2-02-lecture-front.webp` · `room-2-03-u-shape.webp`
-- 3번룸 `room-3-01-lecture.webp` · `room-3-02-meeting.webp` · `room-3-03-meeting-reverse.webp`
+- 3번룸 `room-3-01-main-20261118.webp` · `room-3-02-front-20261118.webp` · `room-3-03-aisle-20261118.webp`
 - 4번룸 `room-4-01-lecture-angle.webp` · `room-4-02-lecture-front.webp` · `room-4-03-theater.webp`
 - 5번룸 `room-5-01-theater.webp` · `room-5-02-u-shape.webp` · `room-5-03-lecture.webp`
 - 코워킹 `35-cowork-sage.webp` · `36-cowork-green-brick.webp` · `37-cowork-night-brick.webp` / 사무실 `23-office-single.webp` · `24-office-double.webp` · `25-office-double-navy.webp` · `26-office-compact.webp` · `38-office-corridor.webp` · `39-corridor-warm.webp`

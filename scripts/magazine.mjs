@@ -394,7 +394,7 @@ function relatedFor(post, posts) {
    -------------------------------------------------------------------------- */
 function renderPost(tpl, post, posts) {
   const cat = CATEGORIES[post.category];
-  const ogImg = exists(`images/og/${post.slug}.jpg`) ? `images/og/${post.slug}.jpg` : post.cover;
+  const ogImg = post.ogImage && exists(post.ogImage) ? post.ogImage : exists(`images/og/${post.slug}.jpg`) ? `images/og/${post.slug}.jpg` : post.cover;
   const body = post.body.blocks.map((b) => typeof b === 'string' ? b : figureHtml(b.figure)).join('\n');
   const toc = post.body.toc.length >= 3 ? `<nav class="mz-toc" aria-label="이 글의 차례"><strong>이 글의 차례</strong><ol>${post.body.toc.map((t) => `<li><a href="#${t.id}">${inline(t.text)}</a></li>`).join('')}</ol></nav>` : '';
   const related = relatedFor(post, posts);

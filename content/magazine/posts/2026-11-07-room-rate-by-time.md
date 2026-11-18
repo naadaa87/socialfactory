@@ -7,8 +7,9 @@ time: 01:45
 category: space
 description: 소셜팩토리 건대 룸 요금은 평일과 주말 · 공휴일, 오전 · 오후와 저녁 · 심야로 나뉩니다. 시간대가 걸칠 때 계산하는 법, 심야 요금 기준, 같은 모임을 더 낮은 요금으로 여는 요령을 예시와 함께 정리했습니다.
 lead: 같은 3번룸 세 시간이라도 평일 오전과 토요일 오후의 금액은 두 배 차이가 납니다. 요금표를 읽는 법을 알면 일정을 잡을 때 고를 수 있는 선택지가 늘어납니다.
-cover: images/space/room-3-01-lecture.webp
-coverAlt: 소셜팩토리 건대 3번룸 — 대형 모니터와 벽면 화이트보드를 향한 책상 강의형 배치
+cover: images/space/room-3-01-main-20261118.webp
+coverAlt: 소셜팩토리 건대 3번룸 — 흰 테이블을 길게 연결한 회의형 전경, 회색 의자와 대형 화이트보드·칠판
+ogImage: images/og/room-rate-by-time-20261118.jpg
 tags: ["건대 세미나실 대관 요금", "건대 회의실 가격", "건대 스터디룸 대관", "시간대별 대관 요금", "소셜팩토리 건대"]
 related: ["gundae-seminar-room-guide", "lecture-room-rental-checklist"]
 cta: rooms
