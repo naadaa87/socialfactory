@@ -20,6 +20,18 @@ test('cloud status loads only with the reservation view and preserves its existi
  assert.equal(h.node('#booking-cloud-start').disabled,false);assert.equal(h.node('#booking-cloud-guest-start').disabled,false);assert(h.node('#booking-cloud-budget').textContent.includes('한도 120분'));assert(h.node('#booking-cloud-status').textContent.includes('접수 준비 중'));
  assert.equal([...h.timers.values()].some(t=>t.ms<40000),false,'no frequent status polling');
 });
+test('low allowance is shown as paused with an early usage warning, and restored allowance clears it',async()=>{
+ const data={...cloudStatus(),booking_enabled:true,login_saved:true,public_verification:{mode:'public-api-v1',configured:true}};
+ data.budget.monthly_reserved_ms=data.budget.rolling_32d_reserved_ms=7186223;
+ const h=harness(()=>data);h.A.LOAD.booking();await h.flush();
+ assert(h.node('#booking-cloud-status').textContent.includes('사용 한도 부족 · 자동 연동 보류'));
+ assert(!h.node('#booking-cloud-status').textContent.includes('자동 예약 접수 중'));
+ assert(h.node('#booking-cloud-budget').textContent.includes('사용량 80% 이상'));
+ data.budget.monthly_limit_ms=data.budget.rolling_32d_limit_ms=28800000;
+ h.node('#booking-cloud-refresh').events.click();await h.flush();
+ assert(h.node('#booking-cloud-status').textContent.includes('자동 예약 접수 중'));
+ assert(!h.node('#booking-cloud-budget').textContent.includes('사용량 80% 이상'));
+});
 test('reconnect exposes a private explicit link, then saves only that in-memory session',async()=>{
  let saved=false;
  const h=harness((path,options)=>{

@@ -98,6 +98,22 @@ test('zero configured caps stop use and paid inclusion does not raise caps beyon
   assert.equal(monthlyLimit({MONTHLY_BROWSER_BUDGET_MS:'999999999'}),7200000);
   assert.equal(rollingLimit({ROLLING_32D_BROWSER_BUDGET_MS:'999999999'}),7200000);
 });
+test('explicit paid automatic synchronization resumes the existing queue after the legacy two-hour cap without resetting usage',async()=>{
+ const policy={CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',BROWSER_BUDGET_PROFILE:'automatic-sync',MONTHLY_BROWSER_BUDGET_MS:'28800000',ROLLING_32D_BROWSER_BUDGET_MS:'28800000',PUBLIC_AVAILABILITY_MODE:'public-api-v1'};
+ assert.equal(monthlyLimit(policy),28800000);assert.equal(rollingLimit(policy),28800000);
+ assert.equal(monthlyLimit({...policy,INCLUDED_BUDGET_CONFIRMED:'false'}),7200000);
+ assert.equal(monthlyLimit({...policy,BROWSER_BUDGET_PROFILE:''}),7200000);
+ assert.equal(rollingLimit({...policy,ROLLING_32D_BROWSER_BUDGET_MS:'999999999'}),28800000);
+ const f=await ready(fixture(policy));
+ f.sqlite.prepare("INSERT INTO cloud_budget_reservations(id,day,month,reserved_ms,charged_ms,started_at,state,closed_at) VALUES('prior','2026-11-05','2026-11',7186223,7186223,?,'closed',?)").run(CLOCK-86400000,CLOCK-86400000);
+ f.sqlite.exec("UPDATE cloud_budget SET day='2026-11-06',month='2026-11',month_ms=7186223,day_ms=0 WHERE id=1");
+ await f.runner.runOne(f.env);
+ assert.equal(f.counters.claims,1);assert.equal(f.counters.launches,1);assert.equal(f.counters.completions.length,1);
+ assert.equal(budget(f).month_ms,7186223+5000);assert.equal(lock(f).token,null);
+ f.sqlite.exec('UPDATE cloud_budget SET month_ms=28800000 WHERE id=1');
+ await assert.rejects(f.runner.runOne(f.env),{code:'daily-budget'});
+ assert.equal(f.counters.claims,1,'a depleted budget must not lease another booking');
+});
 
 test('the paid 90-minute day cannot overshoot a day or increase either two-hour total cap or the free nine-minute ceiling',async()=>{
   const f=fixture({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999',MONTHLY_BROWSER_BUDGET_MS:'99999999',ROLLING_32D_BROWSER_BUDGET_MS:'99999999'});

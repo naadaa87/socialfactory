@@ -36,12 +36,19 @@ test('each usage cap requires three worst-case browser reservations without rese
     data.budget[used]--;await assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)});
   }
 });
+test('paid automatic synchronization accepts eight-hour caps while retaining booking headroom',async()=>{
+ const data=status();data.budget.monthly_limit_ms=data.budget.rolling_32d_limit_ms=28800000;
+ data.budget.monthly_reserved_ms=data.budget.rolling_32d_reserved_ms=7186223;
+ await assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)});
+ data.budget.rolling_32d_reserved_ms=28800000-MINIMUM_BOOKING_BROWSER_MS+1;
+ await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)}),denied);
+});
 
 test('the paid daily ceiling accepts 90 minutes while monthly and rolling limits remain two hours',async()=>{
   const data=status();assert.equal(data.budget.daily_limit_ms,90*60000);
   assert.equal(data.budget.monthly_limit_ms,2*3600000);assert.equal(data.budget.rolling_32d_limit_ms,2*3600000);
   await assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)});
-  for(const [field,limit] of [['daily_limit_ms',5400000],['monthly_limit_ms',7200000],['rolling_32d_limit_ms',7200000]]){
+  for(const [field,limit] of [['daily_limit_ms',5400000],['monthly_limit_ms',28800000],['rolling_32d_limit_ms',28800000]]){
     const invalid=status();invalid.budget[field]=limit+1;
     await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(invalid)}),denied);
   }
@@ -49,7 +56,7 @@ test('the paid daily ceiling accepts 90 minutes while monthly and rolling limits
 
 test('stale dates and malformed or out-of-policy budget values fail closed',async()=>{
   for(const change of [data=>data.budget.utc_day='2000-01-01',data=>data.budget.utc_month='2000-01',
-    data=>data.budget.monthly_limit_ms=28800000,data=>data.budget.daily_reserved_ms=-1,data=>data.budget.rolling_32d_reserved_ms='0']){
+    data=>data.budget.monthly_limit_ms=28800001,data=>data.budget.daily_reserved_ms=-1,data=>data.budget.rolling_32d_reserved_ms='0']){
     const data=status();change(data);await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)}),denied);
   }
 });

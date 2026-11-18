@@ -41,10 +41,14 @@
     verificationMode=!Object.hasOwn(j,'public_verification') || j.public_verification?.mode==='guest-browser'?'legacy':j.public_verification?.mode==='public-api-v1'?'public-api-v1':'unsupported';
     var login=j.login_saved?'호스트 로그인 상태 저장됨'+(j.session_updated_at?' · 마지막 저장 '+time(j.session_updated_at):''):'호스트 로그인 연결 필요';
     var guest=verificationMode==='public-api-v1'?(publicReady(j)?'공개 일정 조회 사용 · 고객 로그인 불필요':'공개 일정 조회 설정 확인 필요 · 고객 로그인 불필요'):verificationMode==='unsupported'?'일정 조회 방식 설정 확인 필요':j.public_login_saved?'고객 달력 로그인 상태 저장됨'+(j.public_session_updated_at?' · 마지막 저장 '+time(j.public_session_updated_at):''):j.public_candidate_saved?'고객 달력 로그인 상태 보관됨 · 복원 확인 필요'+(j.public_candidate_updated_at?' · 보관 '+time(j.public_candidate_updated_at):''):'고객 달력 로그인 연결 필요';
-    var runner=j.runner.review?'이전 작업 결과 확인 필요':j.runner.busy?'현재 작업 중':'작업 대기 중';
-    status.textContent=login+' / '+guest+' / '+runner+' / '+(j.booking_enabled && j.enabled && j.allow_writes && j.login_saved && publicReady(j)?'홈페이지 자동 예약 접수 중':'홈페이지 자동 예약 접수 준비 중');
+    var allowances=[['daily_limit_ms','daily_reserved_ms'],['monthly_limit_ms','monthly_reserved_ms'],['rolling_32d_limit_ms','rolling_32d_reserved_ms']];
+    var remaining=allowances.map(function(pair){return j.budget[pair[0]]-j.budget[pair[1]];});
+    var workReady=remaining.every(function(ms){return ms>=180000;}),bookingReady=remaining.every(function(ms){return ms>=540000;});
+    var runner=j.runner.review?'이전 작업 결과 확인 필요':j.runner.busy?'현재 작업 중':workReady?'작업 대기 중':'사용 한도 부족 · 자동 연동 보류';
+    status.textContent=login+' / '+guest+' / '+runner+' / '+(j.booking_enabled && j.enabled && j.allow_writes && j.login_saved && publicReady(j) && bookingReady?'홈페이지 자동 예약 접수 중':'홈페이지 자동 예약 접수 준비 중');
     var help=$('#booking-cloud-verification-note');if(help)help.textContent=verificationMode==='public-api-v1'?'공개 일정은 고객 로그인 없이 확인합니다. 호스트 로그인은 예약 시간을 막고 해제할 때 사용합니다.':verificationMode==='unsupported'?'일정 조회 방식이 확인되지 않아 새 예약을 보류합니다. 로그인 재시도보다 조회 설정을 먼저 확인해 주세요.':'호스트와 고객 달력 로그인은 따로 관리합니다. 보관한 로그인은 복원 확인 전까지 예약에 사용하지 않습니다.';
     budget.textContent='최근 32일 '+minutes(j.budget.rolling_32d_reserved_ms)+'분 / 한도 '+minutes(j.budget.rolling_32d_limit_ms)+'분 · 오늘 '+minutes(j.budget.daily_reserved_ms)+'분 / '+minutes(j.budget.daily_limit_ms)+'분 · 이번 달 '+minutes(j.budget.monthly_reserved_ms)+'분 / '+minutes(j.budget.monthly_limit_ms)+'분 (일·월 집계는 UTC 기준)';
+    if(allowances.some(function(pair){return j.budget[pair[0]]>0 && j.budget[pair[1]]>=j.budget[pair[0]]*0.8;}))budget.textContent+=' · 사용량 80% 이상: 한도에 도달하기 전에 운영 사용량을 확인해 주세요.';
   }
   function load(){
     if(loading || busy)return Promise.resolve();loading=true;controls();

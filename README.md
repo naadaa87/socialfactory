@@ -667,7 +667,7 @@ Preview에는 운영 키를 복사하지 않습니다. 키가 누락되거나 �
 
 공간대관 `/booking`은 방·날짜·정시 단위 시간·인원을 받고, 스페이스클라우드 외부예약 확보를 확인한 뒤 페이앱 결제를 엽니다. 결제 직전과 결제 후에도 최신 일정을 확인하며, 실패·미결제 취소·전액환불이 확인되면 자체 표식이 일치하는 차단만 해제합니다. 코워킹 신규 결제는 현장 키오스크로 통일하고 개인 사물함·짐 보관의 신규 온라인 판매는 중단했습니다. 과거 주문 조회·환불·일정 변경, 주차 결제, 기존 스페이스클라우드·페이앱·토스 매출 수집은 유지합니다. 독립사무실은 상담 후 관리자 청구를 사용합니다.
 
-실행기는 [workers/spacecloud-cloud/README.md](workers/spacecloud-cloud/README.md)의 Cloudflare Browser Run 구성입니다. 작업이 있을 때만 브라우저를 열고, 로그인 상태를 별도 D1에 암호화합니다. 노트북·매장 PC에 의존하지 않습니다. 운영 계정의 기존 Workers Paid 포함량을 사용하며, 애플리케이션은 최근 32일 2시간·하루 30분으로 제한합니다. 이 제한은 계정 전체 청구 한도와 다르며, 계정의 다른 브라우저 사용량도 함께 확인해야 합니다. 새 유료 요금제 가입이나 자동 상향은 하지 않습니다. 한도·연결·처리 결과가 불명확하면 새 결제를 보류하고 시간 점유를 유지합니다.
+실행기는 [workers/spacecloud-cloud/README.md](workers/spacecloud-cloud/README.md)의 Cloudflare Browser Run 구성입니다. 작업이 있을 때만 브라우저를 열고, 로그인 상태를 별도 D1에 암호화합니다. 노트북·매장 PC에 의존하지 않습니다. 운영 계정의 기존 Workers Paid 포함량을 사용하며, 자동 연동 프로필은 최근 32일·달력 월 각각 8시간, 하루 90분으로 제한합니다. 기존 유료 요금제의 월 10시간 포함량 중 2시간은 여유로 남깁니다. 이 제한은 계정 전체 청구 한도와 다르며, 계정의 다른 브라우저 사용량도 함께 확인해야 합니다. 새 유료 요금제 가입이나 자동 상향은 하지 않습니다. 한도·연결·처리 결과가 불명확하면 새 결제를 보류하고 시간 점유를 유지합니다.
 
 새 결제 모듈·통보·원장은 `booking-payapp`, `booking_payapp_*`, `/api/booking/payapp-feedback`로 분리해 기존 페이앱 주문·환불 처리를 보존합니다. 기존 판매자 키 `PAYAPP_USERID`, `PAYAPP_LINKKEY`, `PAYAPP_LINKVAL`, `PAYAPP_REQUESTKEY`를 재사용하며 `PAYAPP_ENABLED=1`, `PAYAPP_SITE_URL=https://socialfactory.co.kr`가 필요합니다. Pages와 실행기의 `SPACECLOUD_WORKER_TOKEN`은 같은 비밀값입니다.
 

@@ -1,6 +1,7 @@
 import {adminGate} from '../../_lib/admin.js';
 import {json,sameOrigin} from '../../_lib/auth.js';
 import {cloudRunnerOrigin} from '../../_lib/spacecloud-runner.js';
+import {AUTOMATIC_BROWSER_TOTAL_MS} from '../../_lib/cloud-budget-policy.js';
 
 const TIMEOUT_MS=35000,MAX_BODY=32768;
 const uuid=value=>typeof value==='string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -34,7 +35,7 @@ function statusFields(data,env){
     public_candidate_expires_at:timestamp(data.public_candidate_expires_at===undefined?null:data.public_candidate_expires_at),
     ...(publicVerification(data)===undefined?{}:{public_verification:publicVerification(data)}),
     runner:{busy:data.runner.busy,review:data.runner.review},budget:{utc_day:b.utc_day,utc_month:b.utc_month,
-      daily_limit_ms:finite(b.daily_limit_ms,5400000),monthly_limit_ms:finite(b.monthly_limit_ms,7200000),rolling_32d_limit_ms:finite(b.rolling_32d_limit_ms,7200000),
+      daily_limit_ms:finite(b.daily_limit_ms,5400000),monthly_limit_ms:finite(b.monthly_limit_ms,AUTOMATIC_BROWSER_TOTAL_MS),rolling_32d_limit_ms:finite(b.rolling_32d_limit_ms,AUTOMATIC_BROWSER_TOTAL_MS),
       daily_reserved_ms:finite(b.daily_reserved_ms,32*86400000),monthly_reserved_ms:finite(b.monthly_reserved_ms,32*86400000),rolling_32d_reserved_ms:finite(b.rolling_32d_reserved_ms,32*86400000)}};
 }
 function liveView(value){
