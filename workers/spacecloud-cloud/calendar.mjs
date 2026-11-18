@@ -89,8 +89,11 @@ export async function calendarRequest(config,body){
 export async function collectHostCalendarAPI(savedState,plan,{fetcher=fetch,live=()=>{}}={}){
  const state=structuredClone(savedState),origin=state?.origins?.find(o=>o.origin===HOST);
  const entry=origin?.localStorage?.find(e=>e.name==='spacecloud__userInfo');
- let user;try{user=JSON.parse(entry?.value||'null');}catch{return null;}
- if(!user || typeof user.accessToken!=='string' || !user.accessToken)return null;
+ let user;try{user=JSON.parse(entry?.value||'null');}catch{console.info('spacecloud-host-auth','saved-profile-invalid');return null;}
+ if(!user || typeof user.accessToken!=='string' || !user.accessToken){
+  console.info('spacecloud-host-auth','saved-profile-incomplete',{has_origin:!!origin,has_user_entry:!!entry,has_user:!!user,has_access_token:typeof user?.accessToken==='string',has_refresh_token:typeof user?.refreshToken==='string'});
+  return null;
+ }
  for(const s of plan.scopes)if(!ROOMS[s.space]||String(ROOMS[s.space].product)!==s.product_id||!/^20\d{2}-\d{2}$/.test(s.month))throw fail('host-calendar-plan');
  const originalToken=user.accessToken;
  let refreshTask=null,failed=null;
