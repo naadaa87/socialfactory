@@ -11,6 +11,7 @@ import { calendarReservationId, attachCalendarPayments } from '../functions/_lib
 import { onRequestPost as importHistory } from '../functions/api/admin/spacecloud-history.js';
 import { prepareBookings, applyBookingPayment } from '../functions/_lib/booking.js';
 import { onRequestGet as getBoard } from '../functions/api/admin/reservation-board.js';
+import { onRequestGet as getPublicBoard } from '../functions/api/board/schedule.js';
 import { onRequestGet as getSales } from '../functions/api/admin/sales.js';
 import { loadCalendarDisplay, publishCalendarDisplay, refreshCalendarDisplay } from '../functions/_lib/spacecloud-display.js';
 
@@ -685,6 +686,7 @@ test('own overnight SpaceCloud blocks stay out of schedules and manual sales aft
   const monitor = await get(getBoard,'/api/admin/reservation-board');
   assert.equal(monitor.reservations.length,5);
   assert.equal(monitor.reservations.filter(row => row.room === 'r1' && row.continued).length,1);
+  assert.deepEqual((await get(getPublicBoard,'/api/board/schedule')).reservations,monitor.reservations);
   const beforeSales = await get(getSales,'/api/admin/sales?year=2026');
   assert.equal(beforeSales.total,15000);
   assert.equal(beforeSales.byChannel.web.amount,15000);
@@ -703,6 +705,7 @@ test('own overnight SpaceCloud blocks stay out of schedules and manual sales aft
   assert.equal(remaining.results.length,4);
   assert.equal((await get(getDashboard,'/api/admin/dashboard')).counts.today,4);
   assert.equal((await get(getBoard,'/api/admin/reservation-board')).reservations.length,4);
+  assert.equal((await get(getPublicBoard,'/api/board/schedule')).reservations.length,4);
   const afterSales = await get(getSales,'/api/admin/sales?year=2026');
   assert.equal(afterSales.total,0);
   assert.equal(afterSales.refunds,15000);
@@ -713,6 +716,30 @@ test('own overnight SpaceCloud blocks stay out of schedules and manual sales aft
   assert.equal(recorded.total,15000);
   assert.equal(recorded.byChannel.spacecloud.amount,15000);
   assert.equal(recorded.unrecordedSpacecloud,3);
+});
+
+test('public board shows the original admin reservation once while retaining genuine overlapping bookings',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-18T16:10:00+09:00')});
+ const e=env({r3:url(3)});t.after(()=>e.sqlite.close());
+ const syncCode='BADM'+'a'.repeat(32),marker='SFWEB:'+syncCode;
+ const own=event('admin-hold','20261118T160000','20261118T170000')
+   .replace('SUMMARY:예약 일정','SUMMARY:'+marker).replace(/URL:[^\r]+\r\n/,'');
+ const other=event('real-paid-booking','20261118T160000','20261118T170000').replace('SUMMARY:예약 일정','SUMMARY:김민수');
+ t.mock.method(globalThis,'fetch',async()=>response(calendar(own,other)));
+ await prepareBookings(e);
+ e.sqlite.prepare(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method)
+   VALUES('R261117-MDA5','confirmed','r3','2026-11-18',960,1020,'정진수','kakao',0,'bank_blank')`).run();
+ e.sqlite.prepare(`INSERT INTO spacecloud_blocks(code,room,date,start_min,end_min,marker,access_token,state,created_at,updated_at)
+   VALUES(?,'r3','2026-11-18',960,1020,?,'test-token','blocked',1,1)`).run(syncCode,marker);
+ const read=async()=>{const result=await getPublicBoard({env:e});assert.equal(result.status,200);return result.json();};
+ const data=await read();
+ assert.deepEqual(data.reservations.map(r=>r.name).sort(),['김○수','정○수']);
+ assert(data.reservations.every(r=>r.room==='r3' && r.end-r.start===3600000));
+ assert(!JSON.stringify(data).includes('SFWEB'));assert(!JSON.stringify(data).includes('R261117-MDA5'));
+ assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM reservations').get().n,1);
+ // A stale upstream hold must not reappear after the original is cancelled/released.
+ e.sqlite.exec("UPDATE reservations SET status='cancelled'; UPDATE spacecloud_blocks SET state='released'");
+ assert.deepEqual((await read()).reservations.map(r=>r.name),['김○수']);
 });
 
 test('an extended manual booking replaces its completed earlier version and stays corrected after expiry',async()=>{
