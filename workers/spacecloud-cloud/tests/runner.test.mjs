@@ -10,6 +10,7 @@ const CLOCK=Date.parse('2026-11-06T10:00:00Z');
 const PRIVATE_STATE={cookies:[{name:'auth',value:'PRIVATE-LOGIN-COOKIE',domain:'partner.spacecloud.kr',path:'/'}],origins:[{origin:'https://partner.spacecloud.kr',localStorage:[{name:'example',value:'PRIVATE-LOCAL-STATE'}]}]};
 const PUBLIC_STATE={cookies:[{name:'guest_auth',value:'PRIVATE-GUEST-LOGIN-COOKIE',domain:'www.spacecloud.kr',path:'/'}],origins:[{origin:'https://www.spacecloud.kr',localStorage:[{name:'guest_auth',value:'PRIVATE-GUEST-STATE'}]}]};
 const job={id:'opaque-job-id',job_id:'opaque-job-id',lease_token:'leased-server-token',action:'block',code:'B261208-TESTRUN',marker:'SFWEB:B261208-TESTRUN',room:'r5',date:'2026-12-08',start_min:240,end_min:360};
+const METERED={CLOUD_PLAN_MODE:'paid-metered',METERED_USAGE_CONFIRMED:'true',BROWSER_BUDGET_PROFILE:'continuous-sync',PUBLIC_AVAILABILITY_MODE:'public-api-v1'};
 
 function fixture(overrides={}) {
   const sqlite=new DatabaseSync(':memory:');
@@ -97,6 +98,52 @@ test('zero configured caps stop use and paid inclusion does not raise caps beyon
   assert.equal(dailyLimit({CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',DAILY_BROWSER_BUDGET_MS:'99999999'}),5400000);
   assert.equal(monthlyLimit({MONTHLY_BROWSER_BUDGET_MS:'999999999'}),7200000);
   assert.equal(rollingLimit({ROLLING_32D_BROWSER_BUDGET_MS:'999999999'}),7200000);
+});
+test('metered operation requires an explicitly confirmed paid plan and never silently changes other modes',async()=>{
+ assert.equal(dailyLimit(METERED),null);assert.equal(monthlyLimit(METERED),null);assert.equal(rollingLimit(METERED),null);
+ for(const extra of [{METERED_USAGE_CONFIRMED:'false'},{BROWSER_BUDGET_PROFILE:'automatic-sync'},{CLOUD_PLAN_MODE:'free'}]) {
+  const f=await ready(fixture({...METERED,...extra}));
+  assert.notEqual(monthlyLimit(f.env),null);
+  if(extra.CLOUD_PLAN_MODE!=='free')await assert.rejects(f.runner.runOne(f.env),{code:'cost-not-confirmed'});
+  assert.equal(f.counters.launches,0);
+ }
+});
+test('metered reservation work continues beyond daily, eight-hour monthly and ten-hour included usage while preserving accounting',async()=>{
+ const f=await ready(fixture(METERED)),used=12*3600000;
+ f.sqlite.prepare("INSERT INTO cloud_budget_reservations(id,day,month,reserved_ms,charged_ms,started_at,state,closed_at) VALUES('prior','2026-11-06','2026-11',?,?,?,'closed',?)").run(used,used,CLOCK-1000,CLOCK-1000);
+ f.sqlite.prepare("UPDATE cloud_budget SET day='2026-11-06',month='2026-11',day_ms=?,month_ms=? WHERE id=1").run(2*3600000,used);
+ await f.runner.runOne(f.env);
+ assert.equal(f.counters.claims,1);assert.equal(f.counters.launches,1);assert.equal(f.counters.completions.length,1);
+ assert.equal(budget(f).month_ms,used+5000);assert.equal(budget(f).day_ms,2*3600000+5000);
+ const status=await f.runner.status(f.env);
+ assert.equal(status.budget.mode,'metered');assert.equal(status.budget.monthly_limit_ms,null);
+ assert.equal(status.budget.rolling_32d_reserved_ms,used+5000);assert.equal(lock(f).token,null);
+});
+test('metered idle polling opens no browser and does not consume tracked usage',async()=>{
+ const f=await ready(fixture(METERED));f.setJob(null);
+ f.sqlite.exec("UPDATE cloud_budget SET day='2026-11-06',month='2026-11',month_ms=43200000,day_ms=7200000 WHERE id=1");
+ for(let n=0;n<3;n++)assert.equal((await f.runner.runOne(f.env)).idle,true);
+ assert.equal(f.counters.launches,0);assert.equal(f.counters.acquires,0);assert.equal(budget(f).month_ms,43200000);
+ assert.equal(f.sqlite.prepare('SELECT SUM(charged_ms) used FROM cloud_budget_reservations').get().used,0);
+});
+test('metered operation retains job deadlines, uncertain-closure quarantine and single-runner locking',async()=>{
+ const f=await ready(fixture(METERED));
+ await assert.rejects(reserveBudget(f.env,360001,{now:CLOCK}),{code:'browser-duration'});
+ assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_budget_reservations').get().n,0);
+ f.setCloseFailure();await f.runner.runOne(f.env);
+ assert.equal(lock(f).review,1);assert.equal(reservation(f).state,'review');
+ await assert.rejects(f.runner.runOne(f.env),{code:'runner-busy'});
+ assert.equal(f.counters.claims,1);assert.equal(f.counters.launches,1);
+});
+test('metered sessions can cross UTC midnight and reconnect beyond previous cumulative allowances',async()=>{
+ const f=await ready(fixture(METERED)),midnight=Date.parse('2026-11-06T23:59:58Z');
+ const reserved=await reserveBudget(f.env,180000,{now:midnight});
+ await settleBudget(f.env,reserved,{closed:true,notStarted:true,now:midnight});
+ f.sqlite.exec("UPDATE cloud_budget SET day='2026-11-06',month='2026-11',month_ms=43200000,day_ms=7200000 WHERE id=1");
+ const login=await f.runner.startLogin(f.env);
+ assert.equal(login.expires_at-f.now(),300000);
+ assert.equal(f.sqlite.prepare('SELECT reserved_ms FROM cloud_budget_reservations WHERE id=(SELECT budget_id FROM cloud_login WHERE id=?)').get(login.login_id).reserved_ms,360000);
+ await f.runner.saveLogin(f.env,login.login_id,{cancel:true});assert.equal(lock(f).token,null);
 });
 test('explicit paid automatic synchronization resumes the existing queue after the legacy two-hour cap without resetting usage',async()=>{
  const policy={CLOUD_PLAN_MODE:'paid-included',INCLUDED_BUDGET_CONFIRMED:'true',BROWSER_BUDGET_PROFILE:'automatic-sync',MONTHLY_BROWSER_BUDGET_MS:'28800000',ROLLING_32D_BROWSER_BUDGET_MS:'28800000',PUBLIC_AVAILABILITY_MODE:'public-api-v1'};

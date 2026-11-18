@@ -1,7 +1,7 @@
 import {adminGate} from '../../_lib/admin.js';
 import {json,sameOrigin} from '../../_lib/auth.js';
 import {cloudRunnerOrigin} from '../../_lib/spacecloud-runner.js';
-import {AUTOMATIC_BROWSER_TOTAL_MS} from '../../_lib/cloud-budget-policy.js';
+import {AUTOMATIC_BROWSER_TOTAL_MS,isMeteredBudget} from '../../_lib/cloud-budget-policy.js';
 
 const TIMEOUT_MS=35000,MAX_BODY=32768;
 const uuid=value=>typeof value==='string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -27,6 +27,8 @@ function statusFields(data,env){
     || typeof data.runner.busy!=='boolean' || typeof data.runner.review!=='boolean'
     || !/^\d{4}-\d{2}-\d{2}$/.test(data.budget.utc_day || '') || !/^\d{4}-\d{2}$/.test(data.budget.utc_month || ''))throw Error('cloud-shape');
   const b=data.budget;
+  const metered=isMeteredBudget(b);
+  if((b.mode==='metered' && !metered) || (b.mode!==undefined && !['capped','metered'].includes(b.mode)))throw Error('cloud-shape');
   return {ok:true,configured:true,booking_enabled:env.SPACECLOUD_SYNC_ENABLED==='true' && env.SPACECLOUD_BOOKING_OPEN!=='false',enabled:data.enabled,allow_writes:data.allow_writes,
     login_saved:data.login_saved,session_updated_at:timestamp(data.session_updated_at),
     public_login_saved:data.public_login_saved===true,public_session_updated_at:timestamp(data.public_session_updated_at===undefined?null:data.public_session_updated_at),
@@ -34,9 +36,9 @@ function statusFields(data,env){
     public_candidate_updated_at:timestamp(data.public_candidate_updated_at===undefined?null:data.public_candidate_updated_at),
     public_candidate_expires_at:timestamp(data.public_candidate_expires_at===undefined?null:data.public_candidate_expires_at),
     ...(publicVerification(data)===undefined?{}:{public_verification:publicVerification(data)}),
-    runner:{busy:data.runner.busy,review:data.runner.review},budget:{utc_day:b.utc_day,utc_month:b.utc_month,
-      daily_limit_ms:finite(b.daily_limit_ms,5400000),monthly_limit_ms:finite(b.monthly_limit_ms,AUTOMATIC_BROWSER_TOTAL_MS),rolling_32d_limit_ms:finite(b.rolling_32d_limit_ms,AUTOMATIC_BROWSER_TOTAL_MS),
-      daily_reserved_ms:finite(b.daily_reserved_ms,32*86400000),monthly_reserved_ms:finite(b.monthly_reserved_ms,32*86400000),rolling_32d_reserved_ms:finite(b.rolling_32d_reserved_ms,32*86400000)}};
+    runner:{busy:data.runner.busy,review:data.runner.review},budget:{mode:metered?'metered':'capped',utc_day:b.utc_day,utc_month:b.utc_month,
+      daily_limit_ms:metered?null:finite(b.daily_limit_ms,5400000),monthly_limit_ms:metered?null:finite(b.monthly_limit_ms,AUTOMATIC_BROWSER_TOTAL_MS),rolling_32d_limit_ms:metered?null:finite(b.rolling_32d_limit_ms,AUTOMATIC_BROWSER_TOTAL_MS),
+      daily_reserved_ms:finite(b.daily_reserved_ms,Number.MAX_SAFE_INTEGER),monthly_reserved_ms:finite(b.monthly_reserved_ms,Number.MAX_SAFE_INTEGER),rolling_32d_reserved_ms:finite(b.rolling_32d_reserved_ms,Number.MAX_SAFE_INTEGER)}};
 }
 function liveView(value){
   if(typeof value!=='string' || value.length>8192)return null;

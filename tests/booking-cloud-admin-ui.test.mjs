@@ -32,6 +32,16 @@ test('low allowance is shown as paused with an early usage warning, and restored
  assert(h.node('#booking-cloud-status').textContent.includes('자동 예약 접수 중'));
  assert(!h.node('#booking-cloud-budget').textContent.includes('사용량 80% 이상'));
 });
+test('metered usage beyond the included hours remains operational and clearly describes additional charges',async()=>{
+ const data={...cloudStatus(),booking_enabled:true,login_saved:true,public_verification:{mode:'public-api-v1',configured:true}};
+ Object.assign(data.budget,{mode:'metered',daily_limit_ms:null,monthly_limit_ms:null,rolling_32d_limit_ms:null,daily_reserved_ms:7200000,monthly_reserved_ms:43200000,rolling_32d_reserved_ms:50000000});
+ const h=harness(()=>data);h.A.LOAD.booking();await h.flush();
+ assert(h.node('#booking-cloud-status').textContent.includes('자동 예약 접수 중'));
+ assert(!h.node('#booking-cloud-status').textContent.includes('연동 보류'));
+ const text=h.node('#booking-cloud-budget').textContent;
+ assert(text.includes('종량 실행'));assert(text.includes('누적 시간으로 자동 연동을 중단하지 않습니다'));
+ assert(text.includes('US$0.09'));assert(!text.includes('한도 0'));
+});
 test('reconnect exposes a private explicit link, then saves only that in-memory session',async()=>{
  let saved=false;
  const h=harness((path,options)=>{

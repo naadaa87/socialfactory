@@ -27,6 +27,14 @@ test('status accepts the restored eight-hour automatic synchronization allowance
  const r=await status({env,request:request()}),j=await r.json();
  assert.equal(r.status,200);assert.equal(j.budget.monthly_limit_ms,28800000);assert.equal(j.budget.rolling_32d_limit_ms,28800000);
 });
+test('status preserves explicit metered usage and rejects ambiguous or malformed unlimited claims',async t=>{
+ const data=payload();Object.assign(data.budget,{mode:'metered',daily_limit_ms:null,monthly_limit_ms:null,rolling_32d_limit_ms:null,daily_reserved_ms:7200000,monthly_reserved_ms:43200000,rolling_32d_reserved_ms:50000000});
+ mock(t,async()=>Response.json(data));let response=await status({env,request:request()}),j=await response.json();
+ assert.equal(response.status,200);assert.equal(j.budget.mode,'metered');assert.equal(j.budget.monthly_limit_ms,null);assert.equal(j.budget.monthly_reserved_ms,43200000);
+ for(const change of [j=>j.budget.mode='unknown',j=>delete j.budget.mode,j=>j.budget.daily_limit_ms=5400000,j=>j.budget.rolling_32d_reserved_ms=-1]) {
+  const bad=structuredClone(data);change(bad);mock(t,async()=>Response.json(bad));response=await status({env,request:request()});assert.equal(response.status,503);
+ }
+});
 test('cloud status rejects malformed or out-of-policy usage values rather than understating them',async t=>{
  for(const changeValue of [j=>j.budget.daily_reserved_ms=-1,j=>j.budget.rolling_32d_limit_ms=28800001,j=>j.budget.monthly_reserved_ms=Infinity,j=>j.budget.daily_limit_ms='5400000',j=>j.runner.review='false',j=>j.public_login_saved='true',j=>j.public_session_updated_at=-1,j=>j.public_candidate_saved='true',j=>j.public_candidate_updated_at=-1,j=>j.public_candidate_expires_at='later']){
   const j=payload();changeValue(j);mock(t,async()=>Response.json(j));const r=await status({env,request:request()});assert.equal(r.status,503);assert(!(await r.text()).includes(secret));

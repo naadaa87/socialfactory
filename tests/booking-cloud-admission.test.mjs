@@ -43,6 +43,13 @@ test('paid automatic synchronization accepts eight-hour caps while retaining boo
  data.budget.rolling_32d_reserved_ms=28800000-MINIMUM_BOOKING_BROWSER_MS+1;
  await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)}),denied);
 });
+test('explicit metered status admits reservations beyond previous cumulative cutoffs without weakening login or review checks',async()=>{
+ const data=status();Object.assign(data.budget,{mode:'metered',daily_limit_ms:null,monthly_limit_ms:null,rolling_32d_limit_ms:null,daily_reserved_ms:7200000,monthly_reserved_ms:43200000,rolling_32d_reserved_ms:50000000});
+ await assertCloudAdmission(config(),{fetcher:async()=>Response.json(data)});
+ for(const change of [j=>j.budget.mode='unknown',j=>delete j.budget.mode,j=>j.budget.daily_limit_ms=5400000,j=>j.budget.monthly_reserved_ms=-1,j=>j.runner.review=true,j=>j.login_saved=false]) {
+  const bad=structuredClone(data);change(bad);await assert.rejects(assertCloudAdmission(config(),{fetcher:async()=>Response.json(bad)}),denied);
+ }
+});
 
 test('the paid daily ceiling accepts 90 minutes while monthly and rolling limits remain two hours',async()=>{
   const data=status();assert.equal(data.budget.daily_limit_ms,90*60000);

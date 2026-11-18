@@ -1,4 +1,4 @@
-import { browserTotalCeiling } from '../../functions/_lib/cloud-budget-policy.js';
+import { browserTotalCeiling, isMeteredPlan } from '../../functions/_lib/cloud-budget-policy.js';
 const encoder=new TextEncoder(),decoder=new TextDecoder();
 export const schema=[
   `CREATE TABLE IF NOT EXISTS cloud_calendar_lock (id INTEGER PRIMARY KEY CHECK(id=1),token TEXT,expires_at INTEGER NOT NULL DEFAULT 0)`,
@@ -92,9 +92,9 @@ export async function promotePublicCandidate(env,candidate,state,{now=Date.now()
 }
 export const paidIncluded=env=>env.CLOUD_PLAN_MODE==='paid-included' && env.INCLUDED_BUDGET_CONFIRMED==='true';
 const configuredNumber=(value,fallback)=>value!==undefined && value!=='' && Number.isFinite(Number(value))?Number(value):fallback;
-export const dailyLimit=env=>Math.max(0,Math.min(paidIncluded(env)?5400000:540000,configuredNumber(env.DAILY_BROWSER_BUDGET_MS,paidIncluded(env)?5400000:540000)));
-export const monthlyLimit=env=>Math.max(0,Math.min(browserTotalCeiling(env),configuredNumber(env.MONTHLY_BROWSER_BUDGET_MS,7200000)));
-export const rollingLimit=env=>Math.max(0,Math.min(browserTotalCeiling(env),configuredNumber(env.ROLLING_32D_BROWSER_BUDGET_MS,7200000)));
+export const dailyLimit=env=>isMeteredPlan(env)?null:Math.max(0,Math.min(paidIncluded(env)?5400000:540000,configuredNumber(env.DAILY_BROWSER_BUDGET_MS,paidIncluded(env)?5400000:540000)));
+export const monthlyLimit=env=>isMeteredPlan(env)?null:Math.max(0,Math.min(browserTotalCeiling(env),configuredNumber(env.MONTHLY_BROWSER_BUDGET_MS,7200000)));
+export const rollingLimit=env=>isMeteredPlan(env)?null:Math.max(0,Math.min(browserTotalCeiling(env),configuredNumber(env.ROLLING_32D_BROWSER_BUDGET_MS,7200000)));
 export async function lockRunner(env,{duration=120000,now=Date.now()}={}){
   const token=crypto.randomUUID();
   const result=await env.STATE_DB.prepare(`UPDATE cloud_runner_lock SET token=?1,expires_at=?2 WHERE id=1 AND review=0 AND token IS NULL`).bind(token,now+duration).run();
@@ -103,17 +103,25 @@ export async function lockRunner(env,{duration=120000,now=Date.now()}={}){
 export async function assertLock(env,token,now=Date.now()){const row=await env.STATE_DB.prepare('SELECT token,expires_at,review FROM cloud_runner_lock WHERE id=1').first();if(!row || row.token!==token || row.review || row.expires_at<=now)throw problem('runner-lock','클라우드 작업 잠금이 만료되었습니다. 추가 변경을 중단합니다.');}
 export async function unlockRunner(env,token,{review=false}={}){await env.STATE_DB.prepare(`UPDATE cloud_runner_lock SET token=NULL,expires_at=0,review=?2 WHERE id=1 AND token=?1`).bind(token,review?1:0).run();}
 export async function reserveBudget(env,milliseconds,{now=Date.now()}={}){
-  const amount=Math.ceil(milliseconds),day=new Date(now).toISOString().slice(0,10),month=day.slice(0,7),id=crypto.randomUUID();
-  if(!Number.isSafeInteger(amount) || amount<1 || amount>dailyLimit(env))throw problem('daily-budget','오늘의 무료 브라우저 사용 예산이 부족합니다.',429);
-  if(new Date(now+amount+5000).toISOString().slice(0,10)!==day)throw problem('budget-window','사용량 집계 날짜가 바뀌는 시간입니다. 잠시 후 다시 진행해 주세요.',429);
-  const result=await env.STATE_DB.batch([
-    env.STATE_DB.prepare(`UPDATE cloud_budget SET day=?1,month=?2,
+  const amount=Math.ceil(milliseconds),day=new Date(now).toISOString().slice(0,10),month=day.slice(0,7),id=crypto.randomUUID(),metered=isMeteredPlan(env);
+  // Continuous paid operation has no cumulative cutoff, but every acquisition
+  // still has a deadline (at most five-minute login plus one-minute cleanup).
+  if(metered && (!Number.isSafeInteger(amount) || amount<1 || amount>360000))throw problem('browser-duration','브라우저 한 작업의 실행 제한 시간을 확인해 주세요.',429);
+  if(!metered && (!Number.isSafeInteger(amount) || amount<1 || amount>dailyLimit(env)))throw problem('daily-budget','오늘의 무료 브라우저 사용 예산이 부족합니다.',429);
+  if(!metered && new Date(now+amount+5000).toISOString().slice(0,10)!==day)throw problem('budget-window','사용량 집계 날짜가 바뀌는 시간입니다. 잠시 후 다시 진행해 주세요.',429);
+  const update=metered
+    ?env.STATE_DB.prepare(`UPDATE cloud_budget SET day=?1,month=?2,
+      day_ms=CASE WHEN day=?1 THEN day_ms ELSE 0 END+?3,
+      month_ms=CASE WHEN month=?2 THEN month_ms ELSE 0 END+?3,last_id=?4 WHERE id=1`).bind(day,month,amount,id)
+    :env.STATE_DB.prepare(`UPDATE cloud_budget SET day=?1,month=?2,
       day_ms=CASE WHEN day=?1 THEN day_ms ELSE 0 END+?3,
       month_ms=CASE WHEN month=?2 THEN month_ms ELSE 0 END+?3,last_id=?4
       WHERE id=1 AND (CASE WHEN day=?1 THEN day_ms ELSE 0 END)+?3<=?5
         AND (CASE WHEN month=?2 THEN month_ms ELSE 0 END)+?3<=?6
         AND (SELECT COALESCE(SUM(COALESCE(charged_ms,reserved_ms)),0) FROM cloud_budget_reservations WHERE started_at>=?7)+?3<=?8`)
-      .bind(day,month,amount,id,dailyLimit(env),monthlyLimit(env),now-32*86400000,rollingLimit(env)),
+      .bind(day,month,amount,id,dailyLimit(env),monthlyLimit(env),now-32*86400000,rollingLimit(env));
+  const result=await env.STATE_DB.batch([
+    update,
     env.STATE_DB.prepare(`INSERT INTO cloud_budget_reservations(id,day,month,reserved_ms,started_at)
       SELECT ?1,?2,?3,?4,?5 WHERE EXISTS(SELECT 1 FROM cloud_budget WHERE id=1 AND last_id=?1)`).bind(id,day,month,amount,now)
   ]);
@@ -131,4 +139,4 @@ export async function settleBudget(env,reservation,{closed=true,notStarted=false
     env.STATE_DB.prepare(`UPDATE cloud_budget_reservations SET state=?2,charged_ms=?3,closed_at=?4 WHERE id=?1 AND state='reserved'`).bind(reservation.id,closed?'closed':'review',charged,closed?now:null)
   ]);
 }
-export async function budgetStatus(env,{now=Date.now()}={}){const day=new Date(now).toISOString().slice(0,10),month=day.slice(0,7),row=await env.STATE_DB.prepare('SELECT * FROM cloud_budget WHERE id=1').first(),rolling=await env.STATE_DB.prepare('SELECT COALESCE(SUM(COALESCE(charged_ms,reserved_ms)),0) used_ms FROM cloud_budget_reservations WHERE started_at>=?1').bind(now-32*86400000).first();return {utc_day:day,utc_month:month,daily_limit_ms:dailyLimit(env),monthly_limit_ms:monthlyLimit(env),rolling_32d_limit_ms:rollingLimit(env),rolling_32d_reserved_ms:Number(rolling?.used_ms || 0),daily_reserved_ms:row?.day===day?Number(row.day_ms):0,monthly_reserved_ms:row?.month===month?Number(row.month_ms):0};}
+export async function budgetStatus(env,{now=Date.now()}={}){const day=new Date(now).toISOString().slice(0,10),month=day.slice(0,7),row=await env.STATE_DB.prepare('SELECT * FROM cloud_budget WHERE id=1').first(),rolling=await env.STATE_DB.prepare('SELECT COALESCE(SUM(COALESCE(charged_ms,reserved_ms)),0) used_ms FROM cloud_budget_reservations WHERE started_at>=?1').bind(now-32*86400000).first();return {mode:isMeteredPlan(env)?'metered':'capped',utc_day:day,utc_month:month,daily_limit_ms:dailyLimit(env),monthly_limit_ms:monthlyLimit(env),rolling_32d_limit_ms:rollingLimit(env),rolling_32d_reserved_ms:Number(rolling?.used_ms || 0),daily_reserved_ms:row?.day===day?Number(row.day_ms):0,monthly_reserved_ms:row?.month===month?Number(row.month_ms):0};}
