@@ -1,3 +1,4 @@
+import { browserTotalCeiling } from '../../functions/_lib/cloud-budget-policy.js';
 const encoder=new TextEncoder(),decoder=new TextDecoder();
 export const schema=[
   `CREATE TABLE IF NOT EXISTS cloud_calendar_lock (id INTEGER PRIMARY KEY CHECK(id=1),token TEXT,expires_at INTEGER NOT NULL DEFAULT 0)`,
@@ -92,8 +93,8 @@ export async function promotePublicCandidate(env,candidate,state,{now=Date.now()
 export const paidIncluded=env=>env.CLOUD_PLAN_MODE==='paid-included' && env.INCLUDED_BUDGET_CONFIRMED==='true';
 const configuredNumber=(value,fallback)=>value!==undefined && value!=='' && Number.isFinite(Number(value))?Number(value):fallback;
 export const dailyLimit=env=>Math.max(0,Math.min(paidIncluded(env)?5400000:540000,configuredNumber(env.DAILY_BROWSER_BUDGET_MS,paidIncluded(env)?5400000:540000)));
-export const monthlyLimit=env=>Math.max(0,Math.min(7200000,configuredNumber(env.MONTHLY_BROWSER_BUDGET_MS,7200000)));
-export const rollingLimit=env=>Math.max(0,Math.min(7200000,configuredNumber(env.ROLLING_32D_BROWSER_BUDGET_MS,7200000)));
+export const monthlyLimit=env=>Math.max(0,Math.min(browserTotalCeiling(env),configuredNumber(env.MONTHLY_BROWSER_BUDGET_MS,7200000)));
+export const rollingLimit=env=>Math.max(0,Math.min(browserTotalCeiling(env),configuredNumber(env.ROLLING_32D_BROWSER_BUDGET_MS,7200000)));
 export async function lockRunner(env,{duration=120000,now=Date.now()}={}){
   const token=crypto.randomUUID();
   const result=await env.STATE_DB.prepare(`UPDATE cloud_runner_lock SET token=?1,expires_at=?2 WHERE id=1 AND review=0 AND token IS NULL`).bind(token,now+duration).run();

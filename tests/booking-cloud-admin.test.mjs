@@ -21,8 +21,14 @@ test('status forwards only bounded public control fields and keeps all cloud aut
  assert.equal(sent.url,runner+'/status');assert(!sent.url.includes(secret));assert.equal(sent.options.headers.Authorization,'Bearer '+secret);assert.equal(sent.options.method,'GET');assert.equal(sent.options.redirect,'manual');assert(!sent.options.headers.origin);assert(sent.options.signal instanceof AbortSignal);
  assert.equal(r.headers.get('cache-control'),'no-store');assert.equal(r.headers.get('referrer-policy'),'no-referrer');
 });
+test('status accepts the restored eight-hour automatic synchronization allowance',async t=>{
+ const data=payload();data.budget.monthly_limit_ms=28800000;data.budget.rolling_32d_limit_ms=28800000;
+ mock(t,async()=>Response.json(data));
+ const r=await status({env,request:request()}),j=await r.json();
+ assert.equal(r.status,200);assert.equal(j.budget.monthly_limit_ms,28800000);assert.equal(j.budget.rolling_32d_limit_ms,28800000);
+});
 test('cloud status rejects malformed or out-of-policy usage values rather than understating them',async t=>{
- for(const changeValue of [j=>j.budget.daily_reserved_ms=-1,j=>j.budget.rolling_32d_limit_ms=7200001,j=>j.budget.monthly_reserved_ms=Infinity,j=>j.budget.daily_limit_ms='5400000',j=>j.runner.review='false',j=>j.public_login_saved='true',j=>j.public_session_updated_at=-1,j=>j.public_candidate_saved='true',j=>j.public_candidate_updated_at=-1,j=>j.public_candidate_expires_at='later']){
+ for(const changeValue of [j=>j.budget.daily_reserved_ms=-1,j=>j.budget.rolling_32d_limit_ms=28800001,j=>j.budget.monthly_reserved_ms=Infinity,j=>j.budget.daily_limit_ms='5400000',j=>j.runner.review='false',j=>j.public_login_saved='true',j=>j.public_session_updated_at=-1,j=>j.public_candidate_saved='true',j=>j.public_candidate_updated_at=-1,j=>j.public_candidate_expires_at='later']){
   const j=payload();changeValue(j);mock(t,async()=>Response.json(j));const r=await status({env,request:request()});assert.equal(r.status,503);assert(!(await r.text()).includes(secret));
  }
 });
@@ -30,7 +36,7 @@ test('cloud status accepts the paid 90-minute daily ceiling without expanding mo
  mock(t,async()=>Response.json(payload()));
  let r=await status({env,request:request()}),j=await r.json();assert.equal(r.status,200);assert.equal(j.budget.daily_limit_ms,5400000);
  assert.equal(j.budget.monthly_limit_ms,7200000);assert.equal(j.budget.rolling_32d_limit_ms,7200000);
- for(const [field,limit] of [['daily_limit_ms',5400000],['monthly_limit_ms',7200000],['rolling_32d_limit_ms',7200000]]){
+ for(const [field,limit] of [['daily_limit_ms',5400000],['monthly_limit_ms',28800000],['rolling_32d_limit_ms',28800000]]){
   const invalid=payload();invalid.budget[field]=limit+1;mock(t,async()=>Response.json(invalid));
   r=await status({env,request:request()});assert.equal(r.status,503,field);assert(!(await r.text()).includes(secret));
  }
