@@ -1,5 +1,6 @@
 import { reservationBoardName, validBoardName } from '../../functions/_lib/reservation-board-name.js';
 import { ROOMS } from '../../integrations/spacecloud-worker/spacecloud-ui.mjs';
+import { hostAPIHeaders } from './host-auth.mjs';
 const API='https://api.spacecloud.kr',HOST='https://partner.spacecloud.kr';
 const TABLE=`CREATE TABLE IF NOT EXISTS cloud_board_names (reservation_id TEXT PRIMARY KEY, board_name TEXT, checked_at INTEGER NOT NULL, retry_at INTEGER NOT NULL)`;
 const keys=value=>Array.isArray(value)?value.map(keys):value && typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,v])=>[key.replace(/([a-z0-9])([A-Z])/g,'$1_$2').toLowerCase(),keys(v)])):value;
@@ -39,7 +40,7 @@ export async function enrichBoardNames(env,snapshots,state,{fetcher=fetch,now=Da
         const id=pending[cursor++],event=candidates.get(id);let name=null,retryAt=now+FAILURE_TTL;
         try {
           live();
-          const response=await fetcher(API+'/partner/reservations/'+id,{method:'GET',redirect:'manual',signal:AbortSignal.timeout(5000),headers:{Authorization:user.accessToken,Accept:'application/json'}});
+          const response=await fetcher(API+'/partner/reservations/'+id,{method:'GET',redirect:'manual',signal:AbortSignal.timeout(5000),headers:hostAPIHeaders(state,'/partner/reservations/'+id,user.accessToken)});
           if(response.status===429||response.status===401){
             diagnostic('lookup-paused',{status:response.status});
             stopped=true;

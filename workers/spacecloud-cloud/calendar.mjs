@@ -1,4 +1,5 @@
 import { ROOMS } from '../../integrations/spacecloud-worker/spacecloud-ui.mjs';
+import { hostAPIHeaders } from './host-auth.mjs';
 const API='https://api.spacecloud.kr',HOST='https://partner.spacecloud.kr';
 const fail=code=>Object.assign(new Error(code),{code});
 const rateLimit=response=>{
@@ -96,9 +97,9 @@ export async function collectHostCalendarAPI(savedState,plan,{fetcher=fetch,live
  const check=()=>{live();if(failed)throw failed;};
  const refresh=()=>refreshTask||=(async()=>{
   check();const token=user.refreshToken||user.accessToken;
-  const r=await fetcher(API+'/partner/users/get_token',{method:'GET',redirect:'manual',signal:AbortSignal.timeout(15000),headers:{Authorization:token,Accept:'application/json'}});
+  const r=await fetcher(API+'/partner/users/get_token',{method:'GET',redirect:'manual',signal:AbortSignal.timeout(15000),headers:hostAPIHeaders(state,'/partner/users/get_token',token)});
   if(r.status===429)throw rateLimit(r);
-  if(r.status!==200)throw fail('host-calendar-login');const value=await r.json();check();
+  if(r.status!==200){console.info('spacecloud-host-auth','refresh-unavailable',{status:r.status});throw fail('host-calendar-login');}const value=await r.json();check();
   if(typeof value.token!=='string'||!value.token||value.token.length>16384)throw fail('host-calendar-login');
   user={...user,accessToken:value.token};entry.value=JSON.stringify(user);
  })();
@@ -107,7 +108,7 @@ export async function collectHostCalendarAPI(savedState,plan,{fetcher=fetch,live
   try {while(cursor<plan.scopes.length){
    const index=cursor++,s=plan.scopes[index];check();
    const url=new URL(API+'/partner/reservations/calendar');url.searchParams.set('year',s.month.slice(0,4));url.searchParams.set('month',s.month.slice(5));url.searchParams.set('product_id',s.product_id);
-   const get=()=>fetcher(url.href,{method:'GET',redirect:'manual',signal:AbortSignal.timeout(15000),headers:{Authorization:user.accessToken,Accept:'application/json'}});
+   const get=()=>fetcher(url.href,{method:'GET',redirect:'manual',signal:AbortSignal.timeout(15000),headers:hostAPIHeaders(state,url.href,user.accessToken)});
    let r=await get();check();
    if(r.status===401){await refresh();r=await get();check();}
    if(r.status===429)throw rateLimit(r);

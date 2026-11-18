@@ -34,10 +34,10 @@ test('legacy API uppercase field names are normalized just as in the official ho
 
 test('normal calendar reads use the saved server profile directly, refresh expired tokens once, and never send credentials outside the official API',async()=>{
  const {collectHostCalendarAPI}=await import('../calendar.mjs');
- const saved={cookies:[],origins:[{origin:'https://partner.spacecloud.kr',localStorage:[{name:'spacecloud__userInfo',value:JSON.stringify({accessToken:'EXPIRED_PRIVATE',refreshToken:'REFRESH_PRIVATE',name:'PRIVATE_PROFILE'})}]}]};
+ const saved={cookies:[{name:'host_auth',value:'PRIVATE_COOKIE',domain:'.spacecloud.kr',path:'/',expires:-1}],origins:[{origin:'https://partner.spacecloud.kr',localStorage:[{name:'spacecloud__userInfo',value:JSON.stringify({accessToken:'EXPIRED_PRIVATE',refreshToken:'REFRESH_PRIVATE',name:'PRIVATE_PROFILE'})}]}]};
  const scopes=[scope,{...scope,space:'r1',product_id:'140236'}],calls=[];
  const result=await collectHostCalendarAPI(saved,{scopes},{fetcher:async(url,options)=>{
-  const u=new URL(url);assert.equal(u.origin,'https://api.spacecloud.kr');assert.equal(options.method,'GET');assert.equal(options.redirect,'manual');calls.push({path:u.pathname,auth:options.headers.Authorization});
+  const u=new URL(url);assert.equal(u.origin,'https://api.spacecloud.kr');assert.equal(options.method,'GET');assert.equal(options.redirect,'manual');assert.equal(options.headers.Cookie,'host_auth=PRIVATE_COOKIE');calls.push({path:u.pathname,auth:options.headers.Authorization});
   if(u.pathname.endsWith('/get_token')){assert.equal(options.headers.Authorization,'REFRESH_PRIVATE');return new Response(JSON.stringify({token:'ROTATED_PRIVATE'}));}
   return options.headers.Authorization==='EXPIRED_PRIVATE'?new Response('',{status:401}):new Response(JSON.stringify(grid()));
  }});
