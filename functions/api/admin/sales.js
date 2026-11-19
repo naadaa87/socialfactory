@@ -174,25 +174,29 @@ export async function onRequestGet({ request, env }) {
   byChannel.payapp_direct={amount:byMethod.payapp_direct||0,n:countBy.payapp_direct||0,label:'페이앱 직접 결제'};
   Object.values(byChannel).forEach(x => { x.share = total ? x.amount / total * 100 : 0; });
 
-  // 모든 기간의 결제 합계를 한 번의 DB 요청으로 읽습니다.
-  const sources = [
-    `SELECT substr(${dcol}, 1, 7) AS ym, ${NET} AS amount FROM ${SALES_SOURCE} WHERE ${PAID}`,
-    `SELECT substr(paid_at, 1, 7), amount-refund_amount FROM ${TOSS_SOURCE}`,
-    `SELECT substr(paid_at, 1, 7), amount-refund_amount FROM ${PAYAPP_DIRECT}`
+  // 각 결제 원장을 한 번씩 읽고, 기간별 결과를 합칩니다.
+  const periodTotals = (date, amount, source) => env.DB.prepare(`
+    SELECT COALESCE(SUM(${amount}), 0) AS total, COUNT(*) AS n,
+      COALESCE(SUM(${amount}) FILTER (WHERE substr(${date}, 1, 7) = ?1), 0) AS thisTotal,
+      COUNT(*) FILTER (WHERE substr(${date}, 1, 7) = ?1) AS thisCount,
+      COALESCE(SUM(${amount}) FILTER (WHERE substr(${date}, 1, 7) = ?2), 0) AS lastTotal,
+      COUNT(*) FILTER (WHERE substr(${date}, 1, 7) = ?2) AS lastCount
+    ${source}`).bind(thisYm, lastYm).first();
+  const requests = [
+    periodTotals(dcol, NET, `FROM ${SALES_SOURCE} WHERE ${PAID}`),
+    periodTotals("paid_at", "amount-refund_amount", `FROM ${TOSS_SOURCE}`),
+    periodTotals("paid_at", "amount-refund_amount", `FROM ${PAYAPP_DIRECT}`)
   ];
-  if (withOrders) sources.push(
-    `SELECT substr(paid_at, 1, 7), ${netOrderAmount} FROM orders WHERE status IN ('paid', 'used', 'refund_requested') AND test_mode = 0`,
-    `SELECT substr(paid_at, 1, 7), ${KNET} ${KIOSK}`,
-    `SELECT substr(paid_kst, 1, 7), ${ONET} ${OFFICE}`
+  if (withOrders) requests.push(
+    periodTotals("paid_at", netOrderAmount, "FROM orders WHERE status IN ('paid', 'used', 'refund_requested') AND test_mode = 0"),
+    periodTotals("paid_at", KNET, KIOSK),
+    periodTotals("paid_kst", ONET, OFFICE)
   );
-  const [totals, unpaid] = await Promise.all([
-    one(`WITH sales AS (${sources.join(" UNION ALL ")})
-      SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n,
-        COALESCE(SUM(amount) FILTER (WHERE ym = ?1), 0) AS thisTotal, COUNT(*) FILTER (WHERE ym = ?1) AS thisCount,
-        COALESCE(SUM(amount) FILTER (WHERE ym = ?2), 0) AS lastTotal, COUNT(*) FILTER (WHERE ym = ?2) AS lastCount
-      FROM sales`, thisYm, lastYm),
-    one(`SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM ${SALES_SOURCE} WHERE pay_status = 'unpaid' AND status = 'confirmed'`)
-  ]);
+  const totals = { total: 0, n: 0, thisTotal: 0, thisCount: 0, lastTotal: 0, lastCount: 0 };
+  for (const row of await Promise.all(requests)) {
+    for (const key of Object.keys(totals)) totals[key] += Number(row[key]) || 0;
+  }
+  const unpaid = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM ${SALES_SOURCE} WHERE pay_status = 'unpaid' AND status = 'confirmed'`);
   const ys = (await all(`SELECT DISTINCT substr(date, 1, 4) AS y FROM ${SALES_SOURCE} UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM ${SALES_SOURCE} WHERE paid_at IS NOT NULL UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM orders WHERE paid_at IS NOT NULL AND status IN ('paid', 'used', 'refund_requested') AND test_mode = 0`))
     .concat(await all(`SELECT DISTINCT substr(paid_at, 1, 4) AS y ${KIOSK}`),await all(`SELECT DISTINCT substr(paid_at,1,4) AS y FROM ${TOSS_SOURCE}`));
   ys.push(...await all(`SELECT DISTINCT substr(paid_at,1,4) y FROM ${PAYAPP_DIRECT}`));
