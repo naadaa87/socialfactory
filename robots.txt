@@ -9,5 +9,6 @@ Disallow: /toss-front-plugin/
 Disallow: /workers/
 Disallow: /content/
 Disallow: /scripts/
+Disallow: /cdn-cgi/
 
 Sitemap: https://socialfactory.co.kr/sitemap.xml
