@@ -874,7 +874,32 @@
     $$("#sl-basis [data-basis]").forEach(function (b) { b.classList.toggle("on", b.dataset.basis === (onlyPayapp?'paid':SL.basis));b.disabled=onlyPayapp; });
     $("#sl-orders").disabled=onlyPayapp;
     var requestSeq=++SL.requestSeq;
-    api("/api/admin/sales?year=" + SL.year + "&basis=" + SL.basis + "&orders=" + ($("#sl-orders").checked ? 1 : 0)+'&provider='+$("#sl-provider").value).then(function (d) { if(requestSeq!==SL.requestSeq)return;SL.data = d; drawSales(); }).catch(function(e){if(requestSeq===SL.requestSeq)fail($("#sl-methods"))(e);});
+    var url = "/api/admin/sales?year=" + SL.year;
+    $("#sl-kpis").setAttribute("aria-busy", "true");
+    $("#sl-summary-status").textContent = "매출 집계 불러오는 중…";
+    return api(url + "&part=summary&basis=" + SL.basis + "&orders=" + ($("#sl-orders").checked ? 1 : 0) + "&provider=" + $("#sl-provider").value)
+      .then(function (d) {
+        if (requestSeq !== SL.requestSeq) return;
+        SL.data = d;
+        drawSales();
+        $("#sl-summary-status").textContent = "";
+        if (onlyPayapp) return;
+        api(url + "&part=spacecloud").then(function (calendar) {
+          if (requestSeq !== SL.requestSeq) return;
+          drawSpacecloudPaymentGaps(calendar);
+          drawSalesChannelNote(calendar);
+        }).catch(function (error) {
+          if (requestSeq === SL.requestSeq && !guard(error)) {
+            $("#sl-channel-note").textContent = "스페이스클라우드 미연결 일정을 불러오지 못했습니다.";
+          }
+        });
+      }).catch(function (error) {
+        if (requestSeq !== SL.requestSeq) return;
+        $("#sl-summary-status").textContent = "매출 집계를 불러오지 못했습니다.";
+        fail($("#sl-methods"))(error);
+      }).finally(function () {
+        if (requestSeq === SL.requestSeq) $("#sl-kpis").setAttribute("aria-busy", "false");
+      });
   }
   function bars(items, total) {
     var max = Math.max.apply(null, items.map(function (x) { return x.v; }).concat([1]));
@@ -901,21 +926,36 @@
       }).join('') + '</ul>' : '')
       + (gaps.count > gaps.rows.length ? '<p>최근 ' + num(gaps.rows.length) + '건을 표시합니다.</p>' : '');
   }
+  function drawSalesChannelNote(d) {
+    var note = "채널별 비중은 선택한 연도 총매출 기준입니다. 홈페이지 이용권 포함 여부도 동일하게 적용합니다.";
+    if (d.provider === "payapp") {
+      note = "페이앱 거래번호로 확인한 결제를 결제일 기준으로 집계합니다. 기존 예약에 반영된 페이앱 결제도 여기에는 포함하며, 전체 매출에는 중복 가산하지 않습니다.";
+    } else if (d.unrecordedSpacecloud == null) {
+      note += " 스페이스클라우드 금액 미등록 일정을 확인 중입니다.";
+    } else {
+      note += " 스페이스클라우드 금액 미등록 일정 " + num(d.unrecordedSpacecloud) + "건은 합계에서 제외됩니다. 캘린더는 결제금액을 제공하지 않습니다. 정산 엑셀 일괄 가져오기 또는 예약 상세에서 금액을 등록해 주세요.";
+    }
+    $("#sl-channel-note").textContent = note;
+  }
   function drawSales() {
     var d = SL.data, ms = d.methods || [], cur = todayIso().slice(0, 7);
     drawSpacecloudPaymentGaps(d);
     $("#sl-year").innerHTML = (d.years || [d.year]).map(function (y) { return '<option value="' + y + '"' + (y === d.year ? " selected" : "") + ">" + y + "년</option>"; }).join("");
     $("#sl-year-label").textContent = d.year + "년 · " + (d.basis === "paid" ? "결제일" : "이용일") + " 기준";
     $('#sl-table-help').textContent=d.provider==='payapp'?'페이앱 거래번호로 확인된 결제 · 결제일 기준':'월을 누르면 그 달의 예약 목록이 열립니다';
+    function afterParkingCost(period, total) {
+      var cost = d.parkingSales && d.parkingMargin ? d.parkingSales[period] - d.parkingMargin[period] : 0;
+      return '<span class="parking-adjusted"><strong>주차권 원가 차감 후</strong> ' + won(total - cost) + "</span>";
+    }
     function parkingSalesLine(period) {
       if (!d.parkingMargin) return "";
       var sales = d.parkingSales ? ' <span class="nw">· <strong>주차권 판매 금액</strong> ' + won(d.parkingSales[period]) + "</span>" : "";
       return '<span><span class="nw"><strong>주차권 마진</strong> ' + won(d.parkingMargin[period]) + "</span>" + sales + "</span>";
     }
-    $("#sl-kpis").innerHTML = '<div class="kpi accent"><small>누적 총매출</small><b>' + num(d.allTime.total) + "<em>원</em></b><span>전체 기간 " + num(d.allTime.n) + "건</span>" + parkingSalesLine("allTime") + "</div>"
-      + '<div class="kpi"><small>' + esc(d.year) + "년 매출</small><b>" + num(d.total) + "<em>원</em></b><span>" + num(d.n) + "건" + (d.refunds ? " · 환불 " + won(d.refunds) + " 차감" : "") + "</span>" + parkingSalesLine("annual") + "</div>"
-      + '<div class="kpi"><small>이번 달 (' + (+d.thisMonth.ym.slice(5, 7)) + "월)</small><b>" + num(d.thisMonth.total) + "<em>원</em></b><span>" + num(d.thisMonth.n) + "건</span>" + parkingSalesLine("thisMonth") + "</div>"
-      + '<div class="kpi"><small>지난달 (' + (+d.lastMonth.ym.slice(5, 7)) + "월)</small><b>" + num(d.lastMonth.total) + "<em>원</em></b><span>" + num(d.lastMonth.n) + "건" + (d.lastMonth.total ? " · 이번 달 " + (d.thisMonth.total >= d.lastMonth.total ? "+" : "") + Math.round((d.thisMonth.total - d.lastMonth.total) / d.lastMonth.total * 100) + "%" : "") + "</span>" + parkingSalesLine("lastMonth") + "</div>"
+    $("#sl-kpis").innerHTML = '<div class="kpi accent"><small>누적 총매출</small><b>' + num(d.allTime.total) + "<em>원</em></b><span>전체 기간 " + num(d.allTime.n) + "건</span>" + parkingSalesLine("allTime") + afterParkingCost("allTime", d.allTime.total) + "</div>"
+      + '<div class="kpi"><small>' + esc(d.year) + "년 매출</small><b>" + num(d.total) + "<em>원</em></b><span>" + num(d.n) + "건" + (d.refunds ? " · 환불 " + won(d.refunds) + " 차감" : "") + "</span>" + parkingSalesLine("annual") + afterParkingCost("annual", d.total) + "</div>"
+      + '<div class="kpi"><small>이번 달 (' + (+d.thisMonth.ym.slice(5, 7)) + "월)</small><b>" + num(d.thisMonth.total) + "<em>원</em></b><span>" + num(d.thisMonth.n) + "건</span>" + parkingSalesLine("thisMonth") + afterParkingCost("thisMonth", d.thisMonth.total) + "</div>"
+      + '<div class="kpi"><small>지난달 (' + (+d.lastMonth.ym.slice(5, 7)) + "월)</small><b>" + num(d.lastMonth.total) + "<em>원</em></b><span>" + num(d.lastMonth.n) + "건" + (d.lastMonth.total ? " · 이번 달 " + (d.thisMonth.total >= d.lastMonth.total ? "+" : "") + Math.round((d.thisMonth.total - d.lastMonth.total) / d.lastMonth.total * 100) + "%" : "") + "</span>" + parkingSalesLine("lastMonth") + afterParkingCost("lastMonth", d.lastMonth.total) + "</div>"
       + '<button type="button" class="kpi' + (d.unpaid.n ? " warn" : "") + '" data-go-unpaid><small>미수금 (결제 전)</small><b>' + num(d.unpaid.amount) + "<em>원</em></b><span>" + num(d.unpaid.n) + "건 · 누르면 목록</span></button>";
     $("#sl-methods").innerHTML = bars(ms.map(function (m) { return { k: m.label, v: d.byMethod[m.key] || 0, s: num(d.countBy[m.key] || 0) + "건", c: "var(--m-" + m.key + ")" }; }), d.total);
     var mx = Math.max.apply(null, d.months.map(function (m) { return m.total; }).concat([1]));
@@ -939,7 +979,7 @@
     $("#sl-channel-details").innerHTML = '<table class="tbl"><thead><tr><th>채널</th><th>결제 건수</th><th>매출액</th><th>총매출 비중</th></tr></thead><tbody>' + chs.map(function (x) {
       return '<tr><td>' + esc(x.k) + '</td><td>' + esc(x.s) + '</td><td>' + won(x.v) + '</td><td>' + (d.total ? x.v / d.total * 100 : 0).toFixed(1) + '%</td></tr>';
     }).join('') + '</tbody><tfoot><tr><th>합계</th><td>' + num(d.n) + '건</td><td>' + won(d.total) + '</td><td>' + (d.total ? '100%' : '0%') + '</td></tr></tfoot></table>';
-    $("#sl-channel-note").textContent = d.provider==='payapp'?'페이앱 거래번호로 확인한 결제를 결제일 기준으로 집계합니다. 기존 예약에 반영된 페이앱 결제도 여기에는 포함하며, 전체 매출에는 중복 가산하지 않습니다.':'채널별 비중은 선택한 연도 총매출 기준입니다. 홈페이지 이용권 포함 여부도 동일하게 적용합니다. 스페이스클라우드 금액 미등록 일정 ' + num(d.unrecordedSpacecloud || 0) + '건은 합계에서 제외됩니다. 캘린더는 결제금액을 제공하지 않습니다. 정산 엑셀 일괄 가져오기 또는 예약 상세에서 금액을 등록해 주세요.';
+    drawSalesChannelNote(d);
   }
   $("#sl-year").addEventListener("change", function () { SL.year = this.value; loadSales(); });
   $("#sl-basis").addEventListener("click", function (e) { var b = e.target.closest("[data-basis]"); if (!b) return; SL.basis = b.dataset.basis; loadSales(); });

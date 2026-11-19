@@ -144,6 +144,8 @@ button.kpi:hover { border-color: var(--blue); }
 .kpi b { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi b em { font-style: normal; font-size: 13px; font-weight: 700; color: var(--muted); margin-left: 2px; }
 .kpi span { font-size: 12px; color: var(--muted); }
+.kpi .parking-adjusted { padding-top: 5px; margin-top: 3px; border-top: 1px solid var(--line); color: inherit; font-variant-numeric: tabular-nums; }
+.kpi.accent .parking-adjusted { border-color: rgba(255, 255, 255, .35); color: inherit; }
 .kpi.hot { border-color: var(--blue); background: var(--blue-25); }
 .kpi.hot b { color: var(--blue); }
 .kpi.warn { border-color: var(--amber-line); background: var(--amber-bg); }

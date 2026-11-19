@@ -11,7 +11,7 @@ function harness(fetchImpl) {
     if (nodes.has(key)) return nodes.get(key);
     const x = { innerHTML: '', textContent: '', value: '', hidden: true, checked: false, disabled: false, dataset: {},
       clientWidth: 1000, scrollWidth: 1000, classList: { add(){}, remove(){}, toggle(){} },
-      addEventListener(){}, querySelector: s => select(s), querySelectorAll: () => [], getBoundingClientRect: () => ({width:720,left:0}), focus(){} };
+      addEventListener(){}, setAttribute(){}, querySelector: s => select(s), querySelectorAll: () => [], getBoundingClientRect: () => ({width:720,left:0}), focus(){} };
     nodes.set(key,x);return x;
   };
   const select = key => {
@@ -23,7 +23,7 @@ function harness(fetchImpl) {
   const window={SF_CONFIG:{pricing:{rooms:{r1:{max:30},r2:{max:40},r3:{max:15},r4:{max:50},r5:{max:30}}}},addEventListener(){},scrollTo(){}};
   let code=readFileSync(new URL('../js/admin.js',import.meta.url),'utf8');
   code=code.replace(/  api\("\/api\/admin\/session"\)\.then\(showApp\)\.catch\([^\n]+\);/,'');
-  code=code.replace(/\}\)\(\);\s*$/, 'window.testHooks={resRow,renderExternalDetail,renderSpacecloudStatus,net,BD,loadBoard,drawDay,drawMonth,SL,drawSales,pollScheduleUpdates,setPollView:view=>{CUR=view;app.hidden=false;}};})();');
+  code=code.replace(/\}\)\(\);\s*$/, 'window.testHooks={resRow,renderExternalDetail,renderSpacecloudStatus,net,BD,loadBoard,drawDay,drawMonth,SL,loadSales,drawSales,pollScheduleUpdates,setPollView:view=>{CUR=view;app.hidden=false;}};})();');
   vm.runInNewContext(code,{window,document,sessionStorage:{removeItem(){}},location:{hash:'',pathname:'/admin'},history:{replaceState(){}},
     setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},setInterval(fn,ms){intervals.push({fn,ms});},navigator:{},console,fetch:fetchImpl,AbortController});
   return {hooks:window.testHooks,nodes,statuses,intervals,document,timers};
@@ -140,4 +140,35 @@ test('a hung source-version check releases the polling lock after timeout',async
  const check=h.hooks.pollScheduleUpdates(false);
  [...h.timers.values()].find(t=>t.ms===20000).fn();await check;
  h.hooks.pollScheduleUpdates(false);assert.equal(calls,2);
+});
+
+test('sales cards show parking-cost-adjusted revenue while the external calendar is pending', async () => {
+  const report = {
+    ok:true, year:'2026', years:['2026'], basis:'paid', methods:[], months:[],
+    allTime:{total:1000000,n:8}, total:900000, n:7, refunds:0, unpaid:{amount:25000,n:1},
+    thisMonth:{ym:'2026-11',total:800000,n:6}, lastMonth:{ym:'2026-10',total:500000,n:3},
+    byMethod:{}, bySpace:{}, byChannel:{},
+    parkingSales:{allTime:210000,annual:140000,thisMonth:70000,lastMonth:30000},
+    parkingMargin:{allTime:70000,annual:40000,thisMonth:20000,lastMonth:10000}
+  };
+  const calls = [];
+  let resolveCalendar;
+  const h = harness(url => {
+    calls.push(url);
+    if (url.includes('part=summary')) return Promise.resolve({ok:true,json:async()=>report});
+    return new Promise(resolve => { resolveCalendar = resolve; });
+  });
+  h.hooks.SL.year = '2026';
+  await h.hooks.loadSales();
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /part=summary/);
+  assert.match(calls[1], /part=spacecloud/);
+  const cards = h.nodes.get('#sl-kpis').innerHTML;
+  assert.deepEqual([...cards.matchAll(/주차권 원가 차감 후<\/strong> ([\d,]+원)/g)].map(match => match[1]),
+    ['860,000원','800,000원','750,000원','480,000원']);
+  assert(!cards.split('data-go-unpaid')[1].includes('원가 차감'));
+  assert.match(h.nodes.get('#sl-channel-note').textContent, /확인 중/);
+  resolveCalendar({ok:true,json:async()=>({ok:true,year:'2026',unrecordedSpacecloud:2,spacecloudPaymentGaps:{count:0,rows:[]}})});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(h.nodes.get('#sl-channel-note').textContent, /2건/);
 });

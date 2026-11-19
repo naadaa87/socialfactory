@@ -523,8 +523,8 @@ test('automatic collection accepts a verified payment beside a separate same-day
     method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
     body:JSON.stringify({action:'sync',complete:true,observed_at:Date.now(),rows})
   })});
-  const salesSummary = async () => (await getSales({env:e,request:new Request(
-    'https://example.test/?year=2026',{headers})})).json();
+  const salesSummary = async (part = '') => (await getSales({env:e,request:new Request(
+    'https://example.test/?year=2026'+part,{headers})})).json();
   e.sqlite.exec(`INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status,paid_at)
     VALUES('UNVERIFIED','confirmed','r3','2026-11-08',1020,1320,'수기 일정','spacecloud',50000,'spacecloud','paid','2026-11-08')`);
   const before = await salesSummary();
@@ -550,6 +550,16 @@ test('automatic collection accepts a verified payment beside a separate same-day
   assert.deepEqual(sales.spacecloudPaymentGaps,{count:0,rows:[]});
   assert.equal(sales.total,155000);
   assert.equal(sales.n,2);
+  const fast = await salesSummary('&part=summary');
+  assert.equal(fast.total, sales.total);
+  assert.deepEqual(fast.allTime, sales.allTime);
+  assert.deepEqual(fast.thisMonth, sales.thisMonth);
+  assert.deepEqual(fast.lastMonth, sales.lastMonth);
+  assert.equal(fast.spacecloudPaymentGaps, undefined);
+  const calendarSummary = await salesSummary('&part=spacecloud');
+  assert.deepEqual(calendarSummary.spacecloudPaymentGaps, sales.spacecloudPaymentGaps);
+  assert.equal(calendarSummary.unrecordedSpacecloud, sales.unrecordedSpacecloud);
+  assert.equal(calendarSummary.total, undefined);
 });
 
 test('pre-settlement payment and later settlement share one ID; future use is counted by paid month',async t=>{

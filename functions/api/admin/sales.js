@@ -56,17 +56,35 @@ async function parkingSalesSummary(env, year, thisYm, lastYm) {
   };
 }
 
+async function spacecloudPaymentSummary(env, year) {
+  const external = await loadSpacecloudForDisplay(env);
+  const [{ results: recorded }, { results: imported }] = await Promise.all([
+    env.DB.prepare("SELECT code, status, channel, space, date, start_min, end_min, customer_name, pay_status FROM reservations WHERE channel = 'spacecloud'").all(),
+    env.DB.prepare("SELECT reservation_id, use_date, end_date, linked_code FROM spacecloud_sales").all()
+  ]);
+  const importedIds = new Set(imported.map(x => x.reservation_id));
+  const missing = mergeCalendarRows(recorded, external.results).filter(x =>
+    x.external && x.date.slice(0, 4) === year && !importedIds.has(calendarReservationId(x.source_url)));
+  return {
+    unrecordedSpacecloud: missing.length,
+    spacecloud: external.info,
+    spacecloudPaymentGaps: calendarPaymentGaps(external.results, recorded, imported, year)
+  };
+}
+
 export async function onRequestGet({ request, env }) {
   const deny = await adminGate(request, env); if (deny) return deny;
-  await ensureAutomation(env);
-  await ensurePayappSales(env);
-  await ensureSpacecloudSales(env);
-  await ensureTossSales(env);
   const u = new URL(request.url);
   const today = kstToday();
   const year = /^\d{4}$/.test(u.searchParams.get("year") || "") ? u.searchParams.get("year") : today.slice(0, 4);
   const provider=u.searchParams.get('provider')||'all';
   if(!['all','payapp'].includes(provider))return json({ok:false,message:'결제사 필터를 확인해 주세요.'},400);
+  await ensureSpacecloudSales(env);
+  const part = u.searchParams.get("part");
+  if (part === "spacecloud") return json({ ok: true, year, ...await spacecloudPaymentSummary(env, year) });
+  await ensureAutomation(env);
+  await ensurePayappSales(env);
+  await ensureTossSales(env);
   const thisYm = today.slice(0, 7);
   const lastYm = new Date(Date.parse(thisYm + "-01T00:00:00Z") - 864e5).toISOString().slice(0, 7);
   const withOrders = u.searchParams.get("orders") !== "0";
@@ -133,7 +151,10 @@ export async function onRequestGet({ request, env }) {
   for (const r of await all(`SELECT space AS k, COUNT(*) AS n, SUM(${NET}) AS s, SUM(end_min - start_min) AS mins FROM ${SALES_SOURCE} WHERE ${PAID} AND substr(${dcol}, 1, 4) = ?1 GROUP BY space`, year)) {
     if (bySpace[r.k]) bySpace[r.k] = { amount: Number(r.s) || 0, n: Number(r.n) || 0, minutes: Number(r.mins) || 0 };
   }
-  if(withOrders){const office=await one(`SELECT COUNT(*) n,COALESCE(SUM(${ONET}),0) s ${OFFICE} AND substr(paid_kst,1,4)=?1`,year);bySpace.office.amount+=Number(office.s)||0;bySpace.office.n+=Number(office.n)||0;}
+  if (withOrders) {
+    bySpace.office.amount += byMethod.office_payapp;
+    bySpace.office.n += countBy.office_payapp;
+  }
   const byChannel = {};
   for (const r of await all(`SELECT COALESCE(NULLIF(channel, ''), 'none') AS k, COUNT(*) AS n, SUM(${NET}) AS s FROM ${SALES_SOURCE} WHERE ${PAID} AND substr(${dcol}, 1, 4) = ?1 GROUP BY k`, year)) {
     byChannel[r.k] = { amount: Number(r.s) || 0, n: Number(r.n) || 0, label: CHANNELS[r.k] || "경로 미기록" };
@@ -141,55 +162,52 @@ export async function onRequestGet({ request, env }) {
 
   // 채널 비중의 분모를 총매출과 맞춥니다. 홈페이지 이용권도 홈페이지 채널에 포함합니다.
   if (withOrders) {
-    const website = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${netOrderAmount}),0) AS s FROM orders WHERE status IN ('paid','used','refund_requested') AND test_mode = 0 AND substr(paid_at,1,4) = ?1`, year);
-    const web = byChannel.web || { amount: 0, n: 0, label: "홈페이지" };
-    web.amount += Number(website.s) || 0; web.n += Number(website.n) || 0; web.label = "홈페이지";
-    byChannel.web = web;
-    const office=await one(`SELECT COUNT(*) n,COALESCE(SUM(${ONET}),0) s ${OFFICE} AND substr(paid_kst,1,4)=?1`,year);
-    byChannel.web.amount+=Number(office.s)||0;byChannel.web.n+=Number(office.n)||0;
+    const web = byChannel.web || { amount: 0, n: 0 };
+    byChannel.web = {
+      amount: web.amount + byMethod.orders + byMethod.office_payapp,
+      n: web.n + countBy.orders + countBy.office_payapp,
+      label: "홈페이지"
+    };
   }
-  const terminalYear=await one(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS s FROM ${TOSS_SOURCE} WHERE substr(paid_at,1,4)=?1`,year);
-  byChannel.toss_terminal={amount:Number(terminalYear.s)||0,n:Number(terminalYear.n)||0,label:'토스 일반 단말기'};
+  byChannel.toss_terminal = { amount: byMethod.toss_terminal, n: countBy.toss_terminal, label: "토스 일반 단말기" };
   if(withOrders) byChannel.kiosk={amount:byMethod.kiosk||0,n:countBy.kiosk||0,label:'토스프론트 이용권'};
   byChannel.payapp_direct={amount:byMethod.payapp_direct||0,n:countBy.payapp_direct||0,label:'페이앱 직접 결제'};
   Object.values(byChannel).forEach(x => { x.share = total ? x.amount / total * 100 : 0; });
 
-  // 누적(전체 기간) · 미수금 · 이번 달 · 지난달
-  const resAll = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}), 0) AS s FROM ${SALES_SOURCE} WHERE ${PAID}`);
-  const ordAll = withOrders ? await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${netOrderAmount}), 0) AS s FROM orders WHERE status IN ('paid', 'used', 'refund_requested') AND test_mode = 0`) : { n: 0, s: 0 };
-  const kioskAll = withOrders ? await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${KNET}), 0) AS s ${KIOSK}`) : { n: 0, s: 0 };
-  const terminalAll=await one(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS s FROM ${TOSS_SOURCE}`);
-  const payappAll=await one(`SELECT COUNT(*) n,COALESCE(SUM(amount-refund_amount),0) s FROM ${PAYAPP_DIRECT}`);
-  const officeAll=withOrders?await one(`SELECT COUNT(*) n,COALESCE(SUM(${ONET}),0) s ${OFFICE}`):{n:0,s:0};
-  const unpaid = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM ${SALES_SOURCE} WHERE pay_status = 'unpaid' AND status = 'confirmed'`);
-  const monthTotal = async (ym) => {
-    const a = await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${NET}), 0) AS s FROM ${SALES_SOURCE} WHERE ${PAID} AND substr(${dcol}, 1, 7) = ?1`, ym);
-    const o = withOrders ? await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${netOrderAmount}), 0) AS s FROM orders WHERE status IN ('paid', 'used', 'refund_requested') AND test_mode = 0 AND substr(paid_at, 1, 7) = ?1`, ym) : { n: 0, s: 0 };
-    const k = withOrders ? await one(`SELECT COUNT(*) AS n, COALESCE(SUM(${KNET}), 0) AS s ${KIOSK} AND substr(paid_at, 1, 7) = ?1`, ym) : { n: 0, s: 0 };
-    const t=await one(`SELECT COUNT(*) AS n,COALESCE(SUM(amount-refund_amount),0) AS s FROM ${TOSS_SOURCE} WHERE substr(paid_at,1,7)=?1`,ym);
-    const pg=await one(`SELECT COUNT(*) n,COALESCE(SUM(amount-refund_amount),0) s FROM ${PAYAPP_DIRECT} WHERE substr(paid_at,1,7)=?1`,ym);
-    const office=withOrders?await one(`SELECT COUNT(*) n,COALESCE(SUM(${ONET}),0) s ${OFFICE} AND substr(paid_kst,1,7)=?1`,ym):{n:0,s:0};
-    return { ym, total: (Number(a.s) || 0) + (Number(o.s) || 0) + (Number(k.s) || 0)+(Number(t.s)||0)+(Number(pg.s)||0)+(Number(office.s)||0), n: (Number(a.n) || 0) + (Number(o.n) || 0) + (Number(k.n) || 0)+(Number(t.n)||0)+(Number(pg.n)||0)+(Number(office.n)||0) };
-  };
+  // 모든 기간의 결제 합계를 한 번의 DB 요청으로 읽습니다.
+  const sources = [
+    `SELECT substr(${dcol}, 1, 7) AS ym, ${NET} AS amount FROM ${SALES_SOURCE} WHERE ${PAID}`,
+    `SELECT substr(paid_at, 1, 7), amount-refund_amount FROM ${TOSS_SOURCE}`,
+    `SELECT substr(paid_at, 1, 7), amount-refund_amount FROM ${PAYAPP_DIRECT}`
+  ];
+  if (withOrders) sources.push(
+    `SELECT substr(paid_at, 1, 7), ${netOrderAmount} FROM orders WHERE status IN ('paid', 'used', 'refund_requested') AND test_mode = 0`,
+    `SELECT substr(paid_at, 1, 7), ${KNET} ${KIOSK}`,
+    `SELECT substr(paid_kst, 1, 7), ${ONET} ${OFFICE}`
+  );
+  const [totals, unpaid] = await Promise.all([
+    one(`WITH sales AS (${sources.join(" UNION ALL ")})
+      SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n,
+        COALESCE(SUM(amount) FILTER (WHERE ym = ?1), 0) AS thisTotal, COUNT(*) FILTER (WHERE ym = ?1) AS thisCount,
+        COALESCE(SUM(amount) FILTER (WHERE ym = ?2), 0) AS lastTotal, COUNT(*) FILTER (WHERE ym = ?2) AS lastCount
+      FROM sales`, thisYm, lastYm),
+    one(`SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM ${SALES_SOURCE} WHERE pay_status = 'unpaid' AND status = 'confirmed'`)
+  ]);
   const ys = (await all(`SELECT DISTINCT substr(date, 1, 4) AS y FROM ${SALES_SOURCE} UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM ${SALES_SOURCE} WHERE paid_at IS NOT NULL UNION SELECT DISTINCT substr(paid_at, 1, 4) AS y FROM orders WHERE paid_at IS NOT NULL AND status IN ('paid', 'used', 'refund_requested') AND test_mode = 0`))
     .concat(await all(`SELECT DISTINCT substr(paid_at, 1, 4) AS y ${KIOSK}`),await all(`SELECT DISTINCT substr(paid_at,1,4) AS y FROM ${TOSS_SOURCE}`));
   ys.push(...await all(`SELECT DISTINCT substr(paid_at,1,4) y FROM ${PAYAPP_DIRECT}`));
   if(withOrders)ys.push(...await all(`SELECT DISTINCT substr(paid_kst,1,4) y ${OFFICE}`));
   const years = Array.from(new Set(ys.map((r) => r.y).filter((y) => /^\d{4}$/.test(y || "")).concat([today.slice(0, 4), year]))).sort().reverse();
 
-  const external = await loadSpacecloudForDisplay(env);
-  const recorded = await all(`SELECT code, status, channel, space, date, start_min, end_min, customer_name, pay_status FROM reservations WHERE channel = 'spacecloud'`);
-  const imported = await all("SELECT reservation_id, use_date, end_date, linked_code FROM spacecloud_sales");
-  const importedIds = new Set(imported.map(x => x.reservation_id));
-  const missing = mergeCalendarRows(recorded, external.results).filter(x => x.external && x.date.slice(0,4) === year && !importedIds.has(calendarReservationId(x.source_url)));
+  const calendar = part === "summary" ? {} : await spacecloudPaymentSummary(env, year);
   return json({
     ok: true, today, year, basis, withOrders, years,
     methods: methods.map((k) => ({ key: k, label: k==='office_payapp'?'독립사무실 페이앱':k==='payapp_direct'?'페이앱 직접 결제':k === 'toss_terminal' ? '토스 일반 단말기' : k === "orders" ? "홈페이지 온라인 결제" : k === "kiosk" ? "토스프론트 이용권" : PAY_METHODS[k] })),
     months, byMethod, countBy, total, n, refunds, ...parking,
-    bySpace, byChannel, channelTotal: total, unrecordedSpacecloud: missing.length, spacecloud: external.info,
-    spacecloudPaymentGaps: calendarPaymentGaps(external.results, recorded, imported, year),
-    allTime: { total: (Number(resAll.s) || 0) + (Number(ordAll.s) || 0) + (Number(kioskAll.s) || 0)+(Number(terminalAll.s)||0)+(Number(payappAll.s)||0)+(Number(officeAll.s)||0), n: (Number(resAll.n) || 0) + (Number(ordAll.n) || 0) + (Number(kioskAll.n) || 0)+(Number(terminalAll.n)||0)+(Number(payappAll.n)||0)+(Number(officeAll.n)||0) },
+    bySpace, byChannel, channelTotal: total, ...calendar,
+    allTime: { total: Number(totals.total) || 0, n: Number(totals.n) || 0 },
     unpaid: { n: Number(unpaid.n) || 0, amount: Number(unpaid.s) || 0 },
-    thisMonth: await monthTotal(thisYm), lastMonth: await monthTotal(lastYm)
+    thisMonth: { ym: thisYm, total: Number(totals.thisTotal) || 0, n: Number(totals.thisCount) || 0 },
+    lastMonth: { ym: lastYm, total: Number(totals.lastTotal) || 0, n: Number(totals.lastCount) || 0 }
   });
 }
