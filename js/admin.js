@@ -907,10 +907,14 @@
     $("#sl-year").innerHTML = (d.years || [d.year]).map(function (y) { return '<option value="' + y + '"' + (y === d.year ? " selected" : "") + ">" + y + "년</option>"; }).join("");
     $("#sl-year-label").textContent = d.year + "년 · " + (d.basis === "paid" ? "결제일" : "이용일") + " 기준";
     $('#sl-table-help').textContent=d.provider==='payapp'?'페이앱 거래번호로 확인된 결제 · 결제일 기준':'월을 누르면 그 달의 예약 목록이 열립니다';
-    $("#sl-kpis").innerHTML = '<div class="kpi accent"><small>누적 총매출</small><b>' + num(d.allTime.total) + "<em>원</em></b><span>전체 기간 " + num(d.allTime.n) + "건</span></div>"
-      + '<div class="kpi"><small>' + esc(d.year) + "년 매출</small><b>" + num(d.total) + "<em>원</em></b><span>" + num(d.n) + "건" + (d.refunds ? " · 환불 " + won(d.refunds) + " 차감" : "") + "</span></div>"
-      + '<div class="kpi"><small>이번 달 (' + (+d.thisMonth.ym.slice(5, 7)) + "월)</small><b>" + num(d.thisMonth.total) + "<em>원</em></b><span>" + num(d.thisMonth.n) + "건</span></div>"
-      + '<div class="kpi"><small>지난달 (' + (+d.lastMonth.ym.slice(5, 7)) + "월)</small><b>" + num(d.lastMonth.total) + "<em>원</em></b><span>" + num(d.lastMonth.n) + "건" + (d.lastMonth.total ? " · 이번 달 " + (d.thisMonth.total >= d.lastMonth.total ? "+" : "") + Math.round((d.thisMonth.total - d.lastMonth.total) / d.lastMonth.total * 100) + "%" : "") + "</span></div>"
+    function parkingMarginLine(period) {
+      if (!d.parkingMargin) return "";
+      return '<span><strong>주차권 마진</strong> ' + won(d.parkingMargin[period]) + "</span>";
+    }
+    $("#sl-kpis").innerHTML = '<div class="kpi accent"><small>누적 총매출</small><b>' + num(d.allTime.total) + "<em>원</em></b><span>전체 기간 " + num(d.allTime.n) + "건</span>" + parkingMarginLine("allTime") + "</div>"
+      + '<div class="kpi"><small>' + esc(d.year) + "년 매출</small><b>" + num(d.total) + "<em>원</em></b><span>" + num(d.n) + "건" + (d.refunds ? " · 환불 " + won(d.refunds) + " 차감" : "") + "</span>" + parkingMarginLine("annual") + "</div>"
+      + '<div class="kpi"><small>이번 달 (' + (+d.thisMonth.ym.slice(5, 7)) + "월)</small><b>" + num(d.thisMonth.total) + "<em>원</em></b><span>" + num(d.thisMonth.n) + "건</span>" + parkingMarginLine("thisMonth") + "</div>"
+      + '<div class="kpi"><small>지난달 (' + (+d.lastMonth.ym.slice(5, 7)) + "월)</small><b>" + num(d.lastMonth.total) + "<em>원</em></b><span>" + num(d.lastMonth.n) + "건" + (d.lastMonth.total ? " · 이번 달 " + (d.thisMonth.total >= d.lastMonth.total ? "+" : "") + Math.round((d.thisMonth.total - d.lastMonth.total) / d.lastMonth.total * 100) + "%" : "") + "</span>" + parkingMarginLine("lastMonth") + "</div>"
       + '<button type="button" class="kpi' + (d.unpaid.n ? " warn" : "") + '" data-go-unpaid><small>미수금 (결제 전)</small><b>' + num(d.unpaid.amount) + "<em>원</em></b><span>" + num(d.unpaid.n) + "건 · 누르면 목록</span></button>";
     $("#sl-methods").innerHTML = bars(ms.map(function (m) { return { k: m.label, v: d.byMethod[m.key] || 0, s: num(d.countBy[m.key] || 0) + "건", c: "var(--m-" + m.key + ")" }; }), d.total);
     var mx = Math.max.apply(null, d.months.map(function (m) { return m.total; }).concat([1]));
