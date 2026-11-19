@@ -4,7 +4,7 @@ import { onRequestGet as sales } from '../functions/api/admin/sales.js';
 import { fixture } from './helpers/parking-fixture.mjs';
 import { ensureAutomation } from '../functions/_lib/parking-automation.js';
 
-test('sales cards count daily and hourly parking margins per vehicle by payment date', async (t) => {
+test('sales cards count parking sales per payment and margins per vehicle by payment date', async (t) => {
   const { db, env, req, now } = await fixture(t);
   now(Date.parse('2026-01-15T02:00:00Z'));
   await ensureAutomation(env);
@@ -55,10 +55,17 @@ test('sales cards count daily and hourly parking margins per vehicle by payment 
     return response.json();
   }
 
-  const expected = { allTime: 108000, annual: 78000, thisMonth: 78000, lastMonth: 10000 };
+  const margin = { allTime: 108000, annual: 78000, thisMonth: 78000, lastMonth: 10000 };
+  const salesAmounts = { allTime: 262000, annual: 192000, thisMonth: 192000, lastMonth: 30000 };
   for (const query of ['year=2026', 'year=2026&basis=use', 'year=2026&provider=payapp&orders=0']) {
-    assert.deepEqual({ ...(await summary(query)).parkingMargin }, expected);
+    const report = await summary(query);
+    assert.deepEqual(report.parkingMargin, margin);
+    assert.deepEqual(report.parkingSales, salesAmounts);
   }
-  assert.deepEqual({ ...(await summary('year=2025')).parkingMargin }, { ...expected, annual: 10000 });
-  assert.equal((await summary('year=2026&orders=0')).parkingMargin, null);
+  const priorYear = await summary('year=2025');
+  assert.deepEqual(priorYear.parkingMargin, { ...margin, annual: 10000 });
+  assert.deepEqual(priorYear.parkingSales, { ...salesAmounts, annual: 30000 });
+  const withoutOrders = await summary('year=2026&orders=0');
+  assert.equal(withoutOrders.parkingMargin, null);
+  assert.equal(withoutOrders.parkingSales, null);
 });

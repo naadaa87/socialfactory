@@ -17,34 +17,43 @@ import { adminGate, PAY_METHODS, SPACES, CHANNELS, kstToday } from "../../_lib/a
 import { ensureTossSales, TOSS_SOURCE, PASS_SALES_SOURCE } from "../../_lib/toss-sales.js";
 import { OFFICE_SALES_FROM } from '../../_lib/booking-payapp.js';
 
-async function parkingMarginSummary(env, year, thisYm, lastYm) {
-  // Each parking line is one vehicle, even when several vehicles share a payment.
-  // PayApp records refunds at payment level and does not identify the affected vehicles.
+async function parkingSalesSummary(env, year, thisYm, lastYm) {
+  // A payment can cover several vehicles. Count the sale and its refunds once per payment.
   // Until registration confirms the cost, hourly tickets assume the first hour is free.
   const row = await env.DB.prepare(`
-    WITH tickets AS (
+    WITH parking_payments AS (
       SELECT substr(o.paid_at, 1, 7) AS ym,
-        CASE p.ticket
-          WHEN 'daily' THEN 10000
-          WHEN '24h' THEN 20000
-          ELSE p.vehicle_price - COALESCE(claim.cost,
+        o.amount - pg.refunded_amount AS sales,
+        SUM(CASE
+          WHEN pg.refunded_amount > 0 THEN 0
+          WHEN p.ticket = 'daily' THEN 10000
+          WHEN p.ticket = '24h' THEN 20000
+          WHEN p.ticket IN ('1h', '2h', '3h') THEN p.vehicle_price - COALESCE(claim.cost,
             CASE p.ticket WHEN '1h' THEN 0 WHEN '2h' THEN 3000 WHEN '3h' THEN 6000 END)
-        END AS margin
+          ELSE 0
+        END) AS margin
       FROM parking_orders p
       JOIN orders o ON o.oid = p.payment_oid
       JOIN payapp_payments pg ON pg.oid = p.payment_oid
       LEFT JOIN parking_automation_claims claim ON claim.oid = p.oid AND p.status = 'applied'
-      WHERE p.ticket IN ('daily', '24h', '1h', '2h', '3h') AND o.test_mode = 0
-        AND o.status IN ('paid', 'used', 'refund_requested') AND o.paid_at IS NOT NULL
-        AND o.tid = pg.mul_no AND pg.refunded_amount = 0
+      WHERE o.test_mode = 0 AND o.status IN ('paid', 'used', 'refund_requested')
+        AND o.paid_at IS NOT NULL AND o.tid = pg.mul_no
+      GROUP BY o.oid
     )
-    SELECT COALESCE(SUM(margin), 0) AS allTime,
-      COALESCE(SUM(CASE WHEN substr(ym, 1, 4) = ?1 THEN margin END), 0) AS annual,
-      COALESCE(SUM(CASE WHEN ym = ?2 THEN margin END), 0) AS thisMonth,
-      COALESCE(SUM(CASE WHEN ym = ?3 THEN margin END), 0) AS lastMonth
-    FROM tickets
+    SELECT COALESCE(SUM(margin), 0) AS allMargin,
+      COALESCE(SUM(margin) FILTER (WHERE substr(ym, 1, 4) = ?1), 0) AS annualMargin,
+      COALESCE(SUM(margin) FILTER (WHERE ym = ?2), 0) AS thisMonthMargin,
+      COALESCE(SUM(margin) FILTER (WHERE ym = ?3), 0) AS lastMonthMargin,
+      COALESCE(SUM(sales), 0) AS allSales,
+      COALESCE(SUM(sales) FILTER (WHERE substr(ym, 1, 4) = ?1), 0) AS annualSales,
+      COALESCE(SUM(sales) FILTER (WHERE ym = ?2), 0) AS thisMonthSales,
+      COALESCE(SUM(sales) FILTER (WHERE ym = ?3), 0) AS lastMonthSales
+    FROM parking_payments
   `).bind(year, thisYm, lastYm).first();
-  return row;
+  return {
+    parkingMargin: { allTime: row.allMargin, annual: row.annualMargin, thisMonth: row.thisMonthMargin, lastMonth: row.lastMonthMargin },
+    parkingSales: { allTime: row.allSales, annual: row.annualSales, thisMonth: row.thisMonthSales, lastMonth: row.lastMonthSales }
+  };
 }
 
 export async function onRequestGet({ request, env }) {
@@ -61,9 +70,9 @@ export async function onRequestGet({ request, env }) {
   const thisYm = today.slice(0, 7);
   const lastYm = new Date(Date.parse(thisYm + "-01T00:00:00Z") - 864e5).toISOString().slice(0, 7);
   const withOrders = u.searchParams.get("orders") !== "0";
-  const parkingMargin = provider === "payapp" || withOrders
-    ? await parkingMarginSummary(env, year, thisYm, lastYm) : null;
-  if (provider === "payapp") return json({ ...await payappOnlySummary(env, year, today), parkingMargin });
+  const parking = provider === "payapp" || withOrders
+    ? await parkingSalesSummary(env, year, thisYm, lastYm) : { parkingMargin: null, parkingSales: null };
+  if (provider === "payapp") return json({ ...await payappOnlySummary(env, year, today), ...parking });
   const PAYAPP_DIRECT=payappSource(env);
   const basis = clean(u.searchParams.get("basis") || "", 6) === "use" ? "use" : "paid";
   const dcol = basis === "paid" ? "COALESCE(paid_at, date)" : "date";
@@ -176,7 +185,7 @@ export async function onRequestGet({ request, env }) {
   return json({
     ok: true, today, year, basis, withOrders, years,
     methods: methods.map((k) => ({ key: k, label: k==='office_payapp'?'독립사무실 페이앱':k==='payapp_direct'?'페이앱 직접 결제':k === 'toss_terminal' ? '토스 일반 단말기' : k === "orders" ? "홈페이지 온라인 결제" : k === "kiosk" ? "토스프론트 이용권" : PAY_METHODS[k] })),
-    months, byMethod, countBy, total, n, refunds, parkingMargin,
+    months, byMethod, countBy, total, n, refunds, ...parking,
     bySpace, byChannel, channelTotal: total, unrecordedSpacecloud: missing.length, spacecloud: external.info,
     spacecloudPaymentGaps: calendarPaymentGaps(external.results, recorded, imported, year),
     allTime: { total: (Number(resAll.s) || 0) + (Number(ordAll.s) || 0) + (Number(kioskAll.s) || 0)+(Number(terminalAll.s)||0)+(Number(payappAll.s)||0)+(Number(officeAll.s)||0), n: (Number(resAll.n) || 0) + (Number(ordAll.n) || 0) + (Number(kioskAll.n) || 0)+(Number(terminalAll.n)||0)+(Number(payappAll.n)||0)+(Number(officeAll.n)||0) },
