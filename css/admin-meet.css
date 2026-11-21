@@ -1,0 +1,37 @@
+/* 관리자 — 초대장 · 룸 가이드 (#view-meet). 기존 관리자 화면 스타일(admin.css · admin-community.css)을 그대로 쓰고 필요한 것만 더합니다. */
+#view-meet .mk-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#view-meet .mk-tabs { margin-bottom: 14px; }
+#view-meet .bad, #dr-mk-view .bad { color: var(--red); }
+#view-meet .mk-row { cursor: pointer; }
+#view-meet .mk-row:hover td { background: var(--blue-25); }
+#view-meet .mk-row td b { display: block; }
+#view-meet .mk-acts { white-space: nowrap; }
+#view-meet .mk-acts .btn + .btn { margin-left: 4px; }
+.mk-head { display: grid; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+.mk-head p { margin: 0; }
+.mk-links { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 14px; }
+.mk-qr { width: 120px; height: 120px; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-lg); background: #fff; }
+.mk-qr svg { width: 100%; height: 100%; display: block; }
+.mk-link-list { display: grid; gap: 12px; min-width: 0; }
+.mk-link-list .lbl { display: block; font-weight: 700; font-size: 12.5px; margin-bottom: 4px; }
+.mk-link-list .note { margin: 4px 0 0; }
+.mk-copyrow { display: flex; gap: 6px; }
+.mk-copyrow .input { flex: 1; min-width: 0; font-size: 12.5px; background: var(--bg); }
+.mk-tiles4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.mk-edit { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.mk-edit h3 { font-size: 16px; margin-bottom: 10px; }
+.btn.bad { color: var(--red); }
+.mk-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 14px; }
+.mk-room { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; }
+.mk-room b { display: block; font-size: 16px; }
+.mk-room small { display: block; color: var(--muted); }
+.mk-room-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.mk-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.mk-net { border: 1px solid var(--line); border-radius: var(--r-lg); background: #fff; padding: 14px 16px 16px; margin: 0 0 12px; }
+.mk-net legend { font-weight: 800; padding: 0 6px; }
+.mk-spaces { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.mk-warn-pub { background: var(--amber-bg); border: 1px solid var(--amber-line); color: var(--amber); border-radius: var(--r-lg); padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+@media (max-width: 900px) {
+  #view-meet .mk-tiles, .mk-tiles4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mk-links { grid-template-columns: 1fr; }
+}
