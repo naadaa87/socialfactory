@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/css/admin.css?v=parking-cost-20261119">
   <link rel="stylesheet" href="/css/admin-kpi.css?v=kpi-20261116">
   <link rel="stylesheet" href="/css/admin-community.css?v=cm-20261117">
+  <link rel="stylesheet" href="/css/admin-meet.css?v=mk-20261121">
   <link rel="stylesheet" href="/css/admin-kiosk-ui.css?v=d24708b714">
 </head>
 <body class="adm">
@@ -55,6 +56,7 @@
       <button type="button" data-view="ord">주문 · 결제<em data-count="ord" hidden></em></button>
       <button type="button" data-view="mem">회원</button>
       <button type="button" data-view="community">커뮤니티<em data-count="community" title="처리할 신고" hidden></em></button>
+      <button type="button" data-view="meet">초대장 · 룸 가이드</button>
       <span class="nav-cap">설정</span>
       <button type="button" data-view="prod">상품</button>
       <button type="button" data-view="set">설정 상태</button>
@@ -656,6 +658,54 @@
       </div>
     </section>
 
+    <!-- 초대장 · 룸 가이드 -->
+    <section class="view" id="view-meet" hidden>
+      <header class="vh"><div><h1>초대장 · 룸 가이드</h1><p class="muted small">예약자가 만든 모임 초대장과 참석 응답을 확인하고, 스페이스클라우드 · 전화 예약처럼 다른 채널 예약에는 초대장을 직접 만들어 줍니다. 방마다 붙이는 룸 가이드 QR과 와이파이 정보도 여기서 관리합니다.</p></div>
+        <div class="acts"><a class="btn btn-light btn-sm" href="/play" target="_blank" rel="noopener">모임 도구 열기 ↗</a><button class="btn btn-light btn-sm" type="button" id="mk-reload">새로고침</button><button class="btn btn-primary btn-sm" type="button" id="mk-new">+ 초대장 만들기</button></div></header>
+      <div class="cmm-tiles mk-tiles" id="mk-tiles"></div>
+      <div class="seg mk-tabs" id="mk-tabs" role="tablist" aria-label="초대장 · 룸 가이드 관리">
+        <button type="button" class="on" data-mk-tab="invites">초대장</button><button type="button" data-mk-tab="rooms">룸 가이드 QR</button><button type="button" data-mk-tab="wifi">와이파이</button>
+      </div>
+      <div class="mk-pane" id="mk-pane-invites">
+        <div class="filters">
+          <select class="select select-sm" id="mk-scope" aria-label="기간"><option value="upcoming">오늘 이후 모임</option><option value="past">지난 모임</option><option value="all">전체</option></select>
+          <input class="input" id="mk-q" type="search" placeholder="모임 이름 · 모임장 · 예약번호 · 메모" aria-label="검색">
+          <button class="btn btn-light btn-sm" type="button" id="mk-go">검색</button>
+        </div>
+        <p class="small muted" id="mk-count"></p>
+        <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>모임일</th><th>모임 · 모임장</th><th>방</th><th>만든 곳</th><th class="r">참석 · 불참</th><th class="r">열람</th><th>상태</th><th>관리</th></tr></thead><tbody id="mk-rows"></tbody></table></div></div>
+        <p class="note small mt">초대장과 참석 응답(이름 · 별명, 한마디, 차량 여부)은 모임일로부터 30일이 지나면 자동으로 지워집니다.</p>
+      </div>
+      <div class="mk-pane" id="mk-pane-rooms" hidden>
+        <div class="mk-bar"><p class="note small">방 안 잘 보이는 곳(문 안쪽이나 화면 옆)에 붙이는 QR입니다. 찍으면 그 공간의 와이파이, 화면 연결 방법, 퇴실 전 확인 목록이 나옵니다. 와이파이는 이 QR로 열었을 때만 보입니다.</p>
+          <div class="acts"><button class="btn btn-primary btn-sm" type="button" id="mk-print-all">전체 인쇄 (A5)</button><button class="btn btn-light btn-sm" type="button" id="mk-rotate-all">모든 QR 주소 바꾸기</button></div></div>
+        <div class="mk-rooms" id="mk-rooms"></div>
+        <p class="note small mt">QR 사진이 외부에 퍼졌거나 와이파이를 바꿨다면 '주소 바꾸기'를 누르고 새로 인쇄해 붙여 주세요. 바꾸면 예전 QR로는 와이파이가 보이지 않습니다.</p>
+      </div>
+      <div class="mk-pane" id="mk-pane-wifi" hidden>
+        <form class="form" id="mk-wifi" novalidate>
+          <p class="note small">룸 가이드(방 안 QR)와 모임 당일 초대장에 보이는 와이파이입니다. 공유기 비밀번호를 바꾸면 여기도 함께 바꿔 저장해 주세요.</p>
+          <div id="mk-nets"></div>
+          <p class="form-note" id="mk-w-msg" role="status" hidden></p>
+          <div class="drawer-actions"><button class="btn btn-primary" type="submit">저장</button><button class="btn btn-light" type="button" id="mk-net-add">+ 와이파이 더하기</button><button class="btn btn-light" type="button" id="mk-net-reset">처음 값으로</button></div>
+        </form>
+      </div>
+      <div class="drawer" id="dr-mk-view" hidden>
+        <div class="drawer-bg" data-close></div>
+        <div class="drawer-panel cmm-wide" role="dialog" aria-modal="true" aria-labelledby="mk-v-title">
+          <div class="drawer-head"><h2 id="mk-v-title">초대장</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+          <div class="drawer-body" id="mk-v-body"></div>
+        </div>
+      </div>
+      <div class="drawer" id="dr-mk-form" hidden>
+        <div class="drawer-bg" data-close></div>
+        <div class="drawer-panel cmm-wide" role="dialog" aria-modal="true" aria-labelledby="mk-f-head">
+          <div class="drawer-head"><h2 id="mk-f-head">초대장 만들기</h2><button class="btn btn-light btn-sm" type="button" data-close>닫기 ✕</button></div>
+          <form class="drawer-body form" id="mk-f" novalidate><div id="mk-f-body"></div></form>
+        </div>
+      </div>
+    </section>
+
     <!-- 상품 -->
 <section class="view" id="view-booking" hidden>
       <header class="vh"><div><h1>예약 신청 · 페이앱</h1><p class="muted small">공간대관은 외부 일정을 확인하고 시간을 확보한 뒤 결제를 안내합니다. 독립사무실은 상담한 조건으로 청구합니다.</p></div><button class="btn btn-light" type="button" id="booking-admin-reload">새로고침</button></header>
@@ -870,5 +920,7 @@
 <script src="/js/admin-board-devices.js?v=20261031-direct"></script>
 <script src="/js/admin-kpi.js?v=kpi-20261116"></script>
 <script src="/js/admin-community.js?v=cm-20261117"></script>
+<script src="/js/vendor/qrcode.js?v=mk-20261121"></script>
+<script src="/js/admin-meet.js?v=mk-20261121"></script>
 <script src="/js/parking-periods.js?v=20261116"></script><script src="/js/admin-parking.js?v=period-24h-20261116"></script><script src="/js/admin-parking-automation.js?v=instant-guidance-20261114"></script></body>
 </html>
