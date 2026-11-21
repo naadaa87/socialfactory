@@ -5,6 +5,7 @@
   <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
   <title>예약 · 결제 확인 | 소셜팩토리 건대</title>
   <link rel="stylesheet" href="/css/style.css?v=select-spacing-20261107">
+  <link rel="stylesheet" href="/css/meet.css?v=mk-20261121">
   <style>.payment-result{max-width:680px;margin:70px auto;padding:32px 24px}.payment-result h1{font-size:clamp(26px,5vw,38px);margin:20px 0}.payment-result p{line-height:1.8}.payment-result dl{background:#f4f6f8;padding:24px;border-radius:16px;margin:24px 0}.payment-result dt{font-size:13px;color:#637083;margin-top:14px}.payment-result dt:first-child{margin-top:0}.payment-result dd{margin:4px 0 0;font-weight:600}.payment-result .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}</style>
 </head>
 <body>
@@ -20,7 +21,9 @@
     <p><button type="submit" class="btn btn-primary" id="payment-open">페이앱으로 결제하기</button></p>
   </form>
   <div class="actions"><button type="button" class="btn btn-primary" id="payment-reload">다시 확인</button><button type="button" class="btn btn-outline" id="booking-cancel" hidden>미결제 예약 신청 취소</button><a href="/contact" class="btn btn-outline">예약·결제 문의</a><a href="/shop" class="btn btn-outline">예약·구매 안내</a></div>
+  <section class="mt-booking" data-meet-booking hidden aria-live="polite"></section>
 </main>
 <script src="/js/booking-status.js?v=payapp-gu-20261116"></script>
+<script src="/js/meet.js?v=mk-20261121" defer></script>
 <script defer src="https://choisijun.com/k1.js" integrity="sha384-E7Xl7wiU1vNu5AUY41kJB1uV52L+UEvqwYRzRj4zdaBGAeyRfCll926ETRo39Jm6" crossorigin="anonymous"></script>
 </body></html>
