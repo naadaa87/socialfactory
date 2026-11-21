@@ -98,3 +98,21 @@ https://:version.:project.pages.dev/*
 
 /scripts/*
   X-Robots-Tag: noindex, nofollow
+
+# 모임 초대장 · 관리 · 룸 가이드는 링크를 받은 사람만 쓰는 화면이라 검색에 나오지 않게 하고, 주소(방 QR 키)가 다른 사이트로 넘어가지 않게 합니다
+/i/*
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
+
+/meet-invite
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
+
+/meet-manage
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
+  Cache-Control: no-store
+
+/room
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
