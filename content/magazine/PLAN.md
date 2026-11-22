@@ -34,10 +34,10 @@
 - [x] 2026-11-19 · /magazine/exam-prep-study-spot-routine · 시험 기간 공부 장소, 자리를 정하면 루틴이 생깁니다
 - [x] 2026-11-20 · /magazine/regular-class-price-space-cost · 정기 클래스 수강료 정하기, 공간비부터 계산해 보세요
 - [x] 2026-11-21 · /magazine/gundae-meeting-place-guide · 건대입구 모임 장소 고르기, 모이는 사람의 길부터 그려 보세요
+- [x] 2026-11-22 · /magazine/setup-cleanup-time-by-layout · 세미나실 준비 시간과 정리 시간, 배치별로 얼마나 잡을까
 
 ## 다음 주제
 
-- [ ] space | 준비 시간과 정리 시간, 얼마나 잡아야 할까 | 대관 준비 시간, 세미나실 세팅 시간 | 배치별 예시
 - [ ] meeting | 새해 계획 워크숍, 혼자보다 넷이 낫습니다 | 신년 계획 모임, 새해 목표 워크숍 | 12월 말~1월
 - [ ] work | 코워킹에서 지키면 좋은 여섯 가지 | 코워킹 매너, 스터디카페 예절 | guide · space 기준
 - [ ] host | 소모임 호스트의 첫 모임, 처음 30분 진행법 | 소모임 운영, 모임장 진행 팁 | 아이스브레이킹
