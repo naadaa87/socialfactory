@@ -45,6 +45,28 @@ test('all supported names use the same masking without classifying personal or o
   assert.equal(roomSchedule(longRows,'r5',at('15:00')).current[0].name,'기반기○○');
   assert(!JSON.stringify(longRows).includes('기반기술Seminar'));
 });
+test('comma-separated booking names display only the masked primary name',()=>{
+  for(const [name,expected] of [
+    ['교육콘텐츠협의회, 지역직업교육시설협회','교육콘○○'],
+    ['김민수, 이영희','김○수'],
+    ['김민수，이영희','김○수'],
+    ['김민수,이영희,박철수,최영희,홍길동','김○수'],
+    ['김민*, 다른기관','김민○'],
+    ['가'.repeat(40)+', '+'나'.repeat(40),'가가가○○']
+  ]) {
+    assert.equal(displayName(name),expected);
+    const rows=boardRows([{...base,space:'r2',customer_name:name}],date);
+    assert.equal(rows[0].name,expected);
+    assert([...rows[0].name].length<=5);
+    assert(!JSON.stringify(rows).includes(name));
+  }
+  // Every component must pass the existing name checks. Never strip arbitrary
+  // punctuation or expose contacts, private notes, links or incomplete lists.
+  for(const name of ['김민수, 01012345678','김민수, a@b.com',
+    '김민수, 김민수 / 비밀번호 1234','김민수, https://example.com',
+    '김민수,,이영희',',김민수','김민수,',
+    '가'.repeat(41)+', 기관']) assert.equal(displayName(name),'예약 고객');
+});
 test('three and four character names mask the middle; five and longer names have a five character cap',()=>{
   const cases=[['김민수','김○수'],['남궁민수','남○○수'],['가나다라마','가나다○○'],
     ['가나다라마바사','가나다○○'],['ABCDEF','ABC○○'],['가나다라','가○○라'],
