@@ -112,7 +112,7 @@ function render() {
     if(data.unassigned) warnings.push('방 번호가 없는 예약은 별도 확인이 필요합니다.');
   }
   $('notice').replaceChildren(document.createTextNode(warnings.join(' ')));
-  $('connection').textContent = demo?'예시 데이터':availability==='loading'?'예약 불러오는 중':failed||unavailable?'연결 확인 필요':'1분마다 자동 갱신';
+  $('connection').textContent = demo?'예시 데이터':availability==='loading'?'예약 불러오는 중':failed||unavailable?'연결 확인 필요':'5초마다 자동 갱신';
   document.querySelector('.schedule-bottom').classList.toggle('offline', failed||unavailable);
   $('updated').textContent = demo?'시제품 · 실제 예약과 연결되지 않은 예시 화면':receivedAt?'마지막 확인 '+new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(receivedAt):'갱신 대기 중';
   const entries = unavailable?[]:data.reservations;
@@ -144,7 +144,7 @@ async function refresh() {
     failures++;
   } finally {
     loading=false;render();
-    refreshTimer=setTimeout(refresh,failed?Math.min(60000,5000*2**Math.min(failures-1,4)):60000);
+    refreshTimer=setTimeout(refresh,failed?Math.min(60000,5000*2**Math.min(failures-1,4)):5000);
   }
 }
 

@@ -34,7 +34,7 @@ export async function readBoard(env, { today, now = Date.now(), loadExternal, me
   if (manual.length > 1000) throw new Error('board-limit');
   const external = await loadExternal(env, { from: today, to: today, now });
   const rows = mergeRows(manual, external.results || [], { info: external.info, now });
-  return { ok: true, date: today, generated_at: now, refresh_seconds: 60,
+  return { ok: true, date: today, generated_at: now, refresh_seconds: 5,
     reservations: boardRows(rows, today),
     rooms: ROOM_KEYS.map(id => {
       const state = external.info?.rooms?.find(r => r.space === id);

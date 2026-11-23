@@ -7,6 +7,8 @@ import { onRequestGet as getDevices, onRequestPost as manageDevices } from '../f
 import { onRequestPost as pair } from '../functions/api/board/pair.js';
 import { onRequestGet as schedule } from '../functions/api/board/schedule.js';
 import { onRequestGet as adminSession } from '../functions/api/admin/session.js';
+import { publishCalendarDisplay } from '../functions/_lib/spacecloud-display.js';
+import { readFeedConfig } from '../functions/_lib/spacecloud.js';
 const origin='https://socialfactory.co.kr';
 function environment(){
   const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));
@@ -64,6 +66,22 @@ test('legacy credentials can be revoked but no longer gate the public display or
   assert.equal((await schedule({request:req,env})).status,200);
   assert.equal((await adminSession({request:request('/api/admin/session'),env})).status,401);
   assert.equal((await adminSession({request:request('/api/admin/session',null,adminHeaders),env})).status,200);
+});
+
+test('fast board reads use the published names and pick up a name-only update without upstream work',async t=>{
+ const env=environment();t.after(()=>env.sqlite.close());
+ const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+ const entry={code:'SC-123',external:true,status:'confirmed',space:'r1',date:today,start_min:600,end_min:720,customer_name:'김**',board_name:'김○수'};
+ const projection={results:[entry],info:{configured:false,rooms:[]}};
+ await publishCalendarDisplay(env,projection,[],Date.now());
+ await readFeedConfig(env);
+ let fetches=0;t.mock.method(globalThis,'fetch',async()=>{fetches++;throw Error('board must use the prepared projection');});
+ const statements=[],prepare=env.DB.prepare.bind(env.DB);env.DB.prepare=sql=>{statements.push(sql);return prepare(sql);};
+ const read=async()=>{const response=await schedule({env});assert.equal(response.status,200);return response.json();};
+ const first=await read();assert.equal(first.refresh_seconds,5);assert.deepEqual(first.reservations.map(r=>r.name),['김○수']);
+ assert(statements.every(sql=>/^SELECT\b/.test(sql)),JSON.stringify(statements));assert(statements.length<=5);
+ await publishCalendarDisplay(env,{...projection,results:[{...entry,board_name:'박○희'}]},[],Date.now()+1);
+ assert.deepEqual((await read()).reservations.map(r=>r.name),['박○희']);assert.equal(fetches,0);
 });
 test('pairing and management reject cross-origin requests and device listings never return hashes or codes',async()=>{
   const env=environment(),created=await createBoardDevice(env,'입구');
