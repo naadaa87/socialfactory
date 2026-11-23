@@ -20,7 +20,7 @@ import { adminGate, PAY_METHODS, SPACES, ROOM_KEYS, CHANNELS, kstToday, isIsoDat
 
 import { loadSpacecloud, websiteHoldCalendarCodes, filterExternal, mergeCalendarRows } from "../../_lib/spacecloud.js";
 import { isCalendarLinked } from "../../_lib/spacecloud-links.js";
-import { loadCalendarDisplay } from '../../_lib/spacecloud-display.js';
+import { loadCalendarDisplay, refreshCalendarDisplay } from '../../_lib/spacecloud-display.js';
 import { ensureBookingSchema } from '../../_lib/booking-schema.js';
 
 const COLS = "id, code, created_at, updated_at, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, list_amount, amount_note, pay_method, pay_status, paid_at, refund_amount, refunded_at, cancel_reason, cancelled_at, inquiry_ref, memo";
@@ -33,6 +33,12 @@ async function bookingLinked(env,code) {
 const bookingProtection=()=>json({ok:false,error:'booking-payment-linked',message:'홈페이지 결제 예약입니다. 예약 신청·페이앱 화면에서 결제·시간 해제를 함께 처리해 주세요.'},409);
 
 async function savedReservation(env,row) {
+  if (isCalendarLinked(row)) {
+    // Reconcile the moved paid copy after saving it, before the prepared view
+    // can reuse an earlier "source removed" result from its original room.
+    try { await refreshCalendarDisplay(env,{cacheOnly:true,afterSourceSync:true}); }
+    catch { console.error('admin-reservation-display-refresh'); }
+  }
   if(!syncEnabled(env))return row;
   try {
     await reconcileAdminReservations(env);
@@ -76,12 +82,17 @@ function readFields(b, prev) {
 async function conflicts(env, v, exceptCode) {
   if (!ROOM_KEYS.includes(v.space)) return [];
   const { results } = await env.DB.prepare(
-    `SELECT code, date, start_min, end_min, customer_name, people FROM reservations
+    `SELECT code, status, space, channel, date, start_min, end_min, customer_name, people FROM reservations
      WHERE status = 'confirmed' AND space = ?1 AND date BETWEEN ?2 AND ?3 AND code <> ?4`
   ).bind(v.space, addDaysIso(v.date, -1), addDaysIso(v.date, 1), exceptCode || "").all();
   const base = dayIndex(v.date) * 1440, s = base + v.start_min, e = base + v.end_min;
   const external = await loadSpacecloud(env);
   let externalRows=external.results;
+  // A source moved to another room retains its event identity, but its SC room
+  // prefix changes. Exclude that one source only after the original disappears;
+  // identical simultaneous bookings in both rooms must still conflict.
+  if (/^SC[1-5]-[a-f0-9]{16}$/.test(exceptCode || '') && !externalRows.some(row=>row.code===exceptCode))
+    externalRows=externalRows.filter(row=>!/^SC[1-5]-[a-f0-9]{16}$/.test(row.code) || row.code.slice(4)!==exceptCode.slice(4));
   if(exceptCode && syncEnabled(env)) {
     const copies=await websiteHoldCalendarCodes(env,externalRows);
     const {results:owned}=await env.DB.prepare('SELECT sync_code FROM spacecloud_admin_links WHERE reservation_code=?1').bind(exceptCode).all();
@@ -204,19 +215,23 @@ export async function onRequestPatch({ request, env }) {
   if (!prev) return json({ ok: false, error: "not-found" }, 404);
   if (await bookingLinked(env,code)) return bookingProtection();
   await ensureSpacecloudSales(env);
-  if (await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE linked_code = ?1").bind(code).first())
-    return bad('amount', '정산 엑셀과 연결된 예약입니다. 결제/환불 변경은 가져오기 기록과 함께 확인해야 합니다.');
   const action = clean(b.action || "update", 12);
+  const importedLink = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE linked_code = ?1").bind(code).first();
+  if (importedLink && action !== 'update')
+    return bad('amount', '정산 엑셀과 연결된 예약입니다. 결제/환불 변경은 가져오기 기록과 함께 확인해야 합니다.');
   let stmt;
   if (action === "update") {
     const r = readFields(b, prev); if (r.error) return bad(...r.error);
     const v = r.v;
-    await ensureSpacecloudSales(env);
-    const importedLink = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE linked_code = ?1").bind(code).first();
-    if (importedLink) return bad('amount', '이 예약의 매출은 정산 엑셀 기록으로 관리됩니다. 원본 결제/취소 내역을 먼저 확인해 주세요.');
+    // Reassigning an existing booking is not a new sale. Keep imported payment
+    // protections for financial edits, without blocking a free room change.
+    const samePayment = v.amount === prev.amount && v.channel === prev.channel
+      && v.pay_method === prev.pay_method && v.pay_status === prev.pay_status
+      && v.paid_at === (prev.paid_at || null) && v.date === prev.date;
+    if (importedLink && !samePayment) return bad('amount', '이 예약의 매출은 정산 엑셀 기록으로 관리됩니다. 원본 결제/취소 내역을 먼저 확인해 주세요.');
     const sameCalendarSlot = isCalendarLinked(prev) && v.space === prev.space && v.date === prev.date
       && v.start_min === prev.start_min && v.end_min === prev.end_min;
-    if (v.channel === 'spacecloud' && sameCalendarSlot) {
+    if (!samePayment && v.channel === 'spacecloud' && sameCalendarSlot) {
       const external = await loadSpacecloud(env);
       const match = external.results.find(e => e.space === prev.space && e.date === prev.date
         && e.start_min === prev.start_min && e.end_min === prev.end_min && e.customer_name === prev.customer_name);
@@ -224,7 +239,7 @@ export async function onRequestPatch({ request, env }) {
       if (importedId && await env.DB.prepare('SELECT reservation_id FROM spacecloud_sales WHERE reservation_id=?1').bind(importedId).first())
         return bad('amount', '이 일정은 자동 수집된 결제내역이 있습니다. 수집 기록에서 확인해 주세요.');
     }
-    if (v.channel === 'spacecloud' && !sameCalendarSlot) {
+    if (!samePayment && v.channel === 'spacecloud' && !sameCalendarSlot) {
       const imported = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE use_date <= ?1 AND end_date >= ?1 LIMIT 1").bind(v.date).first();
       if (imported) return bad('amount', '해당 이용일에 엑셀 매출이 있어 중복 여부 확인이 필요합니다.');
     }

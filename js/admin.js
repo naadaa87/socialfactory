@@ -398,6 +398,9 @@
     var hint = $("#rf-amount-hint"), a = rf.amount.value === "" ? null : +rf.amount.value;
     if (c && a != null && a !== c.total) hint.innerHTML = "요금표보다 " + won(Math.abs(a - c.total)) + (a < c.total ? " 적습니다" : " 많습니다") + ' · <button type="button" class="linkish" id="rf-use-calc">요금표 금액 넣기</button>';
     else hint.textContent = c ? "요금표 금액과 같습니다." : "";
+    if (RF.prev && v.space !== RF.prev.space && a === RF.prev.amount)
+      hint.innerHTML = '기존 결제금액 ' + won(a) + '을 유지하는 방 변경입니다. 추가 결제 없이 저장합니다.'
+        + (c && a !== c.total ? ' <span class="muted">새 방의 요금표 금액은 ' + won(c.total) + '입니다.</span>' : '');
     var ppl = parseInt(rf.people.value, 10);
     if (c && ppl > c.max) hint.innerHTML += (hint.innerHTML ? "<br>" : "") + '<span style="color:var(--red)">' + esc(SPL[v.space]) + " 최대 인원(" + c.max + "명)보다 많습니다.</span>";
     rfConflicts();

@@ -639,6 +639,41 @@ test('verified host-added amounts can be registered and edited beside unrelated 
  }finally{globalThis.fetch=original;e.sqlite.close();}
 });
 
+test('a free room change keeps the existing payment beside same-day imports and follows the moved source once',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-23T12:00:00+09:00')});
+ for(const ownLinked of [false,true]){
+  const e=env({r2:url(2),r4:url(4)});let moved=false;
+  const raw=calendar(event('manual','20261123T130000','20261123T170000').replace(/URL:[^\r]+\r\n/,''));
+  const original=globalThis.fetch;globalThis.fetch=async input=>response(moved==='both'||new URL(input).searchParams.get('product_id')===(moved?'4':'2')?raw:calendar());
+  try{
+   const source=(await loadSpacecloud(e)).results[0];
+   const created=await createReservation({env:e,request:new Request('https://test.invalid/api/admin/reservations',{method:'POST',headers,body:JSON.stringify({sourceCode:source.code,amount:120000,paid_at:'2026-10-27'})})});
+   assert.equal(created.status,200);const saved=(await created.json()).item;
+   e.sqlite.prepare('INSERT INTO spacecloud_sales(reservation_id,use_date,end_date,paid_at,amount,refund_amount,space,linked_code) VALUES(?,?,?,?,?,0,?,?)')
+    .run('987','2026-11-23','2026-11-23','2026-10-27',ownLinked?120000:160000,ownLinked?'r2':'r5',ownLinked?saved.code:null);
+   const patch=fields=>updateReservation({env:e,request:new Request('https://test.invalid/api/admin/reservations',{method:'PATCH',headers,body:JSON.stringify({...saved,action:'update',space:'r4',list_amount:140000,...fields})})});
+   // Money, payment identity and revenue dates remain protected.
+   for(const fields of [{amount:140000},{pay_method:'bank_other'},{paid_at:'2026-11-23'},...(ownLinked?[{date:'2026-11-24'}]:[])])assert.equal((await patch(fields)).status,400,JSON.stringify(fields));
+   e.sqlite.exec("INSERT INTO reservations(code,status,space,date,start_min,end_min,customer_name,channel,amount,pay_method,pay_status) VALUES('CLASH','confirmed','r4','2026-11-23',840,900,'다른 예약','phone',0,'card_offline','unpaid')");
+   assert.equal((await patch({})).status,409);
+   assert.equal(e.sqlite.prepare('SELECT space FROM reservations WHERE code=?').get(saved.code).space,'r2');
+   e.sqlite.exec("DELETE FROM reservations WHERE code='CLASH'");
+   moved='both';await loadSpacecloud(e,{force:true});
+   assert.equal((await patch({})).status,409,'a simultaneous matching event in both rooms is still a genuine conflict');
+   // The connected host calendar is moved too, so source refresh cannot restore room 2.
+   moved=true;await loadSpacecloud(e,{force:true});
+   const changed=await patch({});assert.equal(changed.status,200);
+   const item=(await changed.json()).item;assert.equal(item.space,'r4');assert.equal(item.amount,120000);assert.equal(item.list_amount,140000);assert.equal(item.paid_at,'2026-10-27');assert.equal(item.pay_method,'spacecloud');
+   const rows=(await(await getReservations({env:e,request:new Request('https://test.invalid/api/admin/reservations?from=2026-11-23&to=2026-11-23',{headers})})).json()).results;
+   assert.equal(rows.length,1);assert.equal(rows[0].space,'r4');assert.equal(rows[0].code,saved.code);
+   assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM reservations').get().n,1);
+   assert.equal(e.sqlite.prepare('SELECT COUNT(*) n FROM spacecloud_sales').get().n,1);
+   const sales=await(await getSales({env:e,request:new Request('https://test.invalid/api/admin/sales?year=2026',{headers})})).json();
+   assert.equal(sales.total,ownLinked?120000:280000);assert.equal(sales.n,ownLinked?1:2);
+  }finally{globalThis.fetch=original;e.sqlite.close();}
+ }
+});
+
 test('own overnight SpaceCloud blocks stay out of schedules and manual sales after refund even while the feed still lists them', async t => {
   t.mock.timers.enable({ apis:['Date'], now:Date.parse('2026-11-01T00:30:00+09:00') });
   const e = env({ r1:url(1), r2:url(2) });
