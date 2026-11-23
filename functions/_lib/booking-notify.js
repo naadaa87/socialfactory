@@ -7,7 +7,7 @@ import {bookingPaymentDeadline,bookingPaymentOpen} from './booking-checkout.js';
 import {assertCloudAdmission} from './booking-cloud-admission.js';
 import {BOOKING_TEMPLATES} from './booking-templates.js';
 
-const channelLabels = {confirmed:'확정',cancelled:'취소',partial:'부분환불',review:'확인필요'};
+const channelLabels = {confirmed:'결제 완료',cancelled:'취소',partial:'부분환불',review:'확인필요'};
 const phonePattern = /^01[016789]\d{7,8}$/;
 const kst = "datetime('now','+9 hours')";
 const paidNotices = `
@@ -32,6 +32,8 @@ const paidDelayMs = 120000;
 const syncDelayMs = 300000;
 
 // Re-evaluate the current state both when enqueueing and just before sending.
+// D1 allows at most five compound SELECT terms. Materialize the five lifecycle
+// branches so the optimizer cannot flatten them into the three outer branches.
 const bookingEvents = `
   WITH candidates AS (
     SELECT b.*,p.token,p.pay_url,p.mul_no,p.status AS provider_status,p.paid_at AS provider_paid_at,
@@ -41,10 +43,7 @@ const bookingEvents = `
     LEFT JOIN booking_payapp_requests p ON p.code=b.code AND p.kind='room'
     LEFT JOIN spacecloud_blocks s ON s.code=b.code
     LEFT JOIN spacecloud_payment_checks checks ON checks.code=b.code
-  ), events AS (
-    SELECT code,notice,CASE WHEN notice='partial' THEN refund_amount ELSE 0 END AS version,event_at,checkout_token,pay_url
-      FROM (${paidNotices}) WHERE notice IS NOT NULL
-    UNION ALL
+  ), lifecycle_events AS MATERIALIZED (
     SELECT code,'received',0,created_at,NULL,NULL FROM candidates
       WHERE status IN ('requested','awaiting_payment') AND payment_status IN ('unpaid','sync_pending','creating','pending')
         AND (sync_state IS NULL OR sync_state IN ('pending','blocking','blocked'))
@@ -73,6 +72,11 @@ const bookingEvents = `
         AND (payment_status='review' OR sync_state IN ('review','conflict') OR
           (sync_state IN ('pending','blocking','releasing') AND sync_updated_at<=unixepoch()*1000-${syncDelayMs}) OR
           (payment_status IN ('creating','cancelling','sync_pending') AND updated_at<=datetime('now','+9 hours','-5 minutes')))
+  ), events AS (
+    SELECT code,notice,CASE WHEN notice='partial' THEN refund_amount ELSE 0 END AS version,event_at,checkout_token,pay_url
+      FROM (${paidNotices}) WHERE notice IS NOT NULL
+    UNION ALL
+    SELECT * FROM lifecycle_events
     UNION ALL
     SELECT '${systemCode}','sync_outage',incident_at,datetime(incident_at/1000,'unixepoch','+9 hours'),NULL,NULL
       FROM booking_integration_health WHERE unavailable=1
@@ -173,6 +177,25 @@ function staffNotice(booking, kind) {
 }
 
 export async function runBookingNotifications(env,{limit=15,code=null,checkIntegration=false,integrationFailed=false}={}) {
+  return processBookingNotifications(env,{limit,code,checkIntegration,integrationFailed});
+}
+
+// Recovery is explicit, limited to one currently paid reservation, and never
+// touches customer queues or retries a failed/uncertain provider submission.
+export async function recoverBookingOperatorNotices(env,code) {
+  if(typeof code!=='string' || !/^[A-Za-z0-9_-]{4,64}$/.test(code))
+    throw Object.assign(new Error('알림을 확인할 예약번호를 지정해 주세요.'),{code:'booking-notice-scope',status:400});
+  await prepareBookings(env);
+  const booking=await env.DB.prepare(`SELECT b.code FROM booking_requests b
+    JOIN booking_payapp_requests p ON p.code=b.code AND p.kind='room'
+    WHERE b.code=? AND b.status='confirmed' AND b.payment_status='paid'
+      AND p.status='paid' AND p.paid_at IS NOT NULL AND b.payment_id=p.mul_no
+      AND b.refund_amount=0 AND p.refund_amount=0`).bind(code).first();
+  if(!booking)return {enabled:false,reason:'not-confirmed-paid'};
+  return processBookingNotifications(env,{code,staffOnly:true,recover:true});
+}
+
+async function processBookingNotifications(env,{limit=15,code=null,checkIntegration=false,integrationFailed=false,staffOnly=false,recover=false}={}) {
   const {start,staff,customer}=config(env);
   const test=env.BOOKING_NOTIFY_LIVE!=='1';
   const sendEnv={...env,ALIGO_TEST_MODE:test?'Y':'N'};
@@ -181,7 +204,7 @@ export async function runBookingNotifications(env,{limit=15,code=null,checkInteg
   await ensureBookingNotifications(env);
   const staffReady=await bookingStaffReady(env,staff);
   const targets=staffReady ? staff.map((phone,index)=>({key:'staff'+index,phone})) : [];
-  if(customer)targets.push({key:'customer'});
+  if(customer && !staffOnly)targets.push({key:'customer'});
   if(staffReady && (integrationFailed || (checkIntegration && env.SPACECLOUD_SYNC_ENABLED==='true' && env.SPACECLOUD_BOOKING_OPEN!=='false'))) {
     const checkedAt=Date.now();
     let unavailable=integrationFailed;
@@ -189,31 +212,43 @@ export async function runBookingNotifications(env,{limit=15,code=null,checkInteg
     await recordIntegrationHealth(env,unavailable,checkedAt);
   }
 
+  if(staffOnly && recover && code) {
+    for(const {key,phone} of targets)await env.DB.prepare(`UPDATE booking_notifications
+      SET state='queued',updated_at=${kst}
+      WHERE code=?1 AND kind='confirmed' AND version=0 AND recipient=?2 AND last4=?3
+        AND state='skipped' AND message_id IS NULL
+        AND EXISTS (SELECT 1 FROM (${paidNotices}) e
+          WHERE e.code=?1 AND e.notice='confirmed' AND e.event_at>=?4)`)
+      .bind(code,key,phone.slice(-4),start).run();
+  }
+
   for(const {key,phone} of targets) {
     await env.DB.prepare(`${bookingEvents}
       INSERT OR IGNORE INTO booking_notifications (code,kind,version,recipient,last4)
       SELECT e.code,e.notice,e.version,?1,CASE WHEN ?1='customer' THEN substr(b.phone,-4) ELSE ?2 END
       FROM events e LEFT JOIN booking_requests b ON b.code=e.code
-      WHERE e.event_at>=?3 AND e.event_at>=datetime('now','+9 hours','-1 day')
+      WHERE e.event_at>=?3 AND (?5 OR e.event_at>=datetime('now','+9 hours','-1 day'))
         AND (?4 IS NULL OR e.code=?4)
         AND (CASE WHEN ?1='customer' THEN e.notice NOT IN (${staffUrgentSql})
           ELSE e.notice NOT IN (${customerLifecycleSql}) END)`)
-      .bind(key,phone?.slice(-4)||'',start,code).run();
+      .bind(key,phone?.slice(-4)||'',start,code,staffOnly && recover && !!code ? 1 : 0).run();
   }
   await env.DB.prepare(`UPDATE booking_notifications SET state='unknown',updated_at=${kst}
-    WHERE state='sending' AND (?1 IS NULL OR code=?1) AND updated_at<datetime('now','+9 hours','-10 minutes')`).bind(code).run();
+    WHERE state='sending' AND (?1 IS NULL OR code=?1) AND (?2=0 OR recipient<>'customer')
+      AND updated_at<datetime('now','+9 hours','-10 minutes')`).bind(code,staffOnly ? 1 : 0).run();
   await env.DB.prepare(`${bookingEvents}
     UPDATE booking_notifications SET state='skipped',updated_at=${kst}
-    WHERE state='queued' AND (?1 IS NULL OR code=?1) AND (created_at<datetime('now','+9 hours','-1 day') OR NOT EXISTS (
+    WHERE state='queued' AND (?1 IS NULL OR code=?1) AND (?2=0 OR recipient<>'customer')
+      AND ((?3=0 AND created_at<datetime('now','+9 hours','-1 day')) OR NOT EXISTS (
       SELECT 1 FROM events e LEFT JOIN booking_requests b ON b.code=e.code
       WHERE e.code=booking_notifications.code AND e.notice=booking_notifications.kind AND e.version=booking_notifications.version
         AND (booking_notifications.recipient<>'customer' OR substr(b.phone,-4)=booking_notifications.last4)
-    ))`).bind(code).run();
+    ))`).bind(code,staffOnly ? 1 : 0,staffOnly && recover && !!code ? 1 : 0).run();
 
-  const {results}=await env.DB.prepare(`SELECT DISTINCT kind FROM booking_notifications
-    WHERE state='queued' AND recipient='customer' AND (?1 IS NULL OR code=?1) AND kind<>?2`).bind(code,paymentSmsKind).all();
+  const results=staffOnly ? [] : (await env.DB.prepare(`SELECT DISTINCT kind FROM booking_notifications
+    WHERE state='queued' AND recipient='customer' AND (?1 IS NULL OR code=?1) AND kind<>?2`).bind(code,paymentSmsKind).all()).results;
   const approvals=new Set();
-  if(customer)await Promise.all(results.map(async ({kind})=>{
+  if(customer && !staffOnly)await Promise.all(results.map(async ({kind})=>{
     const template=BOOKING_TEMPLATES[kind];
     if(template && (env[template.env] || template.code) && await approvedWebsiteTemplate(env,template))approvals.add(kind);
   }));

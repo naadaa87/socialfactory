@@ -671,6 +671,8 @@ Preview에는 운영 키를 복사하지 않습니다. 키가 누락되거나 �
 
 새 결제 모듈·통보·원장은 `booking-payapp`, `booking_payapp_*`, `/api/booking/payapp-feedback`로 분리해 기존 페이앱 주문·환불 처리를 보존합니다. 기존 판매자 키 `PAYAPP_USERID`, `PAYAPP_LINKKEY`, `PAYAPP_LINKVAL`, `PAYAPP_REQUESTKEY`를 재사용하며 `PAYAPP_ENABLED=1`, `PAYAPP_SITE_URL=https://socialfactory.co.kr`가 필요합니다. Pages와 실행기의 `SPACECLOUD_WORKER_TOKEN`은 같은 비밀값입니다.
 
+대관 결제 후 예약이 확정되면 `BOOKING_NOTIFY_STAFF`의 운영자에게 SMS로 결제 완료를 안내합니다. `BOOKING_NOTIFY_START`(KST 시작 시각), `BOOKING_NOTIFY_LIVE=1`, 문자 발송 설정이 필요하며, `BOOKING_NOTIFY_REQUIRE_SMS_TEST=1`이면 운영자 두 번호의 수신 시험 접수도 확인합니다. 관리자 `예약 신청 · 페이앱`의 확정 건에서 **운영자 결제 문자 보내기**를 누르면 24시간이 지난 미발송 건도 해당 예약의 운영자에게만 보냅니다. 고객 알림을 재발송하거나 결제·예약 상태를 바꾸지 않으며, 이미 접수됐거나 전송 결과가 불확실한 문자는 중복 전송하지 않습니다. `발송사 접수`는 실제 휴대폰 도착과 구분하며 알리고 전송 결과에서 최종 상태를 확인합니다.
+
 운영 설정은 Cloudflare Secrets에서 관리합니다. 토큰·전용 로그인 상태·운영 도구의 임시 인증 파일은 저장소나 정적 업로드에 포함하지 않습니다. Pages 배포에는 `workers`, `integrations`, `tests`, `deploy`, SQL 및 개발 도구를 제외합니다.
 
 검증: `node --test tests/*.test.mjs`, 실행기는 해당 폴더의 `npm test`. 스페이스클라우드에서 이미 결제 중인 요청과의 완전한 원자적 잠금은 보장하지 않으므로, 결제 후 충돌은 자동 확정을 보류하고 운영자가 확인합니다.

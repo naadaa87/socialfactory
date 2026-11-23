@@ -4,7 +4,7 @@ import { prepareBookings,BOOKING_COLUMNS,BOOKING_STATUSES,getBooking,externalBoo
 import { createBookingPayment,payappConfig } from '../../_lib/booking-payapp.js';
 import { syncEnabled,getSync } from '../../_lib/booking-spacecloud-sync.js';
 import { startSynchronizedBooking,cancelBookingRequest } from '../../_lib/booking-checkout.js';
-import { bookingNotificationSettings,ensureBookingNotifications,scheduleBookingNotices,testBookingOperatorSms } from '../../_lib/booking-notify.js';
+import { bookingNotificationSettings,ensureBookingNotifications,scheduleBookingNotices,testBookingOperatorSms,recoverBookingOperatorNotices } from '../../_lib/booking-notify.js';
 import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
 
 export async function onRequestGet({request,env}) {
@@ -47,6 +47,22 @@ export async function onRequestPatch({request,env,waitUntil}) {
     await prepareBookings(env);
     const booking = await getBooking(env,code);
     if (!booking) return json({ok:false,error:'not-found',message:'신청을 찾을 수 없습니다.'},404);
+    if(action==='notify-operators') {
+      if(!sameOrigin(request))return json({ok:false,error:'origin'},403);
+      if(booking.status!=='confirmed' || booking.payment_status!=='paid' || !booking.paid_at || Number(booking.refund_amount)!==0)
+        return json({ok:false,error:'payment-state',message:'결제 완료·예약 확정 건만 운영자 결제 문자를 보낼 수 있습니다.'},409);
+      await ensureBookingNotifications(env);
+      const settings=await bookingNotificationSettings(env);
+      if(!settings.started || !settings.live || !settings.staffReady || !settings.smsReady)
+        return json({ok:false,error:'sms-not-ready',message:'운영자 문자 실발송 설정과 수신번호를 확인해 주세요.'},503);
+      const result=await recoverBookingOperatorNotices(env,code);
+      const {results:notices}=await env.DB.prepare(`SELECT recipient,last4,state FROM booking_notifications
+        WHERE code=? AND kind='confirmed' AND recipient<>'customer' ORDER BY recipient`).bind(code).all();
+      const accepted=notices.filter(notice=>notice.state==='accepted').length;
+      return json({ok:true,result,notices,message:accepted===settings.staffCount
+        ? `운영자 ${accepted}명 결제 문자 발송사 접수를 확인했습니다. 접수된 문자는 중복 발송하지 않습니다.`
+        : '운영자 문자 처리 결과를 공간대관 알림에서 확인해 주세요.'});
+    }
     if (action === 'approve') {
       if(syncEnabled(env)) {
         if(booking.status==='requested')await startSynchronizedBooking(env,booking);
@@ -98,7 +114,7 @@ export async function onRequestPatch({request,env,waitUntil}) {
     console.error('admin-bookings-change',error?.code || error?.message);
     return json({ok:false,error:clean(error?.code,60) || 'db-error',message:clean(error?.message,200) || '신청을 변경하지 못했습니다.'},Number(error?.status) || 500);
   } finally {
-    if(code)await scheduleBookingNotices(env,waitUntil,{code});
+    if(code && action!=='notify-operators')await scheduleBookingNotices(env,waitUntil,{code});
   }
 }
 

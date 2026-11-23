@@ -14,7 +14,7 @@ import { onRequestPost as cancel } from '../functions/api/booking/cancel.js';
 import { onRequestPost as feedback } from '../functions/api/booking/payapp-feedback.js';
 
 import { onRequestPatch as updateBooking,onRequestGet as listBookings } from '../functions/api/admin/booking-requests.js';
-import { runBookingNotifications } from '../functions/_lib/booking-notify.js';
+import { runBookingNotifications,recoverBookingOperatorNotices,ensureBookingNotifications } from '../functions/_lib/booking-notify.js';
 import { kstTimestamp } from '../functions/_lib/booking.js';
 import { BOOKING_TEMPLATES } from '../functions/_lib/booking-templates.js';
 
@@ -540,4 +540,93 @@ test('unapproved customer templates remain queued without sending an SMS',async(
     assert.equal(sms.length,0);
     assert.equal(alimtalk.length,0);
   },{sms,alimtalk,unapproved:true});
+});
+
+
+async function recoveryFixture() {
+  const env=enableLifecycleNotices(fixture());
+  env.BOOKING_NOTIFY_START=kstTimestamp(Date.now()-10*86400000);
+  await prepareBookings(env);await ensureBookingNotifications(env);
+  const old=kstTimestamp(Date.now()-2*86400000),date=addDaysIso(kstToday(),12);
+  for(const [index,code] of ['B-RECOVER-ONE','B-RECOVER-TWO'].entries()) {
+    env.sqlite.prepare(`INSERT INTO booking_requests(code,submission_id,fingerprint,status,room,date,start_min,end_min,people,customer_name,phone,purpose,amount,consent,notice_version,payment_status,payment_id,paid_at,updated_at)
+      VALUES(?,?,'recovery','confirmed',?, ?,600,720,1,'test','010-1234-5678','meeting',120000,1,'test','paid',?,?,?)`)
+      .run(code,code,'r'+(index+1),date,String(8000+index),old,old);
+    env.sqlite.prepare(`INSERT INTO booking_payapp_requests(code,kind,label,amount,token,mul_no,status,paid_at)
+      VALUES(?,'room','recovery',120000,'private-token',?,'paid',?)`).run(code,String(8000+index),old);
+  }
+  return env;
+}
+
+test('explicit operator recovery reaches only one old paid booking and leaves all customer queues and financial records untouched',async t=>{
+  const env=await recoveryFixture(),code='B-RECOVER-ONE',sends=[];
+  env.sqlite.prepare(`INSERT INTO booking_notifications(code,kind,version,recipient,last4,state,created_at,updated_at)
+    VALUES(?,'confirmed',0,'customer','5678','queued',datetime('now','+9 hours','-2 days'),datetime('now','+9 hours','-2 days'))`).run(code);
+  env.sqlite.prepare(`INSERT INTO booking_notifications(code,kind,version,recipient,last4,state,created_at,updated_at)
+    VALUES(?,'received',0,'customer','5678','sending',datetime('now','+9 hours','-2 days'),datetime('now','+9 hours','-20 minutes'))`).run(code);
+  const customerBefore=env.sqlite.prepare("SELECT * FROM booking_notifications WHERE recipient='customer' ORDER BY kind").all();
+  const bookingBefore=env.sqlite.prepare('SELECT * FROM booking_requests ORDER BY code').all(),paymentBefore=env.sqlite.prepare('SELECT * FROM booking_payapp_requests ORDER BY code').all();
+  t.mock.method(globalThis,'fetch',async(url,options)=>{
+    assert.equal(url,'https://apis.aligo.in/send/');const form=new URLSearchParams(options.body);sends.push(form);
+    assert.match(form.get('msg'),/결제 완료 120,000원/);assert(!form.get('msg').includes('private-token'));
+    return Response.json({result_code:1,msg_id:sends.length,success_cnt:1,error_cnt:0});
+  });
+  // The ordinary runner never accepts private recovery options from its callers.
+  const normal=await runBookingNotifications(env,{code,staffOnly:true,recover:true});assert.equal(normal.accepted,0);assert.equal(sends.length,0);
+  // Restore the preexisting customer queue states modified by the ordinary runner.
+  env.sqlite.prepare("UPDATE booking_notifications SET state='queued',updated_at=? WHERE code=? AND kind='confirmed' AND recipient='customer'").run(customerBefore.find(row=>row.kind==='confirmed').updated_at,code);
+  env.sqlite.prepare("UPDATE booking_notifications SET state='sending',updated_at=? WHERE code=? AND kind='received' AND recipient='customer'").run(customerBefore.find(row=>row.kind==='received').updated_at,code);
+  const recovered=await recoverBookingOperatorNotices(env,code);assert.equal(recovered.accepted,2);assert.equal(sends.length,2);
+  assert.deepEqual(sends.map(form=>form.get('receiver')).sort(),['01011112222','01033334444']);
+  assert.deepEqual(env.sqlite.prepare("SELECT * FROM booking_notifications WHERE recipient='customer' ORDER BY kind").all(),customerBefore);
+  assert.equal(env.sqlite.prepare("SELECT COUNT(*) n FROM booking_notifications WHERE code='B-RECOVER-TWO'").get().n,0);
+  assert.deepEqual(env.sqlite.prepare('SELECT * FROM booking_requests ORDER BY code').all(),bookingBefore);
+  assert.deepEqual(env.sqlite.prepare('SELECT * FROM booking_payapp_requests ORDER BY code').all(),paymentBefore);
+  assert.equal((await recoverBookingOperatorNotices(env,code)).accepted,0);assert.equal(sends.length,2);
+});
+
+test('operator recovery keeps start and readiness guards and never retries failed or uncertain SMS',async t=>{
+  const env=await recoveryFixture(),code='B-RECOVER-ONE';let sends=0;
+  t.mock.method(globalThis,'fetch',async()=>{sends++;throw Error('must-not-send');});
+  for(const [index,state] of ['failed','unknown'].entries())env.sqlite.prepare(`INSERT INTO booking_notifications(code,kind,version,recipient,last4,state) VALUES(?,'confirmed',0,?,?,?)`)
+    .run(code,'staff'+index,index?'4444':'2222',state);
+  assert.equal((await recoverBookingOperatorNotices(env,code)).accepted,0);assert.equal(sends,0);
+  assert.deepEqual(env.sqlite.prepare("SELECT state FROM booking_notifications WHERE recipient<>'customer' ORDER BY recipient").all().map(row=>row.state),['failed','unknown']);
+  env.BOOKING_NOTIFY_START=kstTimestamp(Date.now()-60000);
+  assert.equal((await recoverBookingOperatorNotices(env,'B-RECOVER-TWO')).accepted,0);assert.equal(sends,0);
+  assert.equal(env.sqlite.prepare("SELECT COUNT(*) n FROM booking_notifications WHERE code='B-RECOVER-TWO'").get().n,0);
+  env.BOOKING_NOTIFY_START=kstTimestamp(Date.now()-10*86400000);env.BOOKING_NOTIFY_REQUIRE_SMS_TEST='1';
+  const waiting=await recoverBookingOperatorNotices(env,'B-RECOVER-TWO');assert.equal(waiting.waitingForOperatorTest,true);assert.equal(sends,0);
+  assert.equal(env.sqlite.prepare("SELECT COUNT(*) n FROM booking_notifications WHERE code='B-RECOVER-TWO'").get().n,0);
+});
+
+test('operator recovery requires an exact currently confirmed and fully paid booking',async t=>{
+  const env=await recoveryFixture();t.mock.method(globalThis,'fetch',async()=>{throw Error('must-not-send');});
+  for(const code of [null,'','%','B-RECOVER-ONE?other=1'])await assert.rejects(recoverBookingOperatorNotices(env,code),error=>error.code==='booking-notice-scope');
+  assert.equal((await recoverBookingOperatorNotices(env,'B-NOT-FOUND')).reason,'not-confirmed-paid');
+  env.sqlite.exec("UPDATE booking_payapp_requests SET refund_amount=1000 WHERE code='B-RECOVER-ONE'");
+  assert.equal((await recoverBookingOperatorNotices(env,'B-RECOVER-ONE')).reason,'not-confirmed-paid');
+  env.sqlite.exec("UPDATE booking_payapp_requests SET mul_no='unmatched' WHERE code='B-RECOVER-TWO'");
+  assert.equal((await recoverBookingOperatorNotices(env,'B-RECOVER-TWO')).reason,'not-confirmed-paid');
+  assert.equal(env.sqlite.prepare('SELECT COUNT(*) n FROM booking_notifications').get().n,0);
+});
+
+test('operator recovery revives only a matching skipped confirmation that was never submitted',async t=>{
+  const env=await recoveryFixture(),code='B-RECOVER-ONE',sends=[];
+  for(const [recipient,last4] of [['staff0','2222'],['staff1','4444'],['customer','5678']])env.sqlite.prepare(`INSERT INTO booking_notifications(code,kind,version,recipient,last4,state,created_at,updated_at)
+    VALUES(?,'confirmed',0,?,?,'queued',datetime('now','+9 hours','-2 days'),datetime('now','+9 hours','-2 days'))`).run(code,recipient,last4);
+  t.mock.method(globalThis,'fetch',async(url,options)=>{
+    assert.equal(url,'https://apis.aligo.in/send/');sends.push(new URLSearchParams(options.body));
+    return Response.json({result_code:1,msg_id:sends.length,success_cnt:1,error_cnt:0});
+  });
+  await runBookingNotifications(env,{code});assert.equal(sends.length,0);
+  assert.deepEqual(env.sqlite.prepare('SELECT state FROM booking_notifications ORDER BY recipient').all().map(row=>row.state),['skipped','skipped','skipped']);
+  env.sqlite.prepare("UPDATE booking_notifications SET message_id='earlier-submission' WHERE code=? AND recipient='staff1'").run(code);
+  const customerBefore=env.sqlite.prepare("SELECT * FROM booking_notifications WHERE code=? AND recipient='customer'").get(code);
+  assert.equal((await recoverBookingOperatorNotices(env,code)).accepted,1);assert.equal(sends.length,1);assert.equal(sends[0].get('receiver'),'01011112222');
+  assert.equal(env.sqlite.prepare("SELECT state FROM booking_notifications WHERE code=? AND recipient='staff0'").get(code).state,'accepted');
+  assert.equal(env.sqlite.prepare("SELECT state FROM booking_notifications WHERE code=? AND recipient='staff1'").get(code).state,'skipped');
+  assert.equal(env.sqlite.prepare("SELECT message_id FROM booking_notifications WHERE code=? AND recipient='staff1'").get(code).message_id,'earlier-submission');
+  assert.deepEqual(env.sqlite.prepare("SELECT * FROM booking_notifications WHERE code=? AND recipient='customer'").get(code),customerBefore);
+  assert.equal((await recoverBookingOperatorNotices(env,code)).accepted,0);assert.equal(sends.length,1);
 });
