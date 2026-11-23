@@ -241,3 +241,15 @@ test('native network and upstream 5xx errors are retried safely; uncertainty nev
  assert.equal(retryableSourceError({code:'source-write-unverified'}),true);
  for(const code of ['source-creation-uncertain','source-conflict','source-stale','source-ambiguous'])assert.equal(retryableSourceError({code}),false);
 });
+
+test('new cancellation of an old local booking is timed from its current release job, not the original hold',async t=>{
+ const {ensureSyncSchema}=await import('../functions/_lib/booking-spacecloud-sync.js');
+ const {readSyncAlerts}=await import('../functions/_lib/spacecloud-sync-alerts.js');
+ const f=await fixture(t,{linked:true});await ensureSyncSchema(f.env);const now=Date.now(),old=now-30*86400000;
+ f.sqlite.prepare(`INSERT INTO spacecloud_admin_links(sync_code,reservation_code,room,date,original_start,original_end,desired,created_at) VALUES('BADMrelease',?,'r3',?,600,660,0,?)`).run(f.body.code,f.before.date,old);
+ f.sqlite.prepare(`INSERT INTO spacecloud_blocks(code,room,date,start_min,end_min,marker,access_token,state,created_at,updated_at) VALUES('BADMrelease','r3',?,600,660,'SFWEB:BADMrelease','DO_NOT_LEAK','releasing',?,?)`).run(f.before.date,old,now);
+ f.sqlite.prepare(`INSERT INTO spacecloud_sync_jobs(id,booking_code,room,action,state,attempts,created_at,updated_at) VALUES('finished','BADMrelease','r3','block','succeeded',7,?,?)`).run(old,old);
+ f.sqlite.prepare(`INSERT INTO spacecloud_sync_jobs(id,booking_code,room,action,state,created_at,updated_at) VALUES('release','BADMrelease','r3','release','queued',?,?)`).run(now,now);
+ const report=await readSyncAlerts(f.env,{now});assert.equal(report.counts.delayed,0);assert.equal(report.items[0].created_at,now);assert.equal(report.items[0].attempts,0);
+ assert.equal((await readSyncAlerts(f.env,{now:now+300001})).counts.delayed,1);
+});
