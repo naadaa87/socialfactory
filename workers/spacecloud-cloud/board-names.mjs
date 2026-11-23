@@ -5,7 +5,7 @@ const API='https://api.spacecloud.kr',HOST='https://partner.spacecloud.kr';
 const TABLE=`CREATE TABLE IF NOT EXISTS cloud_board_names (reservation_id TEXT PRIMARY KEY, board_name TEXT, checked_at INTEGER NOT NULL, retry_at INTEGER NOT NULL)`;
 const keys=value=>Array.isArray(value)?value.map(keys):value && typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,v])=>[key.replace(/([a-z0-9])([A-Z])/g,'$1_$2').toLowerCase(),keys(v)])):value;
 const diagnostic=(code,detail={})=>console.info('spacecloud-board-names',code,detail);
-const DAY=86400000,TTL=DAY,FAILURE_TTL=60000,LIMIT=6;
+const DAY=86400000,TTL=10000,FUTURE_TTL=300000,FAILURE_TTL=60000,LIMIT=6;
 
 export async function enrichBoardNames(env,snapshots,state,{fetcher=fetch,now=Date.now(),live=()=>{}}={}) {
   // Full names and contact details never enter storage, calendar payloads or logs.
@@ -15,10 +15,12 @@ export async function enrichBoardNames(env,snapshots,state,{fetcher=fetch,now=Da
     const user=JSON.parse(entry?.value||'null');
     if(!user?.accessToken){diagnostic('host-auth-unavailable');return;}
     const today=new Date(now+9*3600000).toISOString().slice(0,10);
+    const yesterday=new Date(now+9*3600000-DAY).toISOString().slice(0,10);
     const until=new Date(now+9*3600000+7*DAY).toISOString().slice(0,10);
+    const onBoard=event=>event.date===today || event.date===yesterday && event.end_min>1440;
     const candidates=new Map();
     for(const scope of snapshots)for(const event of scope.events||[]) {
-      if(event.kind==='reservation' && event.date>=today && event.date<=until && /^[0-9]{1,20}$/.test(event.id) && ROOMS[scope.space])
+      if(event.kind==='reservation' && (event.date>=today || onBoard(event)) && event.date<=until && /^[0-9]{1,20}$/.test(event.id) && ROOMS[scope.space])
         candidates.set(event.id,{...event,space:scope.space});
     }
     if(!candidates.size)return;
@@ -27,13 +29,25 @@ export async function enrichBoardNames(env,snapshots,state,{fetcher=fetch,now=Da
     const ids=[...candidates.keys()];
     for(let offset=0;offset<ids.length;offset+=90) {
       const chunk=ids.slice(offset,offset+90);
-      const rows=await env.STATE_DB.prepare(`SELECT reservation_id,board_name,retry_at FROM cloud_board_names WHERE reservation_id IN (${chunk.map(()=>'?').join(',')})`).bind(...chunk).all();
+      const rows=await env.STATE_DB.prepare(`SELECT reservation_id,board_name,checked_at,retry_at FROM cloud_board_names WHERE reservation_id IN (${chunk.map(()=>'?').join(',')})`).bind(...chunk).all();
       for(const row of rows.results||[])cached.set(row.reservation_id,row);
     }
     await env.STATE_DB.prepare('CREATE TABLE IF NOT EXISTS cloud_board_name_backoff (id INTEGER PRIMARY KEY CHECK(id=1), retry_at INTEGER NOT NULL)').run();
     const backoff=await env.STATE_DB.prepare('SELECT retry_at FROM cloud_board_name_backoff WHERE id=1').first();
     const deadline=Date.now()+20000;
-    const pending=(backoff?.retry_at>now?[]:ids).filter(id=>!cached.has(id)||cached.get(id).retry_at<=now).slice(0,LIMIT);
+    const refreshAt=id=>{
+      const row=cached.get(id);if(!row)return 0;
+      const interval=row.retry_at-row.checked_at;
+      // Expire legacy 24-hour successes immediately under the new policy, and
+      // shorten an upcoming booking's cache when its day begins. Failed lookups
+      // retain their independent retry deadline, even when an old name survives.
+      return interval===DAY || interval===FUTURE_TTL
+        ? Math.min(row.retry_at,row.checked_at+(onBoard(candidates.get(id))?TTL:FUTURE_TTL)) : row.retry_at;
+    };
+    const pending=(backoff?.retry_at>now?[]:ids).filter(id=>refreshAt(id)<=now)
+      .sort((a,b)=>Number(onBoard(candidates.get(b)))-Number(onBoard(candidates.get(a)))
+        || (cached.get(a)?.checked_at||0)-(cached.get(b)?.checked_at||0) || a.localeCompare(b))
+      .slice(0,LIMIT);
     let cursor=0,stopped=false;
     await Promise.all(Array.from({length:Math.min(2,pending.length)},async()=>{
       while(cursor<pending.length && !stopped && Date.now()<deadline) {
@@ -56,7 +70,7 @@ export async function enrichBoardNames(env,snapshots,state,{fetcher=fetch,now=Da
             if(String(detail.id)===id && space?.space_name===(env.SPACECLOUD_ACCOUNT_LABEL||'소셜팩토리 건대 (초특가)') &&
               typeof space.product_name==='string' && space.product_name.startsWith(Number(event.space.slice(1))+'번룸 '))
               name=reservationBoardName(detail.user_info?.name);
-            if(name)retryAt=now+TTL;
+            if(name)retryAt=now+(onBoard(event)?TTL:FUTURE_TTL);
             else diagnostic('detail-not-matched',{id_matches:String(detail.id)===id,venue_matches:space?.space_name===(env.SPACECLOUD_ACCOUNT_LABEL||'소셜팩토리 건대 (초특가)'),has_room:typeof space?.product_name==='string',has_name:typeof detail.user_info?.name==='string'});
           }
           else diagnostic('detail-http',{status:response.status});
@@ -65,7 +79,7 @@ export async function enrichBoardNames(env,snapshots,state,{fetcher=fetch,now=Da
         const boardName=name || (validBoardName(previous)?previous:null);
         await env.STATE_DB.prepare(`INSERT INTO cloud_board_names(reservation_id,board_name,checked_at,retry_at) VALUES(?1,?2,?3,?4)
           ON CONFLICT(reservation_id) DO UPDATE SET board_name=excluded.board_name,checked_at=excluded.checked_at,retry_at=excluded.retry_at`).bind(id,boardName,now,retryAt).run();
-        cached.set(id,{board_name:boardName,retry_at:retryAt});
+        cached.set(id,{board_name:boardName,checked_at:now,retry_at:retryAt});
       }
     }));
     for(const scope of snapshots)for(const event of scope.events||[]) {
