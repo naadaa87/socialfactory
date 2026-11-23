@@ -368,8 +368,17 @@
     var rn = $("#rf-refund-note");
     if (item && item.pay_status === "refunded") { rn.hidden = false; rn.textContent = "환불 " + won(item.refund_amount) + " 기록이 있는 예약입니다. 결제 상태는 그대로 두고 금액 · 결제수단만 고칠 수 있습니다."; $$('input[name="pay_status"]', rf).forEach(function (x) { x.disabled = true; }); }
     else { rn.hidden = true; $$('input[name="pay_status"]', rf).forEach(function (x) { x.disabled = false; }); }
+    var linkedImported = item && item.channel === 'spacecloud' && /^SC[1-5]-[a-f0-9]{16}$/.test(item.code);
+    var imported = linkedImported && item.source_manual && item.source_manual.space===item.space && item.source_manual.date===item.date
+      &&item.source_manual.start_min===item.start_min&&item.source_manual.end_min===item.end_min;
+    ['space','date','start_min','end_min','customer_name','channel'].forEach(function(name){
+      $$('[name="'+name+'"]',rf).forEach(function(field){field.disabled=!!imported;});
+    });
+    $$('#rf-dur button').forEach(function(button){button.disabled=!!imported;});
+    if(imported)$('#rf-intro').textContent='결제 기록을 수정합니다. 날짜·시간·룸 변경과 취소는 예약 상세의 스페이스클라우드 원본 일정 관리에서 진행해 주세요.';
+    else if(linkedImported)$('#rf-intro').textContent='결제금액을 유지해 장부 배정을 맞춥니다. 스페이스클라우드 원본 일정이 먼저 변경된 경우에 저장할 수 있습니다. 원본 변경·취소는 예약 상세에서 진행해 주세요.';
     rfSync(); openDrawer("#dr-form");
-    setTimeout(function () { (rfVal("space") ? rf.customer_name : rf.querySelector('input[name="space"]')).focus(); }, 60);
+    setTimeout(function () { (imported ? rf.amount : rfVal("space") ? rf.customer_name : rf.querySelector('input[name="space"]')).focus(); }, 60);
   }
   function rfRead() {
     return { space: rfVal("space"), date: rf.date.value, start_min: +rf.start_min.value, end_min: +rf.end_min.value };
@@ -491,6 +500,53 @@
     return { rate: hit ? hit.rate : 0, why: d === 0 ? "이용 당일" : "이용일 " + d + "일 전" };
   }
   var kv = function (k, v) { return v === "" || v == null ? "" : '<div class="kv"><span>' + esc(k) + "</span><b>" + v + "</b></div>"; };
+  function mountSourceManage(r) {
+    var source=r.source_manual, imported=r.channel==='spacecloud'&&/^SC[1-5]-[a-f0-9]{16}$/.test(r.code);
+    if(!source&&!r.source_url&&!imported)return;
+    var box=document.createElement('div');box.className='sec';
+    var busy=r.source_sync&&['queued','leased','review'].indexOf(r.source_sync.state)>=0;
+    var status=r.source_sync?'<p class="alert '+(r.source_sync.state==='review'?'bad':'')+'">'+esc(r.source_sync.message)+'</p>'
+      +(r.source_sync.state==='review'?'<button class="btn btn-light btn-sm" type="button" data-source-retry>원본 재확인</button>':''):'';
+    function bindRetry(){var button=box.querySelector('[data-source-retry]');if(button)button.addEventListener('click',function(){
+      button.disabled=true;api('/api/admin/spacecloud-source',{method:'POST',body:{action:'retry',id:r.source_sync.id}}).then(function(result){toast(result.job.message);closeDrawer($('#dr-detail'));reloadCurrent();}).catch(function(error){toast(error.message);button.disabled=false;});
+    });}
+    if(!source) {
+      box.innerHTML='<h3>스페이스클라우드 원본 일정 관리</h3>'+status+'<p class="small muted">'
+        +(r.source_url||r.payment?'결제 예약의 변경·취소는 스페이스클라우드에서 진행해 주세요. 취소 확정 전 환불금액과 수수료를 직접 확인해야 합니다. 처리된 원본 일정은 자동으로 다시 불러옵니다.'
+         :'현재 수기 원본의 고유 번호를 확인할 수 없습니다. 외부 일정을 새로 불러오거나 스페이스클라우드에서 원본을 확인해 주세요.')+'</p>'
+        +'<a class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer" href="'+esc(r.source_url||'https://partner.spacecloud.kr/reservation')+'">원본 예약 · 취소 확인</a>';
+      $('#dt-body').appendChild(box);bindRetry();return;
+    }
+    var starts='';
+    for(var m=0;m<1440;m+=60)starts+='<option value="'+m+'"'+(m===source.start_min?' selected':'')+'>'+hm(m)+'</option>';
+    function endChoices(start,chosen){var text='';for(var n=start+60;n<=1440;n+=60)text+='<option value="'+n+'"'+(n===chosen?' selected':'')+'>'+hm(n)+'</option>';return text;}
+    box.innerHTML='<h3>스페이스클라우드 원본 일정 관리</h3>'+status
+      +'<p class="small muted">직접 추가한 수기 일정입니다. 변경·취소를 요청하면 서버가 원본을 처리하고 확인한 뒤 반영합니다. 결제금액·매출·환불 기록은 유지됩니다.</p>'
+      +'<form id="sc-source-form"><label for="sc-source-room">룸</label><select class="input" id="sc-source-room">'
+      +ROOM_KEYS.map(function(room){return '<option value="'+room+'"'+(room===source.space?' selected':'')+'>'+SPL[room]+'</option>';}).join('')+'</select>'
+      +'<label for="sc-source-date">이용일</label><input class="input" id="sc-source-date" type="date" required value="'+esc(source.date)+'">'
+      +'<label for="sc-source-start">시작 시간</label><select class="input" id="sc-source-start">'+starts+'</select>'
+      +'<label for="sc-source-end">종료 시간</label><select class="input" id="sc-source-end">'+endChoices(source.start_min,Math.min(source.end_min,1440))+'</select>'
+      +(source.end_min>1440?'<p class="small muted">익일에 걸친 일정의 변경은 스페이스클라우드에서 직접 진행해 주세요.</p>':'')
+      +'<button class="btn btn-primary btn-sm mt-s" type="submit" '+(busy||source.end_min>1440?'disabled':'')+'>원본 일정 변경 요청</button> '
+      +'<button class="btn btn-danger btn-sm mt-s" type="button" id="sc-source-cancel" '+(busy?'disabled':'')+'>원본 수기 일정 취소</button>'
+      +'<p class="small" id="sc-source-status" role="status"></p></form>'
+      +(source.calendar_url?'<a class="btn btn-light btn-sm mt-s" target="_blank" rel="noopener noreferrer" href="'+esc(source.calendar_url)+'">스페이스클라우드 달력 열기</a>':'');
+    $('#dt-body').appendChild(box);bindRetry();
+    $('#sc-source-start').addEventListener('change',function(){var end=+$('#sc-source-end').value;$('#sc-source-end').innerHTML=endChoices(+this.value,Math.max(end,+this.value+60));});
+    function send(action) {
+      var form=$('#sc-source-form'),body={code:r.code,expected_version:source.version,action:action};
+      if(action==='update')Object.assign(body,{space:$('#sc-source-room').value,date:$('#sc-source-date').value,start_min:+$('#sc-source-start').value,end_min:+$('#sc-source-end').value});
+      $$('button',form).forEach(function(b){b.disabled=true;});
+      api('/api/admin/spacecloud-source',{method:'POST',body:body}).then(function(result){
+        toast(result.job.message);closeDrawer($('#dr-detail'));reloadCurrent();
+      }).catch(function(error){$('#sc-source-status').textContent=error.message;$$('button',form).forEach(function(b){b.disabled=!!busy||(b.type==='submit'&&source.end_min>1440);});});
+    }
+    $('#sc-source-form').addEventListener('submit',function(event){event.preventDefault();send('update');});
+    $('#sc-source-cancel').addEventListener('click',function(){
+      if(confirm('스페이스클라우드 원본 수기 일정을 삭제할까요?\n'+source.date+' '+hm(source.start_min)+'~'+hm(source.end_min)+' '+SPL[source.space]+'\n원본 삭제는 되돌릴 수 없습니다. 결제금액·매출·환불 기록은 유지됩니다.'))send('cancel');
+    });
+  }
   function renderExternalDetail(r) {
     var stamp = r.synced_at ? new Date(r.synced_at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) : "확인 중";
     var p = r.payment;
@@ -505,6 +561,7 @@
       + '<label for="sc-sales-amount">결제 금액 (원)</label><input class="input" id="sc-sales-amount" type="number" min="0" max="100000000" step="1" inputmode="numeric" placeholder="실제 결제금액">'
       + '<label for="sc-sales-date">실제 결제일</label><input class="input" id="sc-sales-date" type="date">'
       + '<button class="btn btn-primary btn-sm mt-s" type="button" id="sc-sales-save">총매출에 등록</button><p class="small" id="sc-sales-status" role="status"></p></div>') + '</div>';
+    mountSourceManage(r);
     if (p || r.payment_conflict) return;
     $("#sc-sales-save").addEventListener("click", function () {
       var raw = $("#sc-sales-amount").value, amount = Number(raw), paid = $("#sc-sales-date").value;
@@ -549,6 +606,10 @@
       + '<div class="mt-s"><button class="btn btn-danger btn-xs" type="button" id="dt-del">이 예약 삭제</button> <span class="tiny muted">잘못 등록한 예약만 지워 주세요. 삭제하면 매출에서도 빠지고 되돌릴 수 없습니다.</span></div></div>';
     $("#dt-body").innerHTML = h;
     $("#dt-title").textContent = "예약 " + r.code;
+    mountSourceManage(r);
+    if(r.channel==='spacecloud'&&/^SC[1-5]-[a-f0-9]{16}$/.test(r.code)) {
+      ['dt-cancel','dt-restore','dt-del'].forEach(function(id){var button=document.getElementById(id);if(button){button.disabled=true;button.title='스페이스클라우드 원본 일정 관리에서 처리해 주세요.';}});
+    }
     var act = function (body, ok) {
       body.code = r.code;
       return api("/api/admin/reservations", { method: "PATCH", body: body }).then(function (j) { RES[r.code] = j.item; renderDetail(j.item); toast(ok); reloadCurrent(); });

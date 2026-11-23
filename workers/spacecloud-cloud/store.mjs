@@ -12,6 +12,7 @@ export const schema=[
   `CREATE INDEX IF NOT EXISTS idx_cloud_budget_started ON cloud_budget_reservations(started_at)`,
   `CREATE TABLE IF NOT EXISTS cloud_runner_lock (id INTEGER PRIMARY KEY CHECK(id=1), token TEXT, expires_at INTEGER NOT NULL DEFAULT 0, review INTEGER NOT NULL DEFAULT 0)`,
   `INSERT OR IGNORE INTO cloud_runner_lock(id) VALUES(1)`,
+  `CREATE TABLE IF NOT EXISTS cloud_source_runs (lock_token TEXT PRIMARY KEY,expires_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS cloud_login (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, lock_token TEXT NOT NULL,
     budget_id TEXT NOT NULL, started_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'active')`,
   `CREATE TABLE IF NOT EXISTS cloud_guest_login (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, lock_token TEXT NOT NULL,
@@ -99,6 +100,14 @@ export async function lockRunner(env,{duration=120000,now=Date.now()}={}){
   const token=crypto.randomUUID();
   const result=await env.STATE_DB.prepare(`UPDATE cloud_runner_lock SET token=?1,expires_at=?2 WHERE id=1 AND review=0 AND token IS NULL`).bind(token,now+duration).run();
   return Number(result.meta?.changes)?token:null;
+}
+export async function lockSourceRunner(env,{duration=120000,now=Date.now()}={}) {
+ const token=crypto.randomUUID();
+ const results=await env.STATE_DB.batch([
+  env.STATE_DB.prepare('UPDATE cloud_runner_lock SET token=?1,expires_at=?2 WHERE id=1 AND review=0 AND token IS NULL').bind(token,now+duration),
+  env.STATE_DB.prepare('INSERT INTO cloud_source_runs(lock_token,expires_at) SELECT token,expires_at FROM cloud_runner_lock WHERE id=1 AND token=?1').bind(token)
+ ]);
+ return results[0].meta?.changes?token:null;
 }
 export async function assertLock(env,token,now=Date.now()){const row=await env.STATE_DB.prepare('SELECT token,expires_at,review FROM cloud_runner_lock WHERE id=1').first();if(!row || row.token!==token || row.review || row.expires_at<=now)throw problem('runner-lock','클라우드 작업 잠금이 만료되었습니다. 추가 변경을 중단합니다.');}
 export async function unlockRunner(env,token,{review=false}={}){await env.STATE_DB.prepare(`UPDATE cloud_runner_lock SET token=NULL,expires_at=0,review=?2 WHERE id=1 AND token=?1`).bind(token,review?1:0).run();}

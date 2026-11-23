@@ -152,6 +152,9 @@ export async function calendarRows(events, space, updatedAt, { from, to } = {}) 
       rows.push({ code: 'SC' + space.slice(1) + '-' + (await sha256Hex(calendarEventIdentity(event) + '|' + date)).slice(0, 16), external: true,
         status: 'confirmed', space, date, start_min: Math.max(0, (event.start + KST - day * DAY) / 60000),
         end_min: Math.min(1440, (event.end + KST - day * DAY) / 60000), customer_name: event.title, ...(event.board_name?{board_name:event.board_name}:{}),
+        ...(/^\d{1,20}$/.test(event.source_manual_id||'')?{source_manual_id:event.source_manual_id,
+          source_manual_date:new Date(event.start+KST).toISOString().slice(0,10),
+          source_manual_start:(event.start+KST)%DAY/60000,source_manual_duration:(event.end-event.start)/60000}:{}),
         phone: '', people: null, purpose: '', channel: 'spacecloud', amount: null, pay_method: 'spacecloud', pay_status: 'unknown',
         refund_amount: 0, source_url: event.source_url, source_start: event.start, source_end: event.end,
         synced_at: updatedAt, memo: '', inquiry_ref: '' });

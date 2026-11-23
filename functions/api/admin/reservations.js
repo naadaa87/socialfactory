@@ -22,6 +22,7 @@ import { loadSpacecloud, websiteHoldCalendarCodes, filterExternal, mergeCalendar
 import { isCalendarLinked } from "../../_lib/spacecloud-links.js";
 import { loadCalendarDisplay, refreshCalendarDisplay } from '../../_lib/spacecloud-display.js';
 import { ensureBookingSchema } from '../../_lib/booking-schema.js';
+import { attachSourceSync,guardImportedScheduleChange,guardSourcePaymentRegistration } from '../../_lib/spacecloud-source-sync.js';
 
 const COLS = "id, code, created_at, updated_at, status, space, space_note, date, start_min, end_min, customer_name, phone, people, purpose, channel, amount, list_amount, amount_note, pay_method, pay_status, paid_at, refund_amount, refunded_at, cancel_reason, cancelled_at, inquiry_ref, memo";
 const int = (v) => { const n = typeof v === "number" ? v : parseInt(String(v == null ? "" : v).replace(/[^0-9-]/g, ""), 10); return Number.isFinite(n) ? Math.round(n) : null; };
@@ -130,11 +131,11 @@ export async function onRequestGet({ request, env, waitUntil }) {
   try {
     const [{ results }, external] = await Promise.all([
       env.DB.prepare(sql).bind(...args).all(),
-      code ? null : loadCalendarDisplay(env, { from: isIsoDate(from) ? from : undefined, to: isIsoDate(to) ? to : undefined, waitUntil })
+      code && !/^SC[1-5]-[a-f0-9]{16}$/.test(code) ? null : loadCalendarDisplay(env, { from: isIsoDate(from) ? from : undefined, to: isIsoDate(to) ? to : undefined, waitUntil })
     ]);
     const rows = mergeCalendarRows(results || [], external ? filterExternal(external.results, u.searchParams) : [],
       { info: external?.info, sourceRows: external?.results || [] });
-    return json({ ok: true, today: kstToday(), results: await adminReservationSyncStatus(env,await attachCalendarPayments(env, rows)), spacecloud: external && external.info });
+    return json({ ok: true, today: kstToday(), results: await attachSourceSync(env,await adminReservationSyncStatus(env,await attachCalendarPayments(env, rows)),external?.results||[]), spacecloud: external && external.info });
   } catch (e) { console.error("res-get", e && e.message); return json({ ok: false, error: "db-error" }, 500); }
 }
 
@@ -148,6 +149,8 @@ export async function onRequestPost({ request, env }) {
     if (!/^SC[1-5]-[a-f0-9]{16}$/.test(sourceCode)) return bad("sourceCode", "외부 일정 번호를 확인해 주세요.");
     const existing = await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code = ?1`).bind(sourceCode).first();
     if (existing) return json({ ok: true, code: existing.code, item: existing, already: true });
+    try {await guardSourcePaymentRegistration(env,sourceCode);}
+    catch(error){return json({ok:false,error:error.code,message:error.message},error.status||409);}
     const external = await loadSpacecloud(env);
     source = external.results.find(x => x.code === sourceCode);
     if (!source) return bad("sourceCode", "외부 일정을 찾지 못했습니다. 일정을 새로고침해 주세요.");
@@ -219,6 +222,8 @@ export async function onRequestPatch({ request, env }) {
   const importedLink = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE linked_code = ?1").bind(code).first();
   if (importedLink && action !== 'update')
     return bad('amount', '정산 엑셀과 연결된 예약입니다. 결제/환불 변경은 가져오기 기록과 함께 확인해야 합니다.');
+  try {if(action!=='update')await guardImportedScheduleChange(env,prev,{...b,action});}
+  catch(error){return json({ok:false,error:error.code,message:error.message},error.status||409);}
   let stmt;
   if (action === "update") {
     const r = readFields(b, prev); if (r.error) return bad(...r.error);
@@ -243,6 +248,8 @@ export async function onRequestPatch({ request, env }) {
       const imported = await env.DB.prepare("SELECT reservation_id FROM spacecloud_sales WHERE use_date <= ?1 AND end_date >= ?1 LIMIT 1").bind(v.date).first();
       if (imported) return bad('amount', '해당 이용일에 엑셀 매출이 있어 중복 여부 확인이 필요합니다.');
     }
+    try {await guardImportedScheduleChange(env,prev,{...v,action});}
+    catch(error){return json({ok:false,error:error.code,message:error.message},error.status||409);}
     if (prev.status === "confirmed") {
       const clash = await conflicts(env, v, code);
       if (clash.length && !b.force) return json({ ok: false, error: "conflict", conflicts: clash }, 409);
@@ -289,6 +296,9 @@ export async function onRequestDelete({ request, env }) {
   if(syncEnabled(env))await prepareBookings(env);
   let b; try { b = await request.json(); } catch { return json({ ok: false, error: "bad-json" }, 400); }
   const code = clean(b && b.code, 20);
+  const original=code && await env.DB.prepare(`SELECT ${COLS} FROM reservations WHERE code=?1`).bind(code).first();
+  try {if(original)await guardImportedScheduleChange(env,original,{action:'delete'});}
+  catch(error){return json({ok:false,error:error.code,message:error.message},error.status||409);}
   if (!code) return json({ ok: false, error: "invalid" }, 400);
   try {
     if (await bookingLinked(env,code)) return bookingProtection();

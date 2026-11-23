@@ -1,6 +1,7 @@
 /** The server collector prepares occupancy once; calendar reads never wait on upstream iCal. */
 import { sha256Hex } from './auth.js';
 import { readFeedConfig, loadSpacecloudForDisplay } from './spacecloud.js';
+import { applySourceWrites } from './spacecloud-source-view.js';
 
 const TABLE = `CREATE TABLE IF NOT EXISTS spacecloud_calendar_display (
   id INTEGER PRIMARY KEY CHECK(id=1), config_hash TEXT NOT NULL,
@@ -54,5 +55,6 @@ export async function loadCalendarDisplay(env, { from, to, waitUntil } = {}) {
       waitUntil(refreshCalendarDisplay(env).catch(() => {}));
   }
   if (!data) data = await refreshCalendarDisplay(env);
+  data=await applySourceWrites(env,data);
   return { ...data, results: data.results.filter(row => (!from || row.date >= from) && (!to || row.date <= to)) };
 }

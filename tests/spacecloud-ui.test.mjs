@@ -6,20 +6,21 @@ import { readFileSync } from 'node:fs';
 function harness(fetchImpl) {
   const html = readFileSync(new URL('../admin.html', import.meta.url), 'utf8');
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
-  const nodes = new Map(), intervals=[], timers=new Map();let timerId=0;
+  const nodes = new Map(), intervals=[], timers=new Map();let timerId=0,created=0;
   const node = key => {
     if (nodes.has(key)) return nodes.get(key);
     const x = { innerHTML: '', textContent: '', value: '', hidden: true, checked: false, disabled: false, dataset: {},
       clientWidth: 1000, scrollWidth: 1000, classList: { add(){}, remove(){}, toggle(){} },
-      addEventListener(){}, setAttribute(){}, querySelector: s => select(s), querySelectorAll: () => [], getBoundingClientRect: () => ({width:720,left:0}), focus(){} };
+      listeners:{},addEventListener(type,fn){this.listeners[type]=fn;}, appendChild(child){this.innerHTML+=child.innerHTML;},setAttribute(){},
+      querySelector(s){return s==='[data-source-retry]'&&!this.innerHTML.includes('data-source-retry')?null:select(s);}, querySelectorAll: () => [], getBoundingClientRect: () => ({width:720,left:0}), focus(){} };
     nodes.set(key,x);return x;
   };
   const select = key => {
-    if (/^#[\w-]+$/.test(key) && !key.startsWith('#sc-sales-')) assert(ids.has(key.slice(1)), 'admin.html must contain '+key);
+    if (/^#[\w-]+$/.test(key) && !key.startsWith('#sc-sales-')&&!key.startsWith('#sc-source-')) assert(ids.has(key.slice(1)), 'admin.html must contain '+key);
     return node(key);
   };
   const statuses=[node('status-1'),node('status-2')];
-  const document={querySelector:select, querySelectorAll:s=>s==='[data-sc-status]'?statuses:[],addEventListener(){},body:node('body'),hidden:false};
+  const document={createElement:tag=>node('created-'+tag+'-'+(++created)),querySelector:select, querySelectorAll:s=>s==='[data-sc-status]'?statuses:[],addEventListener(){},body:node('body'),hidden:false};
   const window={SF_CONFIG:{pricing:{rooms:{r1:{max:30},r2:{max:40},r3:{max:15},r4:{max:50},r5:{max:30}}}},addEventListener(){},scrollTo(){}};
   let code=readFileSync(new URL('../js/admin.js',import.meta.url),'utf8');
   code=code.replace(/  api\("\/api\/admin\/session"\)\.then\(showApp\)\.catch\([^\n]+\);/,'');
@@ -46,6 +47,20 @@ test('matched external detail shows gross, refund and net but no duplicate regis
  hooks.renderExternalDetail(matched);const detail=nodes.get('#dt-body').innerHTML;
  assert(detail.includes('40,000원'));assert(detail.includes('10,000원'));assert(detail.includes('30,000원'));
  assert(detail.includes('2026-10-20'));assert(!detail.includes('sc-sales-save'));assert.equal(hooks.net(matched),0);
+ assert(detail.includes('환불금액과 수수료를 직접 확인'));assert(detail.includes('원본 예약 · 취소 확인'));
+ assert(!detail.includes('id="sc-source-form"'));
+});
+test('verified manual sources show the hourly original editor and send a versioned request without payment data',async()=>{
+ const calls=[];const h=harness(async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>({ok:true,job:{message:'처리 중'}})};});
+ const source={id:'77',space:'r1',date:'2026-12-01',start_min:600,end_min:720,title:'검증 수기 일정',version:'a'.repeat(64)};
+ h.hooks.renderExternalDetail({...slot,source_manual:source});
+ const text=h.nodes.get('#dt-body').innerHTML;assert(text.includes('원본 일정 변경 요청'));assert(text.includes('원본 수기 일정 취소'));
+ assert(text.includes('결제금액·매출·환불 기록은 유지'));assert(!text.includes('value="630"'));
+ for(const [id,value] of [['room','r2'],['date','2026-12-02'],['start','780'],['end','900']])h.document.querySelector('#sc-source-'+id).value=value;
+ h.nodes.get('#sc-source-form').listeners.submit({preventDefault(){}});await new Promise(setImmediate);
+ assert.equal(calls.length,1);assert.equal(calls[0].url,'/api/admin/spacecloud-source');
+ const body=JSON.parse(calls[0].options.body);assert.equal(body.expected_version,source.version);assert.equal(body.space,'r2');assert.equal(body.start_min,780);
+ assert.equal(body.action,'update');assert(!Object.hasOwn(body,'amount'));assert(!Object.hasOwn(body,'refund_amount'));
 });
 test('day and month views render the separate external color and unknown payment label',()=>{
  const {hooks,nodes}=harness();hooks.BD.date='2026-10-24';hooks.BD.items=[slot];hooks.drawDay();

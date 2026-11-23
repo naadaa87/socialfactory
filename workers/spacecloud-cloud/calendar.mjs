@@ -8,7 +8,7 @@ const rateLimit=response=>{
  return Object.assign(fail('host-calendar-rate-limit'),{retry_after_ms:Math.max(30000,Number.isFinite(delay)?delay:60000)});
 };
 const iso=compact=>/^\d{8}$/.test(String(compact))?String(compact).replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3'):String(compact);
-function hostKeys(value){
+export function hostKeys(value){
  if(Array.isArray(value))return value.map(hostKeys);
  if(!value || typeof value!=='object')return value;
  return Object.fromEntries(Object.entries(value).map(([key,v])=>[key.replace(/([A-Z]+)([A-Z][a-z])/g,'$1_$2').replace(/([a-z\d])([A-Z])/g,'$1_$2').replace(/[-\s]+/g,'_').toLowerCase(),hostKeys(v)]));

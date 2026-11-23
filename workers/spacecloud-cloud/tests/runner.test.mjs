@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { ensureStore,encryptState,decryptState,saveState,loadState,savePublicState,loadPublicState,savePublicCandidate,loadPublicCandidate,promotePublicCandidate,publicCandidateStatus,reserveBudget,settleBudget,lockRunner,dailyLimit,monthlyLimit,rollingLimit } from '../store.mjs';
+import { ensureStore,encryptState,decryptState,saveState,loadState,savePublicState,loadPublicState,savePublicCandidate,loadPublicCandidate,promotePublicCandidate,publicCandidateStatus,reserveBudget,settleBudget,lockRunner,lockSourceRunner,unlockRunner,dailyLimit,monthlyLimit,rollingLimit } from '../store.mjs';
 import { createRunner } from '../runner.mjs';
 import { persistentConnector } from '../connection.mjs';
 import { QueueClient } from '../../../integrations/spacecloud-worker/queue.mjs';
@@ -53,6 +53,34 @@ function fixture(overrides={}) {
   return {env,sqlite,counters,deps,sessions,runner:createRunner(deps),advance(ms){clock+=ms;},setJob(value){currentJob=value;},setCallbackIncomplete(value=true){callbackIncomplete=value;},setPopupURL(value){popupURL=value;},setCloseFailure(value=true){closeFails=value;},setMissing404(value=true){knownMissing404=value;},setLaunchFailure(value=true){launchFails=value;},now:()=>clock};
 }
 async function ready(f){await ensureStore(f.env);await saveState(f.env,PRIVATE_STATE);await savePublicState(f.env,PUBLIC_STATE);return f;}
+
+test('source writes use the encrypted server profile and shared lock without creating a browser',async()=>{
+ const f=await ready(fixture({SPACECLOUD_SOURCE_WRITES:'true'})),calls=[];
+ const sourceJob={id:'opaque-source-job',lease_token:'source-lease'};
+ const runner=createRunner({...f.deps,requestSource:async(config,body)=>{calls.push(body);return body.action==='claim'?{ok:true,job:sourceJob}:{ok:true};},
+  executeSource:async(job,state,{checkpoint})=>{assert.deepEqual(job,sourceJob);assert.deepEqual(state,PRIVATE_STATE);await checkpoint({action:'checkpoint',phase:'writing'});return {state:'succeeded'};}});
+ assert.equal((await runner.runSource(f.env)).completed,true);
+ assert.deepEqual(calls.map(c=>c.action),['claim','checkpoint','finish']);
+ assert.equal(calls[1].lease_token,'source-lease');assert.equal(f.counters.launches,0);assert.equal(f.counters.acquires,0);
+ assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM cloud_budget_reservations').get().n,0);
+ f.sqlite.close();
+});
+test('a busy runner does not claim a source job and an uncertain source write is retained for review',async()=>{
+ const f=await ready(fixture({SPACECLOUD_SOURCE_WRITES:'true'})),calls=[];
+ const runner=createRunner({...f.deps,requestSource:async(config,body)=>{calls.push(body);return body.action==='claim'?{ok:true,job:{id:'source-job',lease_token:'lease'}}:{ok:true};},
+  executeSource:async()=>{throw Object.assign(Error('uncertain'),{code:'source-creation-uncertain'});}});
+ const token=await lockRunner(f.env,{duration:120000,now:f.now()});assert.equal((await runner.runSource(f.env)).busy,true);assert.equal(calls.length,0);
+ await unlockRunner(f.env,token);assert.equal((await runner.runSource(f.env)).review,true);
+ assert.equal(calls.at(-1).state,'review');assert.equal(f.counters.launches,0);f.sqlite.close();
+});
+test('an expired native source lock recovers while an expired browser lock remains quarantined',async()=>{
+ const native=await ready(fixture());await lockSourceRunner(native.env,{now:native.now()});native.advance(120001);
+ await native.runner.maintenance(native.env);
+ assert.equal(native.sqlite.prepare('SELECT token FROM cloud_runner_lock').get().token,null);
+ assert.equal(native.sqlite.prepare('SELECT review FROM cloud_runner_lock').get().review,0);native.sqlite.close();
+ const browser=await ready(fixture());await lockRunner(browser.env,{now:browser.now()});browser.advance(120001);
+ await browser.runner.maintenance(browser.env);assert.equal(browser.sqlite.prepare('SELECT review FROM cloud_runner_lock').get().review,1);browser.sqlite.close();
+});
 const reservation=(f)=>f.sqlite.prepare('SELECT * FROM cloud_budget_reservations ORDER BY started_at DESC,rowid DESC LIMIT 1').get();
 const budget=(f)=>f.sqlite.prepare('SELECT * FROM cloud_budget WHERE id=1').get();
 const lock=(f)=>f.sqlite.prepare('SELECT * FROM cloud_runner_lock WHERE id=1').get();
