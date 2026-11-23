@@ -12,8 +12,9 @@ export async function readSyncAlerts(env,{now=Date.now()}={}) {
  const [sources,links]=await Promise.all([
   rows(env,"SELECT * FROM spacecloud_source_jobs WHERE state IN ('queued','leased','review') ORDER BY created_at,id"),
   rows(env,`SELECT l.sync_code,l.reservation_code,l.desired,l.room,l.date,l.original_start,l.original_end,
-   b.state,b.created_at,b.updated_at,r.customer_name,
-   COALESCE((SELECT MAX(attempts) FROM spacecloud_sync_jobs j WHERE j.booking_code=l.sync_code),0) attempts
+   b.state,b.updated_at,r.customer_name,
+   COALESCE((SELECT MIN(created_at) FROM spacecloud_sync_jobs j WHERE j.booking_code=l.sync_code AND j.state IN ('queued','leased','review')),b.updated_at) created_at,
+   COALESCE((SELECT MAX(attempts) FROM spacecloud_sync_jobs j WHERE j.booking_code=l.sync_code AND j.state IN ('queued','leased','review')),0) attempts
    FROM spacecloud_admin_links l JOIN spacecloud_blocks b ON b.code=l.sync_code
    LEFT JOIN reservations r ON r.code=l.reservation_code
    WHERE b.state IN ('pending','blocking','releasing','review') OR b.state='conflict' AND l.desired=1`)
