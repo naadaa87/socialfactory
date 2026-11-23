@@ -88,7 +88,7 @@ test('snapshots are idempotent; cache TTL, failed/malformed fetch, disappearance
   fails=false;body='broken';assert.equal((await loadSpacecloud(e,{...options,force:true,now:1004000})).results.length,1);
   body=calendar();const empty=await loadSpacecloud(e,{...options,force:true,now:1005000});assert.equal(empty.results.length,0);assert.equal(empty.info.rooms[0].error,null);
 });
-test('warm monthly reads use at most five read queries, no upstream calls, and current payment/local records',async()=>{
+test('warm monthly reads use at most six read queries, no upstream calls, and current payment/local records',async()=>{
  const e=env(),original=globalThis.fetch;e.SPACECLOUD_SYNC_ENABLED='true';
  globalThis.fetch=async()=>response(calendar(event('oct','20261024T100000','20261024T120000'),event('nov','20261124T100000','20261124T120000')));
  try {
@@ -104,7 +104,7 @@ test('warm monthly reads use at most five read queries, no upstream calls, and c
   assert.equal(result.ok,true);assert.equal(fetches,0);assert.equal(result.results.length,2);
   assert.equal(result.results.find(r=>r.external).payment.amount,55000);
   assert.equal(result.results.find(r=>r.code==='R-new').amount,12000);
-  assert(statements.length<=5,JSON.stringify(statements));assert(statements.every(sql=>/^SELECT\b/.test(sql)));
+  assert(statements.length<=6,JSON.stringify(statements));assert(statements.every(sql=>/^SELECT\b/.test(sql)));
   assert(!statements.some(sql=>/calendar_history|reconcile/i.test(sql)));
   assert.deepEqual((await loadCalendarDisplay(e,{from:'2026-10-01',to:'2026-10-31'})).results.map(r=>r.date),['2026-10-24']);
  } finally {globalThis.fetch=original;e.sqlite.close();}

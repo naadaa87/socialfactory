@@ -4,8 +4,9 @@ import { QueueClient } from '../../integrations/spacecloud-worker/queue.mjs';
 import { SpacecloudUI } from '../../integrations/spacecloud-worker/spacecloud-ui.mjs';
 import { collectHostPayments, paymentRequest } from './payments.mjs';
 import { collectHostCalendar, collectHostCalendarAPI, calendarRequest } from './calendar.mjs';
+import { executeSourceJob,sourceRequest } from './source-sync.mjs';
 import { executeJob } from '../../integrations/spacecloud-worker/safety.mjs';
-import { ensureStore,problem,lockCalendar,unlockCalendar,loadVersionedHostState,saveRefreshedHostState,loadState,saveState,loadPublicState,savePublicState,onlySpacecloudState,savePublicCandidate,loadPublicCandidate,promotePublicCandidate,publicCandidateStatus,lockRunner,assertLock,unlockRunner,reserveBudget,settleBudget,budgetStatus,paidIncluded } from './store.mjs';
+import { ensureStore,problem,lockCalendar,unlockCalendar,loadVersionedHostState,saveRefreshedHostState,loadState,saveState,loadPublicState,savePublicState,onlySpacecloudState,savePublicCandidate,loadPublicCandidate,promotePublicCandidate,publicCandidateStatus,lockRunner,lockSourceRunner,assertLock,unlockRunner,reserveBudget,settleBudget,budgetStatus,paidIncluded } from './store.mjs';
 
 const HOME='https://partner.spacecloud.kr/reservation-calendar?product=140492&space=82026';
 const GUEST_HOME='https://www.spacecloud.kr/auth/login?source=detail-page';
@@ -46,7 +47,7 @@ function queueConfig(env){const origin=new URL(env.API_ORIGIN);if(origin.protoco
 function reservationRow(row){return {id:row.budget_id,day:new Date(row.started_at).toISOString().slice(0,10),month:new Date(row.started_at).toISOString().slice(0,7),started_at:row.started_at,reserved_ms:row.reserved_ms};}
 async function budgetFor(env,row){const budget=await env.STATE_DB.prepare('SELECT * FROM cloud_budget_reservations WHERE id=?1').bind(row.budget_id).first();if(!budget)throw problem('missing-budget','브라우저 사용량 기록을 확인해야 합니다.',503);return {...reservationRow(row),...budget};}
 
-export function createRunner({launch,connect,Queue=QueueClient,Driver=SpacecloudUI,execute=executeJob,collectPayments=collectHostPayments,requestPayments=paymentRequest,collectCalendar=collectHostCalendar,collectCalendarAPI=collectHostCalendarAPI,requestCalendar=calendarRequest,now=()=>Date.now(),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),setDeadline=setTimeout,clearDeadline=clearTimeout}={}) {
+export function createRunner({launch,connect,Queue=QueueClient,Driver=SpacecloudUI,execute=executeJob,collectPayments=collectHostPayments,requestPayments=paymentRequest,collectCalendar=collectHostCalendar,collectCalendarAPI=collectHostCalendarAPI,requestCalendar=calendarRequest,requestSource=sourceRequest,executeSource=executeSourceJob,now=()=>Date.now(),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),setDeadline=setTimeout,clearDeadline=clearTimeout}={}) {
   const bounded=(promise,ms=5000)=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(problem('remote-timeout','클라우드 브라우저 응답을 확인하지 못했습니다.',503)),ms);Promise.resolve(promise).then(resolve,reject).finally(()=>clearTimeout(timer));});
   async function closeRemote(env,sessionId,browser) {
     let closed=false;
@@ -76,7 +77,18 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       const {results}=await env.STATE_DB.prepare(`SELECT * FROM ${table} WHERE state='active' AND expires_at<=?1 LIMIT 5`).bind(now()).all();
       for(const row of results || [])await finishRecorded(env,table,row,{state:'expired'});
     }
-    // An orphaned expired lock is uncertain; it must never silently authorize another browser.
+    // Native source operations never launch a browser and have a shorter HTTP
+    // deadline than their lease. Their durable write checkpoint is recovered by
+    // the next source claim; retain the existing quarantine for actual browsers.
+    await env.STATE_DB.batch([
+      env.STATE_DB.prepare(`UPDATE cloud_runner_lock SET token=NULL,expires_at=0,review=0 WHERE expires_at<=?1
+        AND token IN(SELECT lock_token FROM cloud_source_runs WHERE expires_at<=?1)
+        AND NOT EXISTS(SELECT 1 FROM cloud_browser_runs b WHERE b.lock_token=cloud_runner_lock.token AND b.state='active')
+        AND NOT EXISTS(SELECT 1 FROM cloud_login b WHERE b.lock_token=cloud_runner_lock.token AND b.state='active')
+        AND NOT EXISTS(SELECT 1 FROM cloud_guest_login b WHERE b.lock_token=cloud_runner_lock.token AND b.state='active')`).bind(now()),
+      env.STATE_DB.prepare('DELETE FROM cloud_source_runs WHERE expires_at<=?1').bind(now())
+    ]);
+    // An orphaned expired browser lock is uncertain; never silently start another browser.
     await env.STATE_DB.prepare("UPDATE cloud_runner_lock SET review=1 WHERE id=1 AND token IS NOT NULL AND expires_at<=?1").bind(now()).run();
   }
   async function runBrowser(env,{kind='run',job,queue,storageState,publicStorageState,candidate,publicAvailabilityMode='guest-browser',token,budget,activeMs,sales,calendar}={}) {
@@ -197,6 +209,31 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         await unlockRunner(env,token);
       }
     }
+  }
+  async function runSource(env) {
+    if(env.SPACECLOUD_SOURCE_WRITES!=='true'||env.ALLOW_WRITES!=='true')return {ok:true,idle:true};
+    const config=queueConfig(env);let job;
+    await ensureStore(env);const token=await lockSourceRunner(env,{duration:120000,now:now()});
+    if(!token)return {ok:true,busy:true};
+    try {
+      const saved=await loadVersionedHostState(env);if(!saved?.state)return {ok:true,login_required:true};
+      ({job}=await requestSource(config,{action:'claim'}));if(!job)return {ok:true,idle:true};
+      const deadline=now()+90000,live=()=>{if(now()>=deadline)throw problem('source-deadline','원본 변경 확인 시간이 초과됐습니다.');};
+      const checkpoint=body=>requestSource(config,{...body,id:job.id,lease_token:job.lease_token});
+      try {
+        const result=await executeSource(job,saved.state,{live,checkpoint,beforeWrite:()=>assertLock(env,token,now()),
+          onState:state=>saveRefreshedHostState(env,state,saved.version,{guard:live})});
+        await requestSource(config,{action:'finish',id:job.id,lease_token:job.lease_token,state:result.state});
+        return {ok:true,completed:true};
+      }catch(error) {
+        // Checkpoints survive a response loss. Never reset a possibly accepted
+        // creation or delete another record to make an uncertain write fit.
+        try {await requestSource(config,{action:'finish',id:job.id,lease_token:job.lease_token,
+          state:error.retry||/^host-calendar-(?:login|http|rate-limit)$/.test(error.code||'')?'retry':'review',retry_after_ms:error.retry_after_ms,error:error.code});}catch{}
+        console.error('spacecloud-source',error.code||'source-review');
+        return {ok:false,review:true};
+      }
+    }finally {await unlockRunner(env,token);await env.STATE_DB.prepare('DELETE FROM cloud_source_runs WHERE lock_token=?1').bind(token).run();}
   }
   async function runCalendar(env) {
     if(env.SPACECLOUD_CLOUD_CALENDAR!=='true')throw problem('calendar-disabled','원본 캘린더 수집 설정을 확인해 주세요.',503);
@@ -425,7 +462,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       error:{name:String(error?.name || 'Error').slice(0,80),status:error?.status || error?.statusCode || null,code:String(error?.code || '').slice(0,80),message:String(error?.message || '').slice(0,200)}};}
   }
   return {
-    maintenance,runOne,runCalendar,startLogin,saveLogin,status,
+    maintenance,runOne,runSource,runCalendar,startLogin,saveLogin,status,
     startGuestLogin:(env,options={})=>startLogin(env,{...options,guest:true}),
     saveGuestLogin:(env,id,options={})=>saveLogin(env,id,{...options,guest:true}),
     viewGuestLogin,revalidateGuest,
@@ -473,7 +510,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         if(env.ENABLED==='true' && env.ALLOW_WRITES==='true')try{await runOne(env);}catch(error){console.error('spacecloud-cloud',error.code||'operation-failed');}
         if(env.SPACECLOUD_CLOUD_SALES==='true' && new Date(scheduledTime).getUTCMinutes()%5===0)try{await runSales(env);}catch(error){console.error('spacecloud-cloud','sales',error.code||'operation-failed');}
       })();
-      const calendarWork=(async()=>{if(env.SPACECLOUD_CLOUD_CALENDAR==='true'){
+      const calendarWork=(async()=>{if(env.SPACECLOUD_CLOUD_CALENDAR==='true'||env.SPACECLOUD_SOURCE_WRITES==='true'){
         const deadline=now()+55000,fast=env.SPACECLOUD_CALENDAR_FAST_POLL==='true';
         for(let pass=0;pass<(fast?6:1);pass++){
           if(pass){
@@ -481,7 +518,8 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
             await pause(10000);
           }
           if(now()>=deadline)break;
-          try{await runCalendar(env);}catch(error){console.error('spacecloud-cloud','calendar',error.code||'operation-failed');}
+          try{await runSource(env);}catch(error){console.error('spacecloud-source',error.code||'operation-failed');}
+          if(env.SPACECLOUD_CLOUD_CALENDAR==='true')try{await runCalendar(env);}catch(error){console.error('spacecloud-cloud','calendar',error.code||'operation-failed');}
         }
       }})();
       await Promise.all([bookingWork,calendarWork]);

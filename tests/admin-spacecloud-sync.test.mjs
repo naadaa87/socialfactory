@@ -176,7 +176,8 @@ test('a slow post-write result gets a bounded read-only check without recreating
   assert.equal(links(env).length,1);
   assert.equal(await claimSyncJob(env),null);
 });
-test('cancellation after an uncertain creation queues an exact owned release and bounds repeated failures',async()=>{
+test('cancellation after an uncertain creation queues an exact owned release and bounds repeated failures',async t=>{
+  let clock=Date.now();t.mock.method(Date,'now',()=>++clock);
   const env=await fixture(),row=insert(env);
   await reconcileAdminReservations(env);
   const first=await claimSyncJob(env);await ack(env,first,'review');

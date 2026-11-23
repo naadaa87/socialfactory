@@ -7,7 +7,7 @@ const INTERVAL=10000, FIRST='2026-10', KST=9*3600000;
 const day=ms=>new Date(ms+KST).toISOString().slice(0,10);
 const nextMonth=m=>new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),1)).toISOString().slice(0,7);
 const problem=code=>Object.assign(new Error(code),{code,status:409});
-const interval=r=>{const midnight=Date.parse(r.date+'T00:00:00+09:00');return {start:midnight+r.start_min*60000,end:midnight+r.end_min*60000,title:r.title,...(validBoardName(r.board_name)?{board_name:r.board_name}:{}),source_url:r.reservation_id?`https://partner.spacecloud.kr/reservation/${r.reservation_id}`:''};};
+const interval=r=>{const midnight=Date.parse(r.date+'T00:00:00+09:00');return {start:midnight+r.start_min*60000,end:midnight+r.end_min*60000,title:r.title,...(!r.reservation_id && r.id?{source_manual_id:String(r.id)}:{}),...(validBoardName(r.board_name)?{board_name:r.board_name}:{}),source_url:r.reservation_id?`https://partner.spacecloud.kr/reservation/${r.reservation_id}`:''};};
 const paidId=event=>/^https:\/\/partner\.spacecloud\.kr\/reservation\/(\d+)\/?$/.exec(event.source_url||'')?.[1]||null;
 export async function ensureHostCalendar(env){
  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS spacecloud_host_calendar_state(id INTEGER PRIMARY KEY CHECK(id=1),requested_at INTEGER NOT NULL DEFAULT 0,last_attempt INTEGER NOT NULL DEFAULT 0,last_success INTEGER,status TEXT,plan_json TEXT,counts TEXT,error TEXT)`).run();
@@ -34,6 +34,10 @@ export async function beginHostCalendar(env,{now=Date.now()}={}){
  // rooms so moving a manual booking does not depend on matching a customer name.
  const cache=await env.DB.prepare('SELECT space,events_json FROM spacecloud_calendar_cache').all();
  for(const c of cache.results||[])for(const e of JSON.parse(c.events_json))if(Number.isFinite(e.end))last=[last,day(e.end-1).slice(0,7)].sort().pop();
+ try {
+  const jobs=(await env.DB.prepare("SELECT before_json,target_json FROM spacecloud_source_jobs WHERE state IN ('queued','leased','review','succeeded')").all()).results||[];
+  for(const job of jobs)for(const raw of [job.before_json,job.target_json])if(raw)last=[last,JSON.parse(raw).date.slice(0,7)].sort().pop();
+ }catch(error){if(!/no such table/.test(error.message))throw error;}
  const scopes=[];let month=FIRST;
  for(let n=0;month<=last && n<36;n++,month=nextMonth(month))for(const f of feeds)scopes.push({space:f.space,month,product_id:new URL(f.url).searchParams.get('product_id'),config_hash:await sha256Hex(f.url)});
  if(month<=last)throw problem('host-calendar-range');
