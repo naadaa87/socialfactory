@@ -132,3 +132,29 @@ test('only validated compact detail masks can override the original calendar dis
  for(const board_name of ['김민수','김민수 010-1234-5678','김○○○○수','<b>김○수</b>'])
    assert.equal(boardRows([{...base,customer_name:'김**',board_name}],date)[0].name,'김○○');
 });
+
+test('manual and calendar names omit trailing annotations using the detail-import masking rules',()=>{
+ for(const external of [true,false])for(const [customer_name,expected] of [
+   ['교육기업 (추가사용)','교○○업'],
+   ['김민수 (교육기관/지점)','김○수'],
+   ['김민수（교육기관）','김○수'],
+   ['교육협의회, 지역협의회 (추가사용)','교육협○○'],
+   ['김민수 (010-1234-5678 / 내부 메모)','김○수']
+ ]) {
+   const rows=boardRows([{...base,external,customer_name}],date);
+   assert.equal(rows[0].name,expected);
+   assert(!JSON.stringify(rows).includes(customer_name));
+   for(const privateText of ['추가사용','교육기관','010-1234','내부 메모'])
+     assert(!JSON.stringify(rows).includes(privateText));
+ }
+ for(const customer_name of ['01012345678 (교육기관)',
+   '김민수 / 비밀번호 1234 (교육기관)','a@b.com (교육기관)',
+   '김민수 (끝나지 않은 메모','(이름 없음)'])
+   assert.equal(boardRows([{...base,customer_name}],date)[0].name,'예약 고객');
+});
+
+test('a generic cached label does not hide a usable reservation name',()=>{
+ assert.equal(boardRows([{...base,board_name:'예약 고객'}],date)[0].name,'김○수');
+ assert.equal(boardRows([{...base,customer_name:'김민수 (교육기관)',board_name:'예약 고객'}],date)[0].name,'김○수');
+ assert.equal(boardRows([{...base,customer_name:'',board_name:'예약 고객'}],date)[0].name,'예약 고객');
+});
