@@ -220,6 +220,25 @@
     a.textContent = '날짜·시간 선택하고 예약 신청';
   });
 
+  // 머리말 · 첫 화면의 로그인 · 회원가입 (2026-11-23) — 위 회원 메뉴 설정(members.enabled)과 상관없이 늘 보인다.
+  // 로그인한 사람에게는 '마이페이지 · 로그아웃'으로 바꿔 보여 준다. 로그인하면 보던 페이지로 돌아온다.
+  var accPath = location.pathname.replace(/\.html$/, "");
+  var accNext = /^\/(login|signup|mypage)$/.test(accPath) ? "" : "?next=" + encodeURIComponent(location.pathname + location.search);
+  var accSet = function (el, label, href) { ($("[data-acc-t]", el) || el).textContent = label; el.href = href; };
+  $$("[data-acc]").forEach(function (el) {
+    var k = el.getAttribute("data-acc");
+    if (!loggedIn) { if (k === "in" && accNext) el.href = "/login" + accNext; return; }
+    if (k === "in" || k === "hero") { accSet(el, "마이페이지", "/mypage"); return; }
+    if (k !== "up") return;
+    accSet(el, "로그아웃", "/mypage");
+    el.classList.add("is-out");
+    el.addEventListener("click", function (e) {
+      e.preventDefault();
+      var done = function () { if (accPath === "/mypage") location.href = "/"; else location.reload(); };
+      fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).then(done, done);
+    });
+  });
+
   // 지도 링크
   var addr = text(get("address"));
   $$("[data-map]").forEach(function (a) {
