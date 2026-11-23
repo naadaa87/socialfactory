@@ -1,7 +1,7 @@
 // Only visitor-safe fields cross the display API boundary. Never return raw calendar titles.
 import { ROOM_KEYS, addDaysIso, isIsoDate } from './admin.js';
 
-import { displayName, validBoardName } from './reservation-board-name.js';
+import { reservationBoardName, validBoardName } from './reservation-board-name.js';
 export { displayName } from './reservation-board-name.js';
 
 export function boardRows(rows, today) {
@@ -16,7 +16,12 @@ export function boardRows(rows, today) {
     const key = [row.code, row.space, from, to].join('|');
     if (seen.has(key)) return [];
     seen.add(key);
-    return [{ room: row.space, name: validBoardName(row.board_name) ? row.board_name : displayName(row.customer_name), start: Math.max(start, from), end: Math.min(end, to),
+    // Calendar/manual names may end with a private parenthetical annotation.
+    // Use the same name-only masking as detail imports, and let an uninformative
+    // cached label fall back to the reservation's own name.
+    const name = row.board_name !== '예약 고객' && validBoardName(row.board_name)
+      ? row.board_name : reservationBoardName(row.customer_name) || '예약 고객';
+    return [{ room: row.space, name, start: Math.max(start, from), end: Math.min(end, to),
       continued: from < start, continues: to > end }];
   }).sort((a, b) => a.start - b.start || a.room.localeCompare(b.room));
 }
