@@ -503,6 +503,14 @@ details.help ol { padding-left: 20px; margin-bottom: 0; }
 /* SpaceCloud schedules are read-only and excluded from payment totals. */
 .sc-status-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; margin:0 0 16px; }
 .sc-warning { color:var(--red); }
+.sc-sync-alert { margin:0 0 20px;padding:16px;border:1px solid #b6c8f5;border-radius:12px;background:#f1f5ff;color:#233761; }
+.sc-sync-alert.warning { border-color:#e1bd66;background:#fff8e7;color:#76520a; }
+.sc-sync-alert.bad { border-color:#e6a4a4;background:#fff1f1;color:#9b2424; }
+.sc-sync-alert p { margin:6px 0; }
+.sc-sync-alert summary { cursor:pointer;font-size:13px;margin-top:10px; }
+.sc-sync-item { padding:12px 0;border-top:1px solid #ddd;margin-top:10px; }
+.sc-sync-item strong,.sc-sync-item .sc-sync-route { display:block; }
+.sc-sync-item .acts { margin-top:8px; }
 .sc-tag { background:#f1eafd; color:#6538a0; }
 .blk.sc-external, .ev.sc-external { background:#7451a8; color:#fff; }
 .lg.sc-external::before { background:#7451a8; }

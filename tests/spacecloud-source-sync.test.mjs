@@ -176,3 +176,68 @@ test('the original imported ledger form cannot silently change geometry or cance
  assert.equal((await response.json()).error,'source-original-required');assert.equal(f.sqlite.prepare('SELECT status FROM reservations').get().status,'confirmed');
  const rows=await attachSourceSync(f.env,f.rows,f.rows);assert.equal(rows[0].source_manual.id,'77');assert(rows[0].source_manual.version);
 });
+
+test('temporary errors back off without losing the write checkpoint and expose persistent delays',async t=>{
+ const {readSyncAlerts}=await import('../functions/_lib/spacecloud-sync-alerts.js');
+ const f=await fixture(t);await enqueueSourceSync(f.env,f.body);
+ let now=Date.now()+10;
+ for(const [index,delay] of [60000,120000,300000,600000,900000,900000].entries()) {
+  const job=await claimSourceSync(f.env,{now});assert(job);
+  if(index===0)await checkpointSourceSync(f.env,{...job,action:'checkpoint',phase:'creating'},{now});
+  else assert.equal(job.phase,'creating');
+  await checkpointSourceSync(f.env,{...job,action:'finish',state:'retry',error:'source-network'},{now});
+  assert.equal(await claimSourceSync(f.env,{now:now+delay-1}),null);
+  const report=await readSyncAlerts(f.env,{now});
+  assert.equal(report.counts.retrying,1);assert.equal(report.counts.delayed,index>=2?1:0);
+  assert.equal(report.items[0].next_retry_at,now+delay);assert.equal(report.items[0].attempts,index+1);
+  assert.equal(report.items[0].before.title,f.before.title);assert.equal(report.items[0].target.space,f.body.space);
+  const leaked=JSON.stringify(report);for(const key of ['lease_token','before_json','PRIVATE_AUTH','PRIVATE_ORIGINAL_MEMO'])assert(!leaked.includes(key));
+  now+=delay;
+ }
+ // A longer provider throttle is respected instead of shortening it to backoff.
+ const job=await claimSourceSync(f.env,{now});
+ await checkpointSourceSync(f.env,{...job,action:'finish',state:'retry',error:'source-rate-limit',retry_after_ms:3600000},{now});
+ assert.equal((await readSyncAlerts(f.env,{now})).items[0].next_retry_at,now+3600000);
+ assert.equal(f.sqlite.prepare('SELECT phase FROM spacecloud_source_jobs').get().phase,'creating');
+});
+test('status is authenticated, global, read-only and retains alerts even when the original disappears',async t=>{
+ const {onRequestGet}=await import('../functions/api/admin/spacecloud-source.js');
+ const {readSyncAlerts}=await import('../functions/_lib/spacecloud-sync-alerts.js');
+ const f=await fixture(t);await enqueueSourceSync(f.env,f.body);const job=await claimSourceSync(f.env);
+ await checkpointSourceSync(f.env,{...job,action:'finish',state:'review',error:'source-creation-uncertain'});
+ await publishCalendarDisplay(f.env,{results:[],info:{configured:false,rooms:[]}},[],Date.now()+1);
+ const before=f.sqlite.prepare('SELECT * FROM spacecloud_source_jobs').all();
+ const request=token=>new Request('https://site.test/api/admin/spacecloud-source',{headers:token?{authorization:'Bearer '+token}:{}});
+ assert.equal((await onRequestGet({env:f.env,request:request()})).status,401);
+ const response=await onRequestGet({env:f.env,request:request(f.env.ADMIN_KEY)});assert.equal(response.status,200);
+ assert.equal(response.headers.get('cache-control'),'no-store');const report=await response.json();
+ assert.equal(report.counts.review,1);assert.equal(report.items[0].id,job.id);assert(report.items[0].needs_attention);
+ assert.deepEqual(f.sqlite.prepare('SELECT * FROM spacecloud_source_jobs').all(),before);
+ // Stuck first-time work is flagged even if no worker can claim it.
+ await retrySourceSync(f.env,job.id);
+ f.sqlite.prepare('UPDATE spacecloud_source_jobs SET created_at=?,attempts=0').run(Date.now()-300001);
+ assert.equal((await readSyncAlerts(f.env)).counts.delayed,1);
+});
+test('alerts cover local admin holds and releases without affecting payment or source queues',async t=>{
+ const {ensureSyncSchema}=await import('../functions/_lib/booking-spacecloud-sync.js');
+ const {readSyncAlerts}=await import('../functions/_lib/spacecloud-sync-alerts.js');
+ const f=await fixture(t,{linked:true});await ensureSyncSchema(f.env);const now=Date.now();
+ f.sqlite.prepare(`INSERT INTO spacecloud_admin_links(sync_code,reservation_code,room,date,original_start,original_end,desired,created_at) VALUES('BADMtest',?,'r3',?,600,660,0,?)`).run(f.body.code,f.before.date,now);
+ f.sqlite.prepare(`INSERT INTO spacecloud_blocks(code,room,date,start_min,end_min,marker,access_token,state,created_at,updated_at) VALUES('BADMtest','r3',?,600,660,'SFWEB:BADMtest','DO_NOT_LEAK','review',?,?)`).run(f.before.date,now,now);
+ const report=await readSyncAlerts(f.env,{now});assert.equal(report.counts.review,1);
+ assert.equal(report.items[0].kind,'admin');assert.equal(report.items[0].action,'cancel');assert(!JSON.stringify(report).includes('DO_NOT_LEAK'));
+ assert.equal(f.sqlite.prepare('SELECT amount FROM reservations').get().amount,55000);
+});
+test('native network and upstream 5xx errors are retried safely; uncertainty never repeats a create',async t=>{
+ const {retryableSourceError}=await import('../workers/spacecloud-cloud/source-sync.mjs');
+ const f=await fixture(t);await enqueueSourceSync(f.env,f.body);const job=await claimSourceSync(f.env),remote=provider(f.before);
+ const checkpoint=body=>checkpointSourceSync(f.env,{...body,id:job.id,lease_token:job.lease_token});
+ let networkError;try {await executeSourceJob(job,state,{checkpoint,fetcher:async()=>{throw new TypeError('PRIVATE_NETWORK_DETAIL');}});}catch(error){networkError=error;}
+ assert.equal(networkError.code,'source-network');assert(retryableSourceError(networkError));
+ // A POST accepted before a 503 is verified and completed without repeating it.
+ let postCount=0;
+ const fetcher=async(url,options)=>{const r=await remote.fetcher(url,options);if(options.method==='POST'){postCount++;return new Response('',{status:503});}return r;};
+ const done=await executeSourceJob(job,state,{checkpoint,fetcher});assert.equal(done.state,'succeeded');assert.equal(postCount,1);
+ assert.equal(retryableSourceError({code:'source-write-unverified'}),true);
+ for(const code of ['source-creation-uncertain','source-conflict','source-stale','source-ambiguous'])assert.equal(retryableSourceError({code}),false);
+});

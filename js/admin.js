@@ -172,7 +172,7 @@
     if (e.code === "UNAUTHORIZED") return "관리자 비밀번호가 맞지 않습니다.";
     return esc(e.message || "로그인하지 못했습니다.");
   }
-  function showApp() { loginBox.hidden = true; app.hidden = false; go(viewFromHash()); refreshCounts(); }
+  function showApp() { loginBox.hidden = true; app.hidden = false; go(viewFromHash()); refreshCounts(); pollSourceAlerts(); }
   function showLogin(msg, info) {
     closeAll(); app.hidden = true; loginBox.hidden = false;
     var m = $("#login-msg"); if (msg) { m.innerHTML = msg; m.hidden = false; m.classList.toggle("info", !!info); } else m.hidden = true;
@@ -505,7 +505,9 @@
     if(!source&&!r.source_url&&!imported)return;
     var box=document.createElement('div');box.className='sec';
     var busy=r.source_sync&&['queued','leased','review'].indexOf(r.source_sync.state)>=0;
-    var status=r.source_sync?'<p class="alert '+(r.source_sync.state==='review'?'bad':'')+'">'+esc(r.source_sync.message)+'</p>'
+    var status=r.source_sync?'<p class="alert '+(r.source_sync.needs_attention||r.source_sync.state==='review'?'bad':'')+'">'+esc(r.source_sync.message)
+      +(r.source_sync.attempts?' · 시도 '+r.source_sync.attempts+'회':'')
+      +(r.source_sync.retrying&&r.source_sync.next_retry_at?' · 다음 자동 재시도 '+esc(new Date(r.source_sync.next_retry_at).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'})):'')+'</p>'
       +(r.source_sync.state==='review'?'<button class="btn btn-light btn-sm" type="button" data-source-retry>원본 재확인</button>':''):'';
     function bindRetry(){var button=box.querySelector('[data-source-retry]');if(button)button.addEventListener('click',function(){
       button.disabled=true;api('/api/admin/spacecloud-source',{method:'POST',body:{action:'retry',id:r.source_sync.id}}).then(function(result){toast(result.job.message);closeDrawer($('#dr-detail'));reloadCurrent();}).catch(function(error){toast(error.message);button.disabled=false;});
@@ -539,7 +541,7 @@
       if(action==='update')Object.assign(body,{space:$('#sc-source-room').value,date:$('#sc-source-date').value,start_min:+$('#sc-source-start').value,end_min:+$('#sc-source-end').value});
       $$('button',form).forEach(function(b){b.disabled=true;});
       api('/api/admin/spacecloud-source',{method:'POST',body:body}).then(function(result){
-        toast(result.job.message);closeDrawer($('#dr-detail'));reloadCurrent();
+        toast(result.job.message);closeDrawer($('#dr-detail'));reloadCurrent();pollSourceAlerts();
       }).catch(function(error){$('#sc-source-status').textContent=error.message;$$('button',form).forEach(function(b){b.disabled=!!busy||(b.type==='submit'&&source.end_min>1440);});});
     }
     $('#sc-source-form').addEventListener('submit',function(event){event.preventDefault();send('update');});
@@ -712,9 +714,56 @@
       }
     }).catch(function (e) { guard(e); }).then(function () { schedulePollBusy = false; });
   }
-  setInterval(function () { pollScheduleUpdates(false); }, 5000);
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) pollScheduleUpdates(true); });
-  window.addEventListener("focus", function () { pollScheduleUpdates(true); });
+  setInterval(function () { pollScheduleUpdates(false); pollSourceAlerts(); }, 5000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { pollScheduleUpdates(true); pollSourceAlerts(); } });
+  window.addEventListener("focus", function () { pollScheduleUpdates(true); pollSourceAlerts(); });
+
+  var sourceAlertBusy=false,sourceAlertKey='',sourceAttentionKey='';
+  function renderSourceAlerts(data) {
+    var box=$('#sc-sync-alert'),c=data.counts||{},attention=(c.review||0)+(c.delayed||0),items=data.items||[];
+    var badge=$('#sc-sync-count');badge.textContent=attention||'';badge.hidden=!attention;badge.classList.toggle('warn',!!attention);
+    box.hidden=!(c.pending||0);box.classList.toggle('bad',!!attention);box.classList.toggle('warning',!attention&&!!c.retrying);
+    $('#sc-sync-heading').textContent=attention?'스페이스클라우드 반영 확인 필요 '+attention+'건'
+      :c.retrying?'스페이스클라우드 자동 재시도 중 '+c.retrying+'건':'스페이스클라우드 반영 처리 중 '+(c.pending||0)+'건';
+    $('#sc-sync-check').textContent='서버가 자동 처리하며 5초마다 상태를 확인합니다.'
+      +(c.delayed?' · 반영 지연 '+c.delayed+'건은 자동 재시도·처리를 계속합니다.':'')
+      +(c.review?' · 원본 확인 필요 '+c.review+'건은 내역을 확인해 주세요.':'');
+    var key=JSON.stringify(items)+'|'+data.more;
+    if(key!==sourceAlertKey) {
+      sourceAlertKey=key;
+      function describe(p){return p?esc(p.date+' '+(SPL[p.space]||p.space)+' '+hm(p.start_min)+'–'+hm(p.end_min)):'';}
+      $('#sc-sync-items').innerHTML=items.map(function(r){
+        var label=r.state==='review'?'원본 확인 필요':r.needs_attention?'반영 지연':r.retrying?'자동 재시도 중':'처리 중';
+        return '<article class="sc-sync-item"><strong>'+esc((r.before&&r.before.title)||'예약')+' · '+label+'</strong>'
+          +'<span class="sc-sync-route small">'+describe(r.before)+(r.target?' → '+describe(r.target):r.action==='cancel'?' → 취소 요청':'')+'</span>'
+          +'<p class="small">'+esc(r.message)+(r.attempts?' · 시도 '+r.attempts+'회':'')
+          +(r.retrying&&r.next_retry_at?' · 다음 자동 재시도 '+esc(new Date(r.next_retry_at).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'})):'')+'</p>'
+          +'<div class="acts">'+(r.source_url?'<a class="btn btn-light btn-xs" href="'+esc(r.source_url)+'" target="_blank" rel="noopener noreferrer">스페이스클라우드 원본 확인</a>':'')
+          +(r.kind==='admin'?'<button class="btn btn-light btn-xs" type="button" data-source-alert-open="'+esc(r.code)+'">어드민 예약 상세</button>':'')
+          +(r.kind==='source'&&r.state==='review'?'<button class="btn btn-light btn-xs" type="button" data-source-alert-retry="'+esc(r.id)+'">원본 재확인</button>':'')+'</div></article>';
+      }).join('')+(data.more?'<p class="small">처리 중인 내역 '+data.more+'건이 더 있습니다.</p>':'');
+    }
+    var attentionKey=items.filter(function(r){return r.needs_attention;}).map(function(r){return r.id;}).join('|');
+    if(attentionKey&&attentionKey!==sourceAttentionKey)$('#sc-sync-details').open=true;
+    sourceAttentionKey=attentionKey;
+  }
+  function pollSourceAlerts() {
+    if(app.hidden||document.hidden||sourceAlertBusy)return;
+    sourceAlertBusy=true;
+    return api('/api/admin/spacecloud-source',{timeoutMs:15000}).then(function(data){if(!app.hidden)renderSourceAlerts(data);})
+      .catch(function(error){if(guard(error))return;var box=$('#sc-sync-alert');box.hidden=false;box.classList.add('warning');
+        $('#sc-sync-heading').textContent='스페이스클라우드 연동 상태 확인 지연';
+        $('#sc-sync-check').textContent='상태를 확인하지 못했습니다. 자동으로 다시 확인합니다. 기존 처리 내역은 유지합니다.';
+      }).then(function(){sourceAlertBusy=false;});
+  }
+  $('#sc-sync-items').addEventListener('click',function(event){
+    var open=event.target.closest('[data-source-alert-open]');if(open){openDetail(open.dataset.sourceAlertOpen);return;}
+    var retry=event.target.closest('[data-source-alert-retry]');if(!retry)return;
+    retry.disabled=true;
+    api('/api/admin/spacecloud-source',{method:'POST',body:{action:'retry',id:retry.dataset.sourceAlertRetry}})
+      .then(function(){toast('원본을 다시 대조합니다. 불확실한 신규 등록은 반복하지 않습니다.');return pollSourceAlerts();})
+      .catch(function(error){retry.disabled=false;if(!guard(error))toast(error.message);});
+  });
 
   /* =================== 예약 현황 (일간 시간표 · 월간 달력) =================== */
   var BD = { mode: "day", date: null, items: [], requestSeq: 0, controller: null, renderedKey: null, pending: null };
