@@ -838,3 +838,16 @@ test('host reconnect stays closed when the remaining allowance cannot fit a minu
  await assert.rejects(f.runner.startLogin(f.env),{code:'daily-budget'});
  assert.equal(f.counters.acquires,0);assert.equal(lock(f).token,null);
 });
+
+test('native source transient failures and missing server login return durable retry results without a browser',async()=>{
+ for(const error of [{code:'source-network'},{code:'source-write-unverified'},{code:'host-calendar-rate-limit',retry_after_ms:3600000}]) {
+  const f=await ready(fixture({SPACECLOUD_SOURCE_WRITES:'true'})),calls=[];
+  const runner=createRunner({...f.deps,requestSource:async(config,body)=>{calls.push(body);return body.action==='claim'?{ok:true,job:{id:'job',lease_token:'lease'}}:{ok:true};},
+   executeSource:async()=>{throw Object.assign(Error('PRIVATE_ERROR'),error);}});
+  assert.equal((await runner.runSource(f.env)).retrying,true);assert.equal(calls.at(-1).state,'retry');assert.equal(calls.at(-1).error,error.code);
+  assert.equal(f.counters.launches,0);f.sqlite.close();
+ }
+ const f=fixture({SPACECLOUD_SOURCE_WRITES:'true'}),calls=[];
+ const runner=createRunner({...f.deps,requestSource:async(config,body)=>{calls.push(body);return body.action==='claim'?{ok:true,job:{id:'job',lease_token:'lease'}}:{ok:true};}});
+ assert.equal((await runner.runSource(f.env)).retrying,true);assert.equal(calls.at(-1).error,'source-login');assert.equal(calls.at(-1).state,'retry');f.sqlite.close();
+});

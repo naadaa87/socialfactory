@@ -10,7 +10,7 @@
   <title>관리자 | 소셜팩토리</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=parking-cost-20261119">
+  <link rel="stylesheet" href="/css/admin.css?v=sync-alerts-20261123">
   <link rel="stylesheet" href="/css/admin-kpi.css?v=kpi-20261116">
   <link rel="stylesheet" href="/css/admin-community.css?v=cm-20261117">
   <link rel="stylesheet" href="/css/admin-meet.css?v=mk-20261121">
@@ -45,7 +45,7 @@
       <span class="nav-cap">운영</span>
       <button type="button" data-view="dash">대시보드</button>
       <button type="button" data-view="kpi">KPI</button>
-      <button type="button" data-view="board">예약 현황</button>
+      <button type="button" data-view="board">예약 현황<em id="sc-sync-count" title="스페이스클라우드 연동 확인 필요" hidden></em></button>
       <button type="button" data-view="booking">예약 신청 · 페이앱</button>
       <button type="button" data-view="list">일자별 예약<em data-count="unpaid" title="결제 전 예약" hidden></em></button>
       <button type="button" data-view="sales">매출</button>
@@ -66,6 +66,11 @@
   </aside>
 
   <main class="main">
+    <section id="sc-sync-alert" class="sc-sync-alert" aria-labelledby="sc-sync-heading" hidden>
+      <strong id="sc-sync-heading" role="status" aria-live="polite"></strong>
+      <p id="sc-sync-check" class="small" role="status"></p>
+      <details id="sc-sync-details"><summary>연동 내역 확인</summary><div id="sc-sync-items"></div></details>
+    </section>
     <!-- 대시보드 -->
     <section class="view" id="view-dash">
       <header class="vh">
@@ -905,7 +910,7 @@
 </div>
 <script src="/js/booking-rates.js?v=customer-audit-20261106"></script>
 <script src="/js/site-config.js?v=payapp-gu-20261116"></script>
-<script src="/js/admin.js?v=spacecloud-source-sync-20261123"></script>
+<script src="/js/admin.js?v=sync-retry-alerts-20261123"></script>
 <script src="/js/admin-bookings.js?v=booking-sms-20261123"></script>
 <script src="/js/admin-booking-cloud.js?v=20261118-continuous-sync"></script>
 <script src="/js/admin-toss-sales.js?v=20261106-sort"></script>

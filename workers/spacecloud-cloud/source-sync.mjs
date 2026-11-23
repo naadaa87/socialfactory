@@ -3,6 +3,8 @@ import {hostAPIHeaders} from './host-auth.mjs';
 import {ROOMS} from '../../integrations/spacecloud-worker/spacecloud-ui.mjs';
 const API='https://api.spacecloud.kr',HOST='https://partner.spacecloud.kr';
 const problem=(code,retry=false,retry_after_ms=60000)=>Object.assign(new Error(code),{code,retry,retry_after_ms});
+export const retryableSourceError=error=>error?.retry===true||
+ /^(?:host-calendar-(?:login|http|rate-limit)|source-(?:login|network|rate-limit|deadline|control|write-unverified))$/.test(error?.code||'');
 const validId=id=>typeof id==='string'&&/^\d{1,20}$/.test(id);
 const same=(a,b)=>a&&b&&a.space===b.space&&a.date===b.date&&a.start_min===b.start_min&&a.end_min===b.end_min&&a.title===b.title;
 const overlaps=(a,b)=>{
@@ -12,9 +14,11 @@ const overlaps=(a,b)=>{
 const addDay=(date,n)=>new Date(Date.parse(date+'T00:00:00Z')+n*86400000).toISOString().slice(0,10);
 export async function sourceRequest(config,body,{fetcher=fetch}={}) {
  const url=new URL('/api/internal/spacecloud-source',config.origin);
- const r=await fetcher(url.href,{method:'POST',redirect:'manual',signal:AbortSignal.timeout(15000),
-  headers:{Authorization:'Bearer '+config.token,'Content-Type':'application/json'},body:JSON.stringify(body)});
- const data=await r.json();if(!r.ok||data.ok!==true)throw problem('source-control');return data;
+ try {
+  const r=await fetcher(url.href,{method:'POST',redirect:'manual',signal:AbortSignal.timeout(15000),
+   headers:{Authorization:'Bearer '+config.token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await r.json();if(!r.ok||data.ok!==true)throw problem('source-control',true);return data;
+ }catch {throw problem('source-control',true);}
 }
 
 // Only host-added external_schedules are writable. Paid reservations never enter
@@ -36,7 +40,7 @@ export async function executeSourceJob(job,savedState,{fetcher=fetch,checkpoint,
   }))).values()];
   const raw=new Map();
   const collected=await collectHostCalendarAPI(state,{scopes},{live,fetcher:async(url,options)=>{
-   const response=await fetcher(url,options);
+   let response;try {response=await fetcher(url,options);}catch {throw problem('source-network',true);}
    if(response.ok&&new URL(url).pathname==='/partner/reservations/calendar')raw.set(String(url),hostKeys(await response.clone().json()));
    return response;
   }});
@@ -60,8 +64,14 @@ export async function executeSourceJob(job,savedState,{fetcher=fetch,checkpoint,
    headers:{...hostAPIHeaders(state,path,user.accessToken),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});}
   catch {return; /* A read-back below decides whether the write was accepted. */}
   live();
-  if(response.status===429)throw problem('source-rate-limit',true,Math.max(60000,(Number(response.headers.get('retry-after'))||60)*1000));
+  if(response.status===429) {
+   const value=response.headers.get('retry-after'),seconds=Number(value),delay=Number.isFinite(seconds)&&value!==null?seconds*1000:Date.parse(value)-Date.now();
+   throw problem('source-rate-limit',true,Math.max(60000,Number.isFinite(delay)?delay:60000));
+  }
   if(response.status===401)throw problem('source-login',true);
+  // An upstream timeout/5xx may follow an accepted write. Read back first;
+  // retries retain the checkpoint, so an uncertain POST is never repeated.
+  if(response.status>=500||response.status===408||response.status===425)return;
   if(!response.ok)throw problem('source-write-rejected');
   if(method!=='DELETE') {
    let result;try {result=await response.json();}catch {return;}

@@ -4,7 +4,7 @@ import { QueueClient } from '../../integrations/spacecloud-worker/queue.mjs';
 import { SpacecloudUI } from '../../integrations/spacecloud-worker/spacecloud-ui.mjs';
 import { collectHostPayments, paymentRequest } from './payments.mjs';
 import { collectHostCalendar, collectHostCalendarAPI, calendarRequest } from './calendar.mjs';
-import { executeSourceJob,sourceRequest } from './source-sync.mjs';
+import { executeSourceJob,sourceRequest,retryableSourceError } from './source-sync.mjs';
 import { executeJob } from '../../integrations/spacecloud-worker/safety.mjs';
 import { ensureStore,problem,lockCalendar,unlockCalendar,loadVersionedHostState,saveRefreshedHostState,loadState,saveState,loadPublicState,savePublicState,onlySpacecloudState,savePublicCandidate,loadPublicCandidate,promotePublicCandidate,publicCandidateStatus,lockRunner,lockSourceRunner,assertLock,unlockRunner,reserveBudget,settleBudget,budgetStatus,paidIncluded } from './store.mjs';
 
@@ -216,11 +216,11 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
     await ensureStore(env);const token=await lockSourceRunner(env,{duration:120000,now:now()});
     if(!token)return {ok:true,busy:true};
     try {
-      const saved=await loadVersionedHostState(env);if(!saved?.state)return {ok:true,login_required:true};
       ({job}=await requestSource(config,{action:'claim'}));if(!job)return {ok:true,idle:true};
       const deadline=now()+90000,live=()=>{if(now()>=deadline)throw problem('source-deadline','원본 변경 확인 시간이 초과됐습니다.');};
       const checkpoint=body=>requestSource(config,{...body,id:job.id,lease_token:job.lease_token});
       try {
+        const saved=await loadVersionedHostState(env);if(!saved?.state)throw Object.assign(problem('source-login','클라우드 호스트 로그인이 필요합니다.'),{retry:true});
         const result=await executeSource(job,saved.state,{live,checkpoint,beforeWrite:()=>assertLock(env,token,now()),
           onState:state=>saveRefreshedHostState(env,state,saved.version,{guard:live})});
         await requestSource(config,{action:'finish',id:job.id,lease_token:job.lease_token,state:result.state});
@@ -228,10 +228,11 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
       }catch(error) {
         // Checkpoints survive a response loss. Never reset a possibly accepted
         // creation or delete another record to make an uncertain write fit.
+        const retry=retryableSourceError(error);
         try {await requestSource(config,{action:'finish',id:job.id,lease_token:job.lease_token,
-          state:error.retry||/^host-calendar-(?:login|http|rate-limit)$/.test(error.code||'')?'retry':'review',retry_after_ms:error.retry_after_ms,error:error.code});}catch{}
+          state:retry?'retry':'review',retry_after_ms:error.retry_after_ms,error:error.code});}catch{}
         console.error('spacecloud-source',error.code||'source-review');
-        return {ok:false,review:true};
+        return {ok:false,...(retry?{retrying:true}:{review:true})};
       }
     }finally {await unlockRunner(env,token);await env.STATE_DB.prepare('DELETE FROM cloud_source_runs WHERE lock_token=?1').bind(token).run();}
   }

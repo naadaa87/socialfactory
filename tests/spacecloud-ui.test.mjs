@@ -24,7 +24,7 @@ function harness(fetchImpl) {
   const window={SF_CONFIG:{pricing:{rooms:{r1:{max:30},r2:{max:40},r3:{max:15},r4:{max:50},r5:{max:30}}}},addEventListener(){},scrollTo(){}};
   let code=readFileSync(new URL('../js/admin.js',import.meta.url),'utf8');
   code=code.replace(/  api\("\/api\/admin\/session"\)\.then\(showApp\)\.catch\([^\n]+\);/,'');
-  code=code.replace(/\}\)\(\);\s*$/, 'window.testHooks={resRow,renderExternalDetail,renderSpacecloudStatus,net,BD,loadBoard,drawDay,drawMonth,SL,loadSales,drawSales,pollScheduleUpdates,setPollView:view=>{CUR=view;app.hidden=false;}};})();');
+  code=code.replace(/\}\)\(\);\s*$/, 'window.testHooks={resRow,renderExternalDetail,renderSpacecloudStatus,net,BD,loadBoard,drawDay,drawMonth,SL,loadSales,drawSales,pollScheduleUpdates,renderSourceAlerts,pollSourceAlerts,setPollView:view=>{CUR=view;app.hidden=false;}};})();');
   vm.runInNewContext(code,{window,document,sessionStorage:{removeItem(){}},location:{hash:'',pathname:'/admin'},history:{replaceState(){}},
     setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},setInterval(fn,ms){intervals.push({fn,ms});},navigator:{},console,fetch:fetchImpl,AbortController});
   return {hooks:window.testHooks,nodes,statuses,intervals,document,timers};
@@ -186,4 +186,25 @@ test('sales cards show parking-cost-adjusted revenue while the external calendar
   resolveCalendar({ok:true,json:async()=>({ok:true,year:'2026',unrecordedSpacecloud:2,spacecloudPaymentGaps:{count:0,rows:[]}})});
   await new Promise(resolve => setImmediate(resolve));
   assert.match(h.nodes.get('#sl-channel-note').textContent, /2건/);
+});
+
+test('sync alerts are visible across all admin views and escape source names while preserving retry details',async()=>{
+ const h=harness(async()=>({ok:true,json:async()=>({ok:true,counts:{pending:1,review:0,delayed:1,retrying:1},items:[{
+  id:'opaque-job',kind:'source',state:'queued',needs_attention:true,retrying:true,attempts:3,next_retry_at:Date.now()+300000,
+  before:{title:'<img src=x onerror=alert(1)>',date:'2026-12-01',space:'r1',start_min:600,end_min:660},
+  target:{date:'2026-12-02',space:'r2',start_min:720,end_min:780},message:'자동 재시도합니다.'}]} )}));
+ h.hooks.setPollView('sales');await h.hooks.pollSourceAlerts();
+ assert.equal(h.nodes.get('#sc-sync-alert').hidden,false);assert.equal(h.nodes.get('#sc-sync-count').textContent,1);
+ assert(h.nodes.get('#sc-sync-heading').textContent.includes('확인 필요 1건'));
+ const html=h.nodes.get('#sc-sync-items').innerHTML;assert(!html.includes('<img'));assert(html.includes('&lt;img'));
+ assert(html.includes('다음 자동 재시도'));assert(html.includes('시도 3회'));assert(html.includes('2026-12-02'));assert(!html.includes('data-source-alert-retry'));
+ assert.equal(h.nodes.get('#sc-sync-details').open,true);
+ h.hooks.renderSourceAlerts({counts:{pending:0},items:[]});assert.equal(h.nodes.get('#sc-sync-alert').hidden,true);assert.equal(h.nodes.get('#sc-sync-count').hidden,true);
+});
+test('status polling failures cannot silently erase pending sync alerts and recover on the next poll',async()=>{
+ let failed=true;const h=harness(async()=>{if(failed)throw Error('offline');return {ok:true,json:async()=>({ok:true,counts:{pending:0},items:[]})};});
+ h.hooks.setPollView('prod');h.nodes.set('#sc-sync-items',{innerHTML:'existing pending job'});
+ await h.hooks.pollSourceAlerts();assert.equal(h.nodes.get('#sc-sync-alert').hidden,false);
+ assert(h.nodes.get('#sc-sync-heading').textContent.includes('상태 확인 지연'));assert.equal(h.nodes.get('#sc-sync-items').innerHTML,'existing pending job');
+ failed=false;await h.hooks.pollSourceAlerts();assert.equal(h.nodes.get('#sc-sync-alert').hidden,true);
 });

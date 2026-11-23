@@ -43,8 +43,17 @@ function matchingSource(row,sources,jobs=[]) {
  }
  return null;
 }
-const summary=row=>({id:row.id,state:row.state,phase:row.phase,message:row.message||
- (row.state==='succeeded'?'스페이스클라우드 원본 반영 완료':row.state==='review'?'스페이스클라우드 원본 확인 필요':'스페이스클라우드 원본 변경을 처리 중입니다.')});
+export const SOURCE_DELAYED_MS=5*60000;
+export function sourceJobSummary(row,now=Date.now()) {
+ const active=['queued','leased','review'].includes(row.state),attempts=Number(row.attempts)||0;
+ const delayed=active&&(attempts>=3||Number.isFinite(row.created_at)&&now-row.created_at>=SOURCE_DELAYED_MS);
+ return {id:row.id,state:row.state,phase:row.phase,attempts,created_at:row.created_at,updated_at:row.updated_at,
+  next_retry_at:row.state==='queued'&&attempts>0?row.retry_at:null,needs_attention:row.state==='review'||delayed,
+  retrying:row.state==='queued'&&attempts>0,message:row.message||
+  (row.state==='succeeded'?'스페이스클라우드 원본 반영 완료':row.state==='review'?'스페이스클라우드 원본 확인 필요':delayed?
+   '스페이스클라우드 반영이 지연되고 있습니다. 서버에서 계속 확인합니다.':'스페이스클라우드 원본 변경을 처리 중입니다.')};
+}
+const summary=sourceJobSummary;
 export async function attachSourceSync(env,rows,sources=[]) {
  if(!rows.length)return rows;
  let jobs=[];
@@ -167,9 +176,12 @@ export async function checkpointSourceSync(env,body,{now=Date.now()}={}) {
    'source-stale':'다른 곳에서 원본을 변경했습니다. 최신 원본을 확인해 주세요.',
    'source-creation-uncertain':'새 룸의 등록 결과를 확인하지 못했습니다. 중복 등록하지 않고 보류했습니다.',
    'source-ambiguous':'동일한 원본이 여러 건 있어 자동 변경을 보류했습니다.'};
-  const message=body.state==='retry'?'스페이스클라우드 연결을 재시도합니다.':reasons[body.error]||'원본이 바뀌었거나 처리 결과 확인이 필요합니다. 중복 실행하지 않고 보류했습니다.';
+  const delay=[60000,120000,300000,600000,900000][Math.min(4,Math.max(0,job.attempts-1))];
+  const message=body.state==='retry'
+   ? (/^(?:source-login|host-calendar-login)$/.test(body.error||'')?'스페이스클라우드 로그인 연결을 확인하며 자동 재시도합니다. 계속 지연되면 서버 로그인을 다시 연결해 주세요.':'스페이스클라우드 연결 오류로 자동 재시도합니다.')
+   :reasons[body.error]||'원본이 바뀌었거나 처리 결과 확인이 필요합니다. 중복 실행하지 않고 보류했습니다.';
   await env.DB.prepare(`UPDATE spacecloud_source_jobs SET state=?3,retry_at=?4,message=?5,updated_at=?6 WHERE id=?1 AND lease_token=?2`)
-   .bind(job.id,body.lease_token,body.state==='retry'?'queued':'review',now+Math.max(60000,Math.min(86400000,Number(body.retry_after_ms)||60000)),message,now).run();
+   .bind(job.id,body.lease_token,body.state==='retry'?'queued':'review',now+Math.max(delay,Math.min(86400000,Number(body.retry_after_ms)||0)),message,now).run();
   return {ok:true};
  }
  throw fail('source-action','지원하지 않는 원본 처리 요청입니다.',400);
