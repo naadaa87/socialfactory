@@ -2254,3 +2254,46 @@ body select:not([multiple]):not([size]), body select:not([multiple])[size="1"] {
   .nav-links a { padding: 10px 6px; }
   .nav-links .nav-cta a.btn { padding: 9px 12px; }
 }
+
+/* ==========================================================================
+   머리말 로그인 · 회원가입 (2026-11-23)
+   - 넓은 화면(1281px 이상): 머리말 위 얇은 줄 오른쪽에 '로그인 | 회원가입'
+   - 메뉴 버튼(☰)이 나오는 화면: 머리말에 '로그인' 버튼(480px 이상), 메뉴를 열면 맨 위에 로그인 · 회원가입
+   - 로그인한 사람에게는 js/main.js 가 '마이페이지 · 로그아웃'으로 바꿔 보여 줍니다.
+   ========================================================================== */
+.site-header a.nav-member { display: none !important; }
+.top-util { display: none; background: var(--bg); border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1; }
+.top-util .tu-in { display: flex; align-items: center; justify-content: flex-end; height: 36px; }
+.top-util a { display: inline-flex; align-items: center; height: 100%; padding: 0 12px; color: var(--navy-80); font-weight: 600; }
+.top-util a:hover { color: var(--blue); }
+.top-util a + a { position: relative; }
+.top-util a + a::before { content: ""; position: absolute; left: 0; top: 50%; width: 1px; height: 11px; margin-top: -5.5px; background: var(--grey); }
+.top-util a.tu-up { color: var(--blue); font-weight: 700; }
+.top-util a.tu-up.is-out { color: var(--navy-80); font-weight: 600; }
+.top-util a:last-child { padding-right: 2px; }
+@media (min-width: 1281px) {
+  .top-util { display: block; }
+  .top-util .container { max-width: 1280px; }
+}
+.na-ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+.nav-acc, .nav-account { display: none; }
+@media (max-width: 1280px) {
+  .nav-account { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 0 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .nav-links .nav-account a { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 10px 12px; border-radius: 12px; border: 1.5px solid var(--grey); background: #fff; color: var(--navy); font-size: 15.5px; font-weight: 700; }
+  .nav-links .nav-account a:hover { border-color: var(--navy); background: #fff; color: var(--navy); }
+  .nav-links .nav-account a.na-up { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .nav-links .nav-account a.na-up:hover { background: var(--blue-dark); border-color: var(--blue-dark); color: #fff; }
+  .nav-links .nav-account a.na-up.is-out { background: #fff; border-color: var(--grey); color: var(--navy); }
+}
+@media (min-width: 480px) and (max-width: 1280px) {
+  .nav-acc { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px 0 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--navy); font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .nav-acc:hover { border-color: var(--navy); color: var(--navy); }
+}
+/* 첫 화면 '회원가입' 버튼 */
+.hero-v3 .actions .h3-join { gap: 6px; padding-left: 18px; padding-right: 20px; }
+.hero-v3 .actions .h3-join .na-ic { width: 17px; height: 17px; color: var(--blue); }
+@media (max-width: 600px) {
+  .hero-v3 .actions .btn-primary { flex-basis: 100%; }
+  .hero-v3 .actions .btn-ghost, .hero-v3 .actions .h3-join { flex: 1 1 0; }
+}
+@media print { .top-util { display: none !important; } }
