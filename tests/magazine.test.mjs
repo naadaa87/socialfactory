@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { markdown, resolveTokens, parseFrontMatter, loadData, build } from '../scripts/magazine.mjs';
+import { markdown, resolveTokens, parseFrontMatter, loadData, build, RSS_LIMIT } from '../scripts/magazine.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -102,10 +102,10 @@ test('사이트맵 · RSS · 메인 페이지에 매거진이 들어 있습니�
   const sitemap = result.contents.get('sitemap.xml');
   const rss = result.contents.get('rss.xml');
   const home = result.contents.get('index.html');
-  for (const p of result.posts) {
-    assert.ok(sitemap.includes(`<loc>${p.url}</loc>`), `사이트맵에 ${p.slug} 없음`);
-    assert.ok(rss.includes(`<link>${p.url}</link>`), `RSS 에 ${p.slug} 없음`);
-  }
+  for (const p of result.posts) assert.ok(sitemap.includes(`<loc>${p.url}</loc>`), `사이트맵에 ${p.slug} 없음`);
+  // RSS 는 최신 글 RSS_LIMIT 편만 싣습니다 (글이 그보다 많아지면 오래된 글은 사이트맵으로만 알립니다)
+  for (const p of result.posts.slice(0, RSS_LIMIT)) assert.ok(rss.includes(`<link>${p.url}</link>`), `RSS 에 ${p.slug} 없음`);
+  assert.equal((rss.match(/<link>https:\/\/socialfactory\.co\.kr\/magazine\/[^<]+<\/link>/g) || []).length, Math.min(result.posts.length, RSS_LIMIT));
   for (const u of ['/story', '/founder', '/magazine']) assert.ok(sitemap.includes(`<loc>https://socialfactory.co.kr${u}</loc>`));
   assert.equal((sitemap.match(/<loc>https:\/\/socialfactory\.co\.kr\/magazine\/[^<]+<\/loc>/g) || []).length, result.posts.length);
   for (const p of result.posts.slice(0, 3)) assert.ok(home.includes(`href="${p.path}"`), `메인 최신 글에 ${p.slug} 없음`);
@@ -114,4 +114,5 @@ test('사이트맵 · RSS · 메인 페이지에 매거진이 들어 있습니�
 
 test('Pages 배포 묶음에 magazine 폴더가 포함됩니다', () => {
   assert.match(read('scripts/build-pages.mjs'), /'magazine'/);
+  for (const dir of ['rooms', 'for']) assert.match(read('scripts/build-pages.mjs'), new RegExp(`'${dir}'`));
 });
