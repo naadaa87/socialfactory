@@ -7,16 +7,25 @@
  */
 import { sameOrigin } from '../_lib/auth.js';
 import { ensureVisitSchema, parseVisitEvent, isBot, deviceOf, classifyRef, visitorHash, kstNow, purgeOldVisits } from '../_lib/visits.js';
+import { pingIndexNow } from '../_lib/indexnow.js';
 
 const done = () => new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
 const PV_LIMIT = 300;   // 같은 방문자(하루 구분값)의 하루 페이지 기록 상한 — 비정상 반복 요청 차단
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+// 새 글 · 바뀐 페이지를 검색엔진에 알리는 확인(IndexNow)을 방문이 있을 때도 한 번씩 깨웁니다.
+// 5분마다 도는 알림 발송기가 멈춰 있어도 알림이 끊기지 않게 하는 보조 장치이며, 실제 확인은 30분에 한 번만 이뤄집니다.
+let seoTriedAt = 0;
+const SEO_RETRY_MS = 10 * 60 * 1000;
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, waitUntil }) {
   try {
     if (!env.DB || !sameOrigin(request)) return done();
     const ua = request.headers.get('user-agent') || '';
     if (isBot(ua)) return done();
+    if (typeof waitUntil === 'function' && Date.now() - seoTriedAt > SEO_RETRY_MS) {
+      seoTriedAt = Date.now();
+      try { waitUntil(pingIndexNow(env, new URL(request.url).origin).catch(() => null)); } catch { /* 무시 */ }
+    }
     const raw = await request.text();
     if (raw.length > 2048) return done();
     let body; try { body = JSON.parse(raw); } catch { return done(); }
