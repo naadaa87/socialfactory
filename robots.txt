@@ -11,4 +11,8 @@ Disallow: /content/
 Disallow: /scripts/
 Disallow: /cdn-cgi/
 
+# AI 검색 도구(ChatGPT · Perplexity · Claude · Gemini 등)의 수집도 위 규칙을 그대로 따릅니다. 따로 막지 않습니다.
+# 사이트 요약: https://socialfactory.co.kr/llms.txt
+
 Sitemap: https://socialfactory.co.kr/sitemap.xml
+Sitemap: https://socialfactory.co.kr/sitemap-community.xml

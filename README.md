@@ -94,6 +94,8 @@ js/admin-passes.js        관리자 '고객 · 이용권' 화면 동작
 schema-upgrade-passes.sql 토스프론트 이용권 표 (관리자 로그인 때 자동으로 만들어져 보통은 실행하지 않아도 됨)
 _headers          보안 · 캐시 헤더
 robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 7번 참고)
+llms.txt, <열쇠>.txt              AI 검색용 사이트 요약, 검색엔진 알림(IndexNow) 열쇠 파일 (README 7번 '검색 노출 강화')
+rooms/, for/, coworking.html, office.html   방별 · 용도별 · 코워킹 · 독립사무실 안내 페이지 (content/landing/ 에서 생성)
 ```
 
 ## 0. 공개 전에 꼭 정할 것
@@ -142,6 +144,7 @@ robots.txt, sitemap.xml, rss.xml   검색엔진용 (README 7번 참고)
 5. **Commit changes** 클릭
 
 이미 저장소가 있다면 바뀐 파일만 같은 자리에 다시 올리면 됩니다.
+- 2026-11-27 검색 노출 강화(방별 · 용도별 · 코워킹 · 독립사무실 안내 페이지, 매거진 요점 상자, 사이트맵 수정일, IndexNow, llms.txt): html 전부(머리글 · 바닥글 링크), `rooms/` · `for/` · `coworking.html` · `office.html` · `llms.txt` · `css/landing.css` · `scripts/landing.mjs` · `scripts/seo.mjs` · `content/landing/` · `content/seo/` · `functions/_lib/indexnow.js` · `functions/sitemap-community.xml.js` · `tests/seo.test.mjs`(새 파일), `scripts/magazine.mjs` · `scripts/build-pages.mjs` · `functions/api/notify/run.js` · `css/magazine.css` · `robots.txt` · `sitemap.xml` · `rss.xml` · `content/magazine/` · `magazine/` · `README.md` (README 7번 '검색 노출 강화')
 - 2026-10-19 관리자 화면 개편(메가스팟 관리자와 같은 구성) · 예약 등록(30분 단위) · 결제수단별 매출: `admin.html`, `css/admin.css` · `js/admin.js`(새 파일), `functions/_lib/admin.js` · `functions/api/admin/` 의 `login.js` · `logout.js` · `session.js` · `dashboard.js` · `reservations.js` · `sales.js`(새 파일), `functions/_lib/auth.js` · `functions/api/admin/stats.js` · `orders.js` · `members.js` · `functions/api/inquiry.js`, `schema.sql`, `schema-upgrade-reservations.sql`(새 파일), `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-17 패밀리 브랜드 연결(푸터 FAMILY SITES · 패밀리 페이지 · 본문 연결): html 전부(`admin.html` 제외), `family.html`(새 파일), `product/` 5개, `css/style.css`, `js/main.js`, `js/site-config.js`, `README.md`, `sitemap.xml`, `rss.xml`
 - 2026-10-14 카카오톡 문의 버튼 곳곳에 추가(헤더 · 오른쪽 아래 버튼 · 각 페이지): html 전부(`admin.html` 제외), `product/` 5개, `tour.html`, `css/style.css`, `js/main.js` · `js/estimate.js` · `js/shop.js` · `js/site-config.js`, `README.md`, `rss.xml`
@@ -512,6 +515,23 @@ Preview에는 운영 키를 복사하지 않습니다. 키가 누락되거나 �
 - `js/site-config.js` 에 대표 전화번호(`contact.phone`)를 넣으면 검색엔진용 업체 정보에도 함께 들어갑니다. 지도에 등록한 번호와 같은 번호로 넣어 주세요.
 - 오시는 길(`directions`)은 출구 번호와 도보 시간을 확인해 '건대입구역 ○번 출구에서 도보 ○분'처럼 적으면 검색과 방문자 모두에게 도움이 됩니다. 주차(`parking`)와 승강기(`elevator`)도 확인되는 대로 채워 주세요.
 - 페이지를 새로 만들거나 크게 바꾸면 서치어드바이저·서치 콘솔에서 해당 주소의 수집을 다시 요청합니다.
+
+### 검색 노출 강화 (2026-11-27)
+
+검색하는 사람은 '건대 회의실 16명', '건대 스터디카페', '건대 1인 사무실'처럼 찾는 것을 좁혀서 칩니다. 그 말에 꼭 맞는 페이지를 만들고, 검색엔진과 AI 검색이 같은 사실을 같은 숫자로 읽도록 정리했습니다.
+
+- **새 안내 페이지 13개** — 방별 `/rooms/1`~`/rooms/5`, 용도별 `/for/seminar` · `/for/class` · `/for/study` · `/for/meeting` · `/for/workshop` · `/for/gathering`, `/coworking`, `/office`.
+  원본은 `content/landing/` 의 `rooms.mjs` · `uses.mjs` · `work.mjs` 이고, `node scripts/magazine.mjs` 가 매거진과 함께 만듭니다(`scripts/landing.mjs`). **만들어진 html(`rooms/`, `for/`, `coworking.html`, `office.html`)은 직접 고치지 않습니다.**
+  요금 · 최대 인원은 `js/booking-rates.js` · `js/site-config.js` 값으로 채워지므로, 요금을 바꾼 뒤 스크립트를 한 번 실행하면 이 페이지들도 함께 바뀝니다. 스타일은 `css/landing.css`.
+- **메뉴 연결** — 모든 페이지 머리글 · 바닥글의 '코워킹' · '독립사무실'이 새 페이지로 갑니다. 메인의 방 카드와 '이런 공간을 찾고 있다면' 카드, 공간 안내의 방별 '자세히 보기', 이용 안내의 '더 자세한 안내'도 새 페이지로 이어집니다.
+- **구조화 데이터** — 방별 페이지에 방(MeetingRoom) · 요금 범위 · 예약 동작, 코워킹 · 독립사무실에 이용권 · 월 이용료, 모든 안내 페이지에 경로(BreadcrumbList)와 그 페이지의 질문 · 답(FAQPage)을 넣었습니다. 같은 질문이 여러 페이지에 겹쳐 표기되지 않도록 메인은 4문항만, 문의 페이지는 표기를 뺐고 이용 안내가 원본입니다. 화면의 글과 표기가 다르면 `tests/seo.test.mjs` 가 알려 줍니다.
+- **매거진** — 글 맨 위 '이 글의 요점'(`summary`), 글 끝 '소셜팩토리 건대 한눈에 보기'와 '이 글과 이어지는 안내'가 붙습니다. 검색 결과 제목(`seoTitle`)은 42자 이하로 줄였습니다. 쓰는 법은 `content/magazine/EDITORIAL.md` 4장.
+- **사이트맵** — `sitemap.xml` 의 수정일은 본문이 실제로 바뀐 페이지만 바뀝니다. `node scripts/seo.mjs` 가 `content/seo/lastmod.json` 에 적어 둔 지문과 견주어 고치고, 배포할 때(`scripts/build-pages.mjs`)도 같은 계산을 한 번 더 합니다. 커뮤니티 글은 `/sitemap-community.xml`(`functions/sitemap-community.xml.js`)로 따로 알립니다. `robots.txt` 에 두 사이트맵이 모두 적혀 있습니다.
+- **검색엔진에 바로 알리기(IndexNow)** — 새 글이 올라오거나 페이지 수정일이 바뀌면 네이버 · 빙에 주소를 자동으로 보냅니다(`functions/_lib/indexnow.js`). 5분마다 도는 알림 발송기(`/api/notify/run`)가 부르고 실제 확인은 30분에 한 번입니다. 맨 위 폴더의 `33d5c77fcb07b5c41db66852fecae5ce.txt` 는 그 열쇠 파일이라 지우면 안 됩니다. 알린다고 색인이 보장되지는 않습니다.
+- **AI 검색** — `llms.txt`(사이트 요약)를 두었습니다. 구글은 이 파일을 쓰지 않는다고 밝혔고 다른 AI 도구의 사용 여부도 확인된 바가 적어, 사실을 한곳에 모아 두는 용도입니다. AI 검색에 인용되는 데 더 중요한 것은 페이지 자체의 글입니다(질문을 소제목으로, 답을 첫 문장에, 숫자는 어디서나 같게). `robots.txt` 는 AI 검색 로봇을 막지 않습니다. Cloudflare 대시보드의 **Security → Bots → 'Block AI bots'** 가 켜져 있으면 AI 검색 도구가 사이트를 읽지 못하니 꺼 둡니다.
+- **점검** — `node scripts/seo.mjs --check` 가 검색에 나오는 페이지의 제목 · 설명 · 대표 주소 · h1 · 구조화 데이터 문법 · 사이트맵 포함 여부를 확인합니다.
+- **새 페이지를 더할 때** — `sitemap.xml` 에 주소를 넣고(`<!-- MAGAZINE -->` 구역 밖), 제목(60자 이하) · 설명(60~160자) · canonical · h1 한 개를 갖춘 뒤 `node scripts/seo.mjs --check` 로 확인합니다. 하위 폴더에 html 을 두면 `scripts/build-pages.mjs` 의 폴더 목록에도 넣어야 배포됩니다.
+- **운영에서 채울 것** — 지도 3곳(네이버 스마트플레이스 · 구글 비즈니스 프로필 · 카카오맵)의 상호 · 주소 · 전화 · 운영 시간을 홈페이지와 똑같이 맞춥니다. 홈페이지는 지번 주소(화양동 10-1)를, 주차 안내는 도로명 주소(능동로13길 39)를 쓰고 있으니 지도에 등록한 표기 하나로 통일하는 편이 좋습니다. 좌표 · 대표 전화 · 지도 주소 · 인스타그램은 `js/site-config.js` 와 메인의 업체 정보에 아직 비어 있습니다.
 
 ## 브랜드 기준
 
