@@ -7,6 +7,7 @@ time: "12:00"
 category: meeting
 description: 연말 팀 회고를 두 시간 안에 끝내는 KPT 진행표 예시입니다. Keep · Problem · Try 순서와 시간 배분, 진행자가 지킬 원칙, 준비물, 인원별 건대입구 회의실 · 세미나실 고르기와 비용 계산까지 정리했습니다.
 lead: 한 해를 돌아보고 싶어도 연말 일정 사이에 반나절을 비우기는 어렵습니다. Keep · Problem · Try 세 칸으로 나누면 두 시간 안에 돌아보기부터 내년에 해 볼 일까지 정할 수 있습니다.
+summary: ["KPT 회고는 Keep · Problem · Try 세 칸으로 한 해를 돌아보는 방식입니다.", "KPT 앞에 타임라인 15분을 넣으면 상반기 일까지 고르게 떠올릴 수 있습니다.", "준비와 정리 15분씩을 넣으면 예약은 2시간 30분이 됩니다."]
 cover: images/space/room-3-02-front-20261118.webp
 coverAlt: 3번룸 긴 회의 테이블을 정면에서 바라본 구도, 양옆 회색 의자와 안쪽 칠판
 ogImage: images/og/year-end-team-retrospective-kpt-20261118.jpg

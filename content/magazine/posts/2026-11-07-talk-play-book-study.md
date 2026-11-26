@@ -1,12 +1,13 @@
 ---
 title: TALK · PLAY · BOOK · STUDY, 네 가지 시간으로 여는 모임
-seoTitle: 소셜팩토리의 네 가지 시간 · TALK PLAY BOOK STUDY 모임 아이디어
+seoTitle: TALK · PLAY · BOOK · STUDY, 소셜팩토리의 네 가지 모임
 slug: talk-play-book-study
 date: 2026-11-07
 time: 01:00
 category: story
 description: 소셜팩토리 로고의 네 개의 원은 TALK · PLAY · BOOK · STUDY 네 가지 시간을 뜻합니다. 각각의 시간에 어울리는 모임 아이디어와 소셜팩토리 건대에서 맞는 방, 배치를 함께 소개합니다.
 lead: 소셜팩토리의 보조 심볼은 네 개의 원입니다. 테이블에 모여 앉은 사람들이자, 이곳에서 보내는 네 가지 시간을 뜻합니다.
+summary: ["소셜팩토리 로고의 원 네 개는 TALK · PLAY · BOOK · STUDY 네 가지 시간을 뜻합니다.", "이야기하는 모임, 만들고 노는 모임, 읽고 쓰는 모임, 배우는 모임마다 맞는 방과 배치가 다릅니다.", "강사와 모임장이 프로그램을 열고 소셜팩토리가 공간을 맡는 방식은 건대에서도 이어집니다."]
 cover: images/scenes/13-book-club.webp
 coverAlt: 테이블에 둘러앉아 책을 펼쳐 놓고 이야기하는 독서모임
 coverNote: 공간 활용 예시 이미지입니다.
