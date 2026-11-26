@@ -6,6 +6,8 @@
    content/magazine/posts/*.md             → magazine/<slug>.html (글 한 편)
                                            → magazine.html (매거진 목록)
    content/pages/*.html                    → story.html, founder.html (브랜드 스토리 · 대표 이야기)
+   content/landing/*.mjs                   → rooms/*.html, for/*.html, coworking.html, office.html (검색용 안내 페이지 · scripts/landing.mjs)
+                                           → llms.txt (AI 검색 도구용 사이트 요약)
    그리고 index.html 의 '최신 글' 칸, sitemap.xml, rss.xml 의 매거진 구역을 다시 씁니다.
 
    실행:  node scripts/magazine.mjs          만들기
@@ -20,6 +22,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { landingPages, llmsTxt, hubsFor, factsBox, LANDING_ROUTES } from './landing.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SITE = 'https://socialfactory.co.kr';
@@ -29,6 +32,8 @@ const OUT_DIR = 'magazine';
 const TEMPLATE = 'about.html';
 const SITE_NAME = '소셜팩토리';
 const MAG_NAME = '소셜팩토리 매거진';
+/* RSS 에 싣는 최신 글 수 — 네이버 등 수집기가 새 글을 찾는 용도라 최근 글만 싣습니다 */
+export const RSS_LIMIT = 50;
 
 export const CATEGORIES = {
   space:   { name: '공간 가이드',      en: 'Space Guide' },
@@ -41,7 +46,7 @@ export const CATEGORIES = {
 
 /* 본문 안에서 쓸 수 있는 내부 주소 — 이 목록에 없는 / 주소는 검사에서 오류로 잡습니다 */
 const ROUTES = ['/', '/space', '/pricing', '/booking', '/guide', '/contact', '/about', '/story', '/founder', '/history',
-  '/family', '/shop', '/program', '/parking', '/tour', '/magazine', '/guest-orders', '/terms', '/privacy'];
+  '/family', '/shop', '/program', '/parking', '/tour', '/magazine', '/guest-orders', '/terms', '/privacy', '/play', '/community', ...LANDING_ROUTES];
 
 /* AI 같은 말투나 과장 표현 — 검사에서 경고(일부는 오류)로 알려 줍니다 */
 const BANNED = [
@@ -257,12 +262,13 @@ export function loadTemplate() {
     style: '/' + style[1],
     fonts: fonts ? fonts[1] : 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css',
     magCss: `/css/magazine.css?v=${hash(magCss)}`,
+    landingCss: `/css/landing.css?v=${hash(read('css/landing.css'))}`,
     header: absolutize(t.slice(bodyStart + '<body>'.length, mainStart)).trim(),
     footer: absolutize(t.slice(mainEnd + '</main>'.length, bodyEnd)).trim()
   };
 }
 
-function pageShell(tpl, { title, description, canonical, ogType = 'website', image, imageAlt, ld, extraHead = '', main, source, robots = 'index, follow, max-image-preview:large' }) {
+function pageShell(tpl, { title, description, canonical, ogType = 'website', image, imageAlt, ld, extraHead = '', main, source, css = [], robots = 'index, follow, max-image-preview:large' }) {
   const img = image ? (image.startsWith('http') ? image : SITE + '/' + image.replace(/^\//, '')) : `${SITE}/images/og-image.jpg`;
   const imgRel = image && !image.startsWith('http') ? image.replace(/^\//, '') : 'images/og-image.jpg';
   const dim = imageSize(imgRel);
@@ -299,7 +305,8 @@ function pageShell(tpl, { title, description, canonical, ogType = 'website', ima
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="${tpl.fonts}">
   <link rel="stylesheet" href="${tpl.style}">
-  <link rel="stylesheet" href="${tpl.magCss}">
+  <link rel="stylesheet" href="${tpl.magCss}">${css.map((href) => `
+  <link rel="stylesheet" href="${href}">`).join('')}
   <script type="application/ld+json" id="sf-ldjson">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>
 </head>
 <body>
@@ -326,7 +333,7 @@ export function loadPosts(data, { includeFuture = false } = {}) {
     const src = fs.readFileSync(path.join(dir, file), 'utf8');
     const { meta, body } = parseFrontMatter(src);
     const where = `${POSTS_DIR}/${file}`;
-    const m = {}; for (const [k, v] of Object.entries(meta)) m[k] = typeof v === 'string' ? resolveTokens(v, data, where) : v;
+    const m = {}; for (const [k, v] of Object.entries(meta)) m[k] = typeof v === 'string' ? resolveTokens(v, data, where) : Array.isArray(v) ? v.map((x) => typeof x === 'string' ? resolveTokens(x, data, where) : x) : v;
     const md = markdown(resolveTokens(body, data, where));
     const text = plainText(md.blocks.filter((b) => typeof b === 'string').join(' '));
     const post = {
@@ -334,6 +341,7 @@ export function loadPosts(data, { includeFuture = false } = {}) {
       time: m.time || '12:00',
       tags: Array.isArray(m.tags) ? m.tags : [],
       related: Array.isArray(m.related) ? m.related : [],
+      summary: Array.isArray(m.summary) ? m.summary : [],
       url: `${SITE}/magazine/${m.slug}`, path: `/magazine/${m.slug}`,
       minutes: Math.max(2, Math.round(text.length / 550))
     };
@@ -369,7 +377,7 @@ function ctaBlock(kind) {
     rooms: ['모임 날짜가 정해졌다면', '방과 날짜, 시간을 고르면 홈페이지에서 바로 예약을 신청할 수 있습니다. 어떤 방이 맞을지 아직 고민된다면 일자 · 시간 · 인원 · 모임 유형 네 가지만 카카오톡으로 보내 주세요.',
       `<a class="btn btn-primary" href="/booking">방과 일정 골라 예약 신청</a><a class="btn btn-outline" href="/pricing#estimate">예상 금액 계산</a>${kk('카카오톡 문의')}`],
     work: ['혼자 일하거나 공부할 자리를 찾고 있다면', '코워킹은 현장 무인 키오스크에서 이용권을 골라 바로 쓰고, 독립사무실은 월 단위로 상담 후 이용합니다.',
-      `<a class="btn btn-primary" href="/space#coworking">코워킹 안내</a><a class="btn btn-outline" href="/space#office">독립사무실 안내</a>${kk('카카오톡 문의')}`],
+      `<a class="btn btn-primary" href="/coworking">코워킹 안내</a><a class="btn btn-outline" href="/office">독립사무실 안내</a>${kk('카카오톡 문의')}`],
     host: ['소셜팩토리에서 모임이나 클래스를 열고 싶다면', '강사, 호스트, 모임장과 함께 공간과 시간, 운영 방식을 맞춰 갑니다. 정기 클래스나 제휴는 따로 조건을 안내해 드립니다.',
       `<a class="btn btn-primary" href="/program#host">함께하는 방법 보기</a><a class="btn btn-outline" href="/contact?purpose=partner#inquiry">제휴 · 협업 문의</a>${kk('카카오톡으로 미팅 요청')}`],
     story: ['소셜팩토리 건대에서 이어지는 이야기', '2015년 홍대에서 시작한 소셜팩토리는 지금 건대입구역 근처 한아름건물 4층 한 층 전체를 운영합니다. 공간과 이용 방법을 먼저 둘러보세요.',
@@ -392,17 +400,19 @@ function relatedFor(post, posts) {
 /* --------------------------------------------------------------------------
    글 한 편
    -------------------------------------------------------------------------- */
-function renderPost(tpl, post, posts) {
+function renderPost(tpl, post, posts, data) {
   const cat = CATEGORIES[post.category];
   const ogImg = post.ogImage && exists(post.ogImage) ? post.ogImage : exists(`images/og/${post.slug}.jpg`) ? `images/og/${post.slug}.jpg` : post.cover;
   const body = post.body.blocks.map((b) => typeof b === 'string' ? b : figureHtml(b.figure)).join('\n');
   const toc = post.body.toc.length >= 3 ? `<nav class="mz-toc" aria-label="이 글의 차례"><strong>이 글의 차례</strong><ol>${post.body.toc.map((t) => `<li><a href="#${t.id}">${inline(t.text)}</a></li>`).join('')}</ol></nav>` : '';
   const related = relatedFor(post, posts);
+  const hubs = hubsFor(post);
   const ld = { '@context': 'https://schema.org', '@graph': [
     { '@type': 'BlogPosting', '@id': `${post.url}#article`, headline: post.title, description: post.description,
       image: [SITE + '/' + ogImg.replace(/^\//, ''), SITE + '/' + post.cover.replace(/^\//, '')].filter((v, i, a) => a.indexOf(v) === i),
       datePublished: post.iso, dateModified: post.updatedIso, inLanguage: 'ko-KR', articleSection: cat.name,
       keywords: post.tags.join(', '), wordCount: post.text.length,
+      ...(post.summary.length ? { abstract: post.summary.join(' ') } : {}),
       author: { '@type': 'Organization', '@id': `${SITE}/#org`, name: SITE_NAME, url: `${SITE}/` },
       publisher: { '@type': 'Organization', '@id': `${SITE}/#org`, name: SITE_NAME, logo: { '@type': 'ImageObject', url: `${SITE}/apple-touch-icon.png` } },
       mainEntityOfPage: { '@type': 'WebPage', '@id': post.url }, isPartOf: { '@type': 'Blog', '@id': `${SITE}/magazine#blog`, name: MAG_NAME },
@@ -431,7 +441,10 @@ function renderPost(tpl, post, posts) {
 <div class="container mz-layout">
   ${toc ? `<div class="mz-side">${toc}</div>` : ''}
   <div class="mz-prose">
+${post.summary.length ? `<aside class="mz-summary" aria-label="이 글의 요점"><strong>이 글의 요점</strong><ul>${post.summary.map((t) => `<li>${inline(t)}</li>`).join('')}</ul></aside>` : ''}
 ${body}
+${factsBox(data, esc)}
+${hubs.length ? `<nav class="mz-hubs" aria-label="이어지는 안내"><strong>이 글과 이어지는 안내</strong><ul>${hubs.map((x) => `<li><a href="${x.href}">${esc(x.label)} →</a></li>`).join('')}</ul></nav>` : ''}
 ${post.tags.length ? `<ul class="mz-tags" aria-label="관련 검색어">${post.tags.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
 ${ctaBlock(post.cta || defaultCta(post.category))}
   </div>
@@ -542,7 +555,7 @@ function renderPage(tpl, page, posts) {
     return `<div class="mz-grid">${[...list, ...fill].map((p) => card(p)).join('')}</div>`;
   });
   return pageShell(tpl, { title: page.meta.title, description: page.meta.description, canonical: page.url, image: page.meta.image, imageAlt: page.meta.imageAlt,
-    ogType: page.meta.ogType || 'website', ld: page.meta.ld, main, source: page.file });
+    ogType: page.meta.ogType || 'website', ld: page.meta.ld, main, source: page.file, css: page.landing ? [tpl.landingCss] : [] });
 }
 
 /* --------------------------------------------------------------------------
@@ -566,7 +579,7 @@ function sitemapXml(src, posts, pages) {
   const pageLast = (p) => p.meta.lastmod || idx;
   const img = (rel) => `<image:image><image:loc>${SITE}/${rel.replace(/^\//, '')}</image:loc></image:image>`;
   const rows = [
-    ...pages.map((p) => `  <url><loc>${p.url}</loc><lastmod>${pageLast(p)}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority>${(p.meta.images || []).map(img).join('')}</url>`),
+    ...pages.map((p) => `  <url><loc>${p.url}</loc><lastmod>${pageLast(p)}</lastmod><changefreq>${p.meta.changefreq || 'monthly'}</changefreq><priority>${p.meta.priority || '0.7'}</priority>${(p.meta.images || []).map(img).join('')}</url>`),
     `  <url><loc>${SITE}/magazine</loc><lastmod>${idx}</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>`,
     ...posts.map((p) => `  <url><loc>${p.url}</loc><lastmod>${p.updatedIso.slice(0, 10)}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority>${img(p.cover)}</url>`)
   ];
@@ -576,7 +589,7 @@ function sitemapXml(src, posts, pages) {
 
 function rssXml(src, posts, pages) {
   const cdata = (s) => `<![CDATA[${String(s).replace(/]]>/g, ']]]]><![CDATA[>')}]]>`;
-  const items = posts.slice(0, 30).map((p) => `    <item><title>${esc(p.title)}</title><link>${p.url}</link><guid isPermaLink="true">${p.url}</guid><category>${esc(CATEGORIES[p.category].name)}</category><description>${cdata(p.description)}</description><pubDate>${rfc822(p.iso)}</pubDate></item>`);
+  const items = posts.slice(0, RSS_LIMIT).map((p) => `    <item><title>${esc(p.title)}</title><link>${p.url}</link><guid isPermaLink="true">${p.url}</guid><category>${esc(CATEGORIES[p.category].name)}</category><description>${cdata(p.description)}</description><pubDate>${rfc822(p.iso)}</pubDate></item>`);
   const pageItems = pages.map((p) => `    <item><title>${esc(p.meta.title)}</title><link>${p.url}</link><guid isPermaLink="true">${p.url}</guid><description>${cdata(p.meta.description)}</description><pubDate>${rfc822((p.meta.lastmod || '2026-11-07') + 'T00:00:00+09:00')}</pubDate></item>`);
   if (!src.includes('<!-- MAGAZINE:START -->')) src = src.replace(/(<lastBuildDate>[^<]*<\/lastBuildDate>\n)/, '$1    <!-- MAGAZINE:START -->\n    <!-- MAGAZINE:END -->\n');
   let out = replaceBetween(src, '<!-- MAGAZINE:START -->', '<!-- MAGAZINE:END -->', `\n${[...items, ...pageItems].join('\n')}\n    `, 'rss.xml');
@@ -600,6 +613,10 @@ export function checkPosts(posts) {
     if (p.time && !/^\d{2}:\d{2}$/.test(p.time)) errors.push(`${at}: time 형식은 HH:MM 입니다`);
     if (p.category && !CATEGORIES[p.category]) errors.push(`${at}: category 는 ${Object.keys(CATEGORIES).join(' · ')} 중 하나입니다`);
     if (p.title && p.title.length > 44) warnings.push(`${at}: 제목이 깁니다(${p.title.length}자, 44자 이하 권장)`);
+    if (p.seoTitle && p.seoTitle.length > 42) warnings.push(`${at}: seoTitle 이 깁니다(${p.seoTitle.length}자, 42자 이하 권장 — 검색 결과에서 뒤가 잘립니다)`);
+    if (p.summary.length && (p.summary.length < 2 || p.summary.length > 4)) errors.push(`${at}: summary 는 2~4줄로 씁니다 (지금 ${p.summary.length}줄)`);
+    for (const t of p.summary) if (typeof t !== 'string' || t.length < 15 || t.length > 110) errors.push(`${at}: summary 한 줄은 15~110자로 씁니다 (${String(t).length}자: ${String(t).slice(0, 20)}…)`);
+    if (!p.summary.length) warnings.push(`${at}: summary(이 글의 요점 2~4줄)가 없습니다 — EDITORIAL.md 4장`);
     if (p.description && (p.description.length < 60 || p.description.length > 160)) errors.push(`${at}: description 은 60~160자로 씁니다 (지금 ${p.description.length}자)`);
     if (p.cover && !exists(p.cover.replace(/^\//, ''))) errors.push(`${at}: 대표 이미지가 없습니다 (${p.cover})`);
     if (p.text.length < 1500) errors.push(`${at}: 본문이 짧습니다 (${p.text.length}자, 1,500자 이상)`);
@@ -616,7 +633,7 @@ export function checkPosts(posts) {
     }
     for (const b of p.body.blocks) if (typeof b !== 'string' && !exists(b.figure.src.replace(/^\//, ''))) errors.push(`${at}: 본문 이미지가 없습니다 (${b.figure.src})`);
     for (const s of p.related) if (!posts.some((x) => x.slug === s)) warnings.push(`${at}: related 의 ${s} 글이 없습니다`);
-    const all = `${p.title} ${p.description} ${p.text}`;
+    const all = `${p.title} ${p.description} ${p.summary.join(' ')} ${p.text}`;
     for (const [w, level] of BANNED) {
       const n = all.split(w).length - 1;
       if (!n) continue;
@@ -635,17 +652,18 @@ export function checkPosts(posts) {
 export function build({ write = true } = {}) {
   const data = loadData();
   const posts = loadPosts(data);
-  const pages = loadPages(data);
   const result = checkPosts(posts);
-  if (result.errors.length) return { ...result, posts, pages, files: [], contents: new Map(), changed: [] };
+  if (result.errors.length) return { ...result, posts, pages: [], files: [], contents: new Map(), changed: [] };
+  const pages = [...loadPages(data), ...landingPages(data, posts, { esc, imageSize, smallOf, card, resolveTokens, KAKAO, KAKAO_SVG })];
   const tpl = loadTemplate();
   const files = new Map();
-  for (const p of posts) files.set(`${OUT_DIR}/${p.slug}.html`, renderPost(tpl, p, posts));
+  for (const p of posts) files.set(`${OUT_DIR}/${p.slug}.html`, renderPost(tpl, p, posts, data));
   files.set('magazine.html', renderIndex(tpl, posts));
   for (const pg of pages) files.set(pg.out, renderPage(tpl, pg, posts));
   files.set('index.html', homeHtml(read('index.html'), posts, tpl));
   files.set('sitemap.xml', sitemapXml(read('sitemap.xml'), posts, pages));
   files.set('rss.xml', rssXml(read('rss.xml'), posts, pages));
+  files.set('llms.txt', llmsTxt(data));
   const changed = [];
   if (write) {
     fs.mkdirSync(path.join(ROOT, OUT_DIR), { recursive: true });
@@ -656,6 +674,7 @@ export function build({ write = true } = {}) {
     for (const [rel, content] of files) {
       const abs = path.join(ROOT, rel);
       if (fs.existsSync(abs) && fs.readFileSync(abs, 'utf8') === content) continue;
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
       fs.writeFileSync(abs, content); changed.push(rel);
     }
   }
