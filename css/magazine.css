@@ -207,3 +207,29 @@ a.mz-cat:hover { background: var(--blue-50); color: var(--blue-dark); }
   .st-values li { padding: 22px 22px 22px 64px; }
   .st-values li::before { left: 22px; top: 22px; }
 }
+
+/* ---------- 글 위 요점 · 글 끝 한눈에 보기 · 이어지는 안내 ---------- */
+.mz-summary { margin: 0 0 36px; padding: 24px 26px; background: var(--blue-25); border-radius: 16px; }
+.mz-summary strong { display: block; font-size: 14px; letter-spacing: 0.02em; color: var(--blue); margin-bottom: 10px; }
+.mz-summary ul { margin: 0 !important; padding: 0 !important; }
+.mz-summary li { position: relative; margin: 0 !important; padding: 0 0 8px 18px !important; font-size: 16px; line-height: 1.75; color: var(--navy); }
+.mz-summary li:last-child { padding-bottom: 0 !important; }
+.mz-summary li::before { content: "" !important; position: absolute; left: 0; top: 12px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue) !important; }
+.mz-summary li::after { content: none !important; }
+.mz-facts { margin: 48px 0 0; padding: 24px 26px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.mz-facts > strong { display: block; font-size: 16px; font-weight: 800; color: var(--navy); margin-bottom: 14px; }
+.mz-facts dl { margin: 0; display: grid; gap: 0; }
+.mz-facts dl > div { display: grid; grid-template-columns: 84px 1fr; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; line-height: 1.65; }
+.mz-facts dt { color: var(--muted); font-weight: 700; }
+.mz-facts dd { margin: 0; color: var(--navy-80); }
+.mz-hubs { margin: 28px 0 0; }
+.mz-hubs > strong { display: block; font-size: 14px; font-weight: 700; color: var(--muted); margin-bottom: 10px; }
+.mz-hubs ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 !important; padding: 0 !important; }
+.mz-hubs li { margin: 0 !important; padding: 0 !important; }
+.mz-hubs li::before, .mz-hubs li::after { content: none !important; display: none !important; }
+.mz-hubs a { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: 999px; border: 1.5px solid var(--blue-50); background: #fff; color: var(--blue); font-size: 14.5px; font-weight: 700; text-decoration: none !important; }
+.mz-hubs a:hover { border-color: var(--blue); }
+@media (max-width: 760px) {
+  .mz-summary, .mz-facts { padding: 20px; }
+  .mz-facts dl > div { grid-template-columns: 68px 1fr; }
+}

@@ -1,0 +1,165 @@
+/* ==========================================================================
+   방별 · 용도별 · 코워킹 · 독립사무실 안내 페이지 (scripts/landing.mjs 가 만드는 페이지)
+   기본 스타일(style.css)의 색 · 서체 · 버튼 · 표 · FAQ 를 그대로 쓰고, 이 파일에는 이 페이지들만의 배치를 둡니다.
+   ========================================================================== */
+
+/* ---------- 첫 화면 ---------- */
+.lp-hero { padding-bottom: 56px; }
+.lp-hero h1 { max-width: 900px; }
+.lp-hero .lead { max-width: 760px; color: var(--navy-80); }
+.lp-hero .actions { margin-top: 28px; }
+.lp-hero.with-media { padding-bottom: 0; }
+.lp-hero.with-media .hero-media { margin-top: 40px; }
+
+/* 핵심 정보 여섯 칸 — 검색으로 들어온 사람이 가장 먼저 찾는 숫자 */
+.lp-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 36px 0 0; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.lp-facts > div { padding: 18px 22px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
+.lp-facts > div:nth-child(3n) { border-right: 0; }
+.lp-facts > div:nth-last-child(-n+3) { border-bottom: 0; }
+.lp-facts dt { font-size: 12.5px; font-weight: 700; color: var(--muted); letter-spacing: 0.01em; }
+.lp-facts dd { margin: 4px 0 0; font-size: 16px; font-weight: 700; color: var(--navy); line-height: 1.45; }
+
+/* ---------- 사진 ---------- */
+.lp-gallery { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; }
+.lp-gallery a { display: block; border-radius: 16px; overflow: hidden; background: var(--bg); }
+.lp-gallery img { width: 100%; height: 100%; object-fit: cover; transition: transform .4s ease; }
+.lp-gallery a:hover img { transform: scale(1.02); }
+.lp-gallery .lg-main img { aspect-ratio: 16 / 10; }
+.lp-gallery .lg-side { display: grid; gap: 12px; grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.lp-gallery .lg-side.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lp-gallery .lg-side.three a:first-child { grid-column: 1 / -1; }
+.lp-gallery .lg-side img { aspect-ratio: 16 / 9.6; }
+.lp-gallery-note { margin-top: 12px; }
+
+/* ---------- 본문 배치 ---------- */
+.lp-two { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 56px; align-items: start; }
+.lp-two.even { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lp-copy h2 { margin-bottom: 18px; }
+.lp-copy p { color: var(--navy-80); font-size: 16.5px; line-height: 1.85; }
+.lp-copy p + p { margin-top: 14px; }
+.lp-copy .rd-specs { margin-top: 28px; }
+.lp-copy .rd-specs > div { grid-template-columns: 104px 1fr; font-size: 15px; }
+.lp-side { background: var(--bg); border-radius: var(--radius); padding: 30px; }
+.section.bg .lp-side { background: #fff; border: 1px solid var(--line); }
+.lp-side h2, .lp-side h3 { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 18px; }
+
+/* 이런 모임에 맞습니다 */
+.lp-fits li { padding: 14px 0; border-top: 1px solid var(--line); }
+.lp-fits li:first-child { border-top: 0; padding-top: 0; }
+.lp-fits li:last-child { padding-bottom: 0; }
+.lp-fits strong { display: block; font-size: 16px; color: var(--navy); }
+.lp-fits span { display: block; margin-top: 4px; font-size: 14.5px; color: var(--muted); line-height: 1.65; }
+
+/* 배치 이름표 */
+.lp-layouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lp-layouts li { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.lp-layouts strong { display: block; font-size: 15px; }
+.lp-layouts span { display: block; margin-top: 2px; font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+
+/* 요금 */
+.lp-rate .rate-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 0; }
+.lp-rate .rate-grid > div { padding: 16px 18px; border-radius: 14px; }
+.lp-rate .rate-grid .v { font-size: 22px; }
+.lp-rate .rate-grid .k { font-size: 13px; }
+.lp-rate .rate-grid .t { font-size: 12.5px; }
+.lp-sub { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; margin: 40px 0 16px; }
+.lp-table table.table { min-width: 560px; }
+.lp-table td.num, .lp-table th.num { text-align: right; white-space: nowrap; }
+.lp-table.wide table.table { min-width: 720px; }
+.lp-table.wide th, .lp-table.wide td { white-space: nowrap; }
+.lp-table td.strong { white-space: nowrap; }
+.lp-table td.num { font-weight: 700; color: var(--navy); }
+.lp-table tr.is-here td { background: var(--blue-25); }
+.lp-table tr.is-here td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+.lp-table td a { color: var(--blue); font-weight: 700; }
+.lp-links { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 18px; }
+.lp-links a { color: var(--blue); font-weight: 700; font-size: 15px; padding: 6px 0; }
+
+/* 순서 */
+.lp-steps.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* 점검 목록 */
+.lp-checks { counter-reset: lpc; max-width: 860px; }
+.lp-checks li { counter-increment: lpc; position: relative; padding: 16px 0 16px 46px; border-top: 1px solid var(--line); color: var(--navy-80); font-size: 16px; line-height: 1.75; }
+.lp-checks li:first-child { border-top: 0; }
+.lp-checks li::before { content: counter(lpc); position: absolute; left: 0; top: 16px; width: 28px; height: 28px; border-radius: 50%; background: var(--blue-25); color: var(--blue); font-family: var(--font-en); font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+
+/* 고르는 기준 카드 */
+.lp-points { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.lp-points li { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 26px 24px; }
+.lp-points strong { display: block; font-size: 18px; font-weight: 800; letter-spacing: -0.02em; color: var(--navy); }
+.lp-points span { display: block; margin-top: 8px; font-size: 15px; color: var(--muted); line-height: 1.7; }
+
+/* 추천하는 방 */
+.lp-rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.lp-room { display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.lp-room .lr-media { display: block; background: var(--bg); }
+.lp-room .lr-media img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.lp-room .lr-body { display: flex; flex-direction: column; gap: 8px; padding: 22px 22px 24px; flex: 1; }
+.lp-room .lr-when { font-size: 13px; font-weight: 700; color: var(--blue); }
+.lp-room h3 { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.lp-room h3 a:hover { color: var(--blue); }
+.lp-room p { font-size: 14.5px; color: var(--muted); line-height: 1.7; flex: 1; }
+.lp-room .lr-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.lp-room .lr-facts li { padding: 4px 10px; border-radius: 999px; background: var(--bg); font-size: 12.5px; font-weight: 700; color: var(--navy-80); }
+.lp-room .lr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+/* 독립사무실 호실 */
+.lp-rooms.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.lp-rooms.four .lr-body { padding: 18px 18px 20px; }
+.lp-rooms.four h3 { font-size: 18px; }
+.lp-room .lr-price { font-family: var(--font-en); font-weight: 800; font-size: 18px; color: var(--navy); }
+.lp-room .lr-price small { font-family: var(--font-kr); font-weight: 600; font-size: 12.5px; color: var(--muted); margin-left: 4px; }
+
+/* 포함 / 미포함 */
+.lp-incl { display: flex; flex-wrap: wrap; gap: 8px; }
+.lp-incl li { padding: 8px 14px; border-radius: 999px; background: var(--blue-25); border: 1px solid var(--blue-50); font-size: 14px; font-weight: 700; color: var(--navy); }
+.lp-plain li { position: relative; padding: 0 0 12px 16px; color: var(--navy-80); font-size: 15.5px; line-height: 1.75; }
+.lp-plain li::before { content: ""; position: absolute; left: 0; top: 12px; width: 6px; height: 6px; border-radius: 50%; background: var(--grey); }
+.lp-plain li:last-child { padding-bottom: 0; }
+
+/* 관련 안내 */
+.lp-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+.lp-next { margin-top: 40px; }
+.lp-next h3 { font-size: 18px; font-weight: 800; margin-bottom: 14px; }
+.lp-next .use-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lp-faq { max-width: 860px; }
+.lp-faq .faq .a { font-size: 15.5px; line-height: 1.8; color: var(--navy-80); }
+
+/* ---------- 화면 폭별 ---------- */
+@media (max-width: 1024px) {
+  .lp-two, .lp-two.even { grid-template-columns: 1fr; gap: 32px; }
+  .lp-rooms, .lp-points { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-rooms.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-rate .rate-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-next .use-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .lp-hero { padding-bottom: 40px; }
+  .lp-hero .actions .btn { flex: 1 1 100%; justify-content: center; }
+  .lp-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 28px; }
+  .lp-facts > div { padding: 14px 16px; }
+  .lp-facts > div:nth-child(3n) { border-right: 1px solid var(--line); }
+  .lp-facts > div:nth-child(2n) { border-right: 0; }
+  .lp-facts > div:nth-last-child(-n+3) { border-bottom: 1px solid var(--line); }
+  .lp-facts > div:nth-last-child(-n+2) { border-bottom: 0; }
+  .lp-facts dd { font-size: 15px; }
+  .lp-gallery { grid-template-columns: 1fr; }
+  .lp-gallery .lg-side { grid-template-rows: none; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-gallery .lg-side.three a:first-child { grid-column: auto; }
+  .lp-gallery .lg-side.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lp-rooms, .lp-points, .lp-rooms.four, .lp-layouts { grid-template-columns: 1fr; }
+  .lp-rooms.four { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .lp-steps.three { grid-template-columns: 1fr; }
+  .lp-side { padding: 22px; }
+  .lp-copy p { font-size: 16px; }
+  .lp-checks li { font-size: 15.5px; padding-left: 40px; }
+  .lp-next .use-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .lp-rooms.four .lr-body { padding: 14px 14px 16px; }
+  .lp-rooms.four .lr-price small { display: block; margin: 2px 0 0; }
+}
+@media (max-width: 330px) {
+  .lp-rooms.four { grid-template-columns: 1fr; }
+}
