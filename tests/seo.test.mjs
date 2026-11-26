@@ -170,6 +170,8 @@ test('IndexNow: 열쇠 파일과 배포 묶음', () => {
   assert.equal(read(`${INDEXNOW_KEY}.txt`), INDEXNOW_KEY);
   const pages = read('scripts/build-pages.mjs');
   for (const s of ["'rooms'", "'for'", "'llms.txt'", '[0-9a-f]{32}']) assert.ok(pages.includes(s), `build-pages.mjs 에 ${s} 없음`);
+  // 알림 발송기(5분마다)와 방문 기록, 두 곳에서 깨웁니다
+  for (const f of ['functions/api/notify/run.js', 'functions/api/visit.js']) assert.ok(read(f).includes('pingIndexNow('), `${f} 에서 IndexNow 를 부르지 않습니다`);
 });
 
 test('IndexNow: 새로 생기거나 수정일이 바뀐 주소만 알립니다', async () => {
