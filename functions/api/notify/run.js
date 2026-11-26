@@ -13,13 +13,16 @@ import { json, safeEqual } from "../../_lib/auth.js";
 import { adminOk, ensureSchema } from "../../_lib/admin.js";
 import {cleanupGuest} from "../../_lib/guest-orders.js";
 import { runQueue } from "../../_lib/notify.js";
+import { pingIndexNow } from "../../_lib/indexnow.js";
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, waitUntil }) {
   const key = request.headers.get("x-cron-key") || "";
   const byCron = !!env.CRON_KEY && key.length > 0 && safeEqual(key, env.CRON_KEY);
   if (!byCron && !(await adminOk(request, env))) return json({ ok: false, error: "unauthorized" }, 401);
   if (!env.DB) return json({ ok: false, error: "no-db" }, 503);
   await ensureSchema(env);
+  // 새 글 · 바뀐 페이지를 검색엔진에 알립니다 (30분에 한 번, 정식 주소에서만). 알림 발송과 무관하게 뒤에서 돌고, 실패해도 영향이 없습니다.
+  try { const seo = pingIndexNow(env, new URL(request.url).origin).catch(() => null); if (typeof waitUntil === "function") waitUntil(seo); } catch { /* 무시 */ }
   const paidAdminTask=wakeParkingServer(env,'paid-notices');
   const bookingTask=(async()=>{
     await prepareBookings(env);
