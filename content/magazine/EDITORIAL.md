@@ -24,21 +24,22 @@ socialfactory.co.kr/magazine 에 매일 낮 12시 한 편씩 올리는 글의 �
 7. 실행합니다:
    ```
    python3 scripts/magazine_og.py      # 공유 미리보기 이미지 (images/og/<slug>.jpg)
-   node scripts/magazine.mjs           # 글 · 목록 · 메인 최신 글 · 사이트맵 · RSS 갱신
-   node --test tests/magazine.test.mjs # 검사
+   node scripts/magazine.mjs           # 글 · 목록 · 메인 최신 글 · 사이트맵 · RSS · 안내 페이지(rooms · for · coworking · office) · llms.txt 갱신
+   node scripts/seo.mjs                # 사이트맵 수정일 정리 (본문이 바뀐 페이지만 오늘 날짜로)
+   node --test tests/magazine.test.mjs tests/seo.test.mjs # 검사
    ```
    오류가 나면 고치고 다시 실행합니다. '경고'도 가능하면 고칩니다.
 8. 6장의 마지막 점검표로 글을 한 번 더 읽습니다.
 9. `PLAN.md` 의 그 주제를 `- [x] YYYY-MM-DD · /magazine/<slug> · 제목` 으로 바꿉니다.
 10. 커밋하고 main 에 바로 올립니다 (Cloudflare Pages 가 1~2분 안에 배포).
     ```
-    git add content/magazine magazine magazine.html index.html sitemap.xml rss.xml images/og story.html founder.html
+    git add content/magazine content/seo magazine magazine.html index.html sitemap.xml rss.xml llms.txt images/og story.html founder.html rooms for coworking.html office.html
     git commit -m "매거진: <글 제목>"
     git fetch origin main && git rebase origin/main
-    node scripts/magazine.mjs && git add -A magazine magazine.html index.html sitemap.xml rss.xml && git diff --cached --quiet || git commit -m "매거진 생성 파일 갱신"
+    node scripts/magazine.mjs && git add -A magazine magazine.html index.html sitemap.xml rss.xml llms.txt rooms for coworking.html office.html && git diff --cached --quiet || git commit -m "매거진 생성 파일 갱신"
     git push origin HEAD:main
     ```
-    rebase 충돌이 생성 파일(magazine/*.html, index.html, sitemap.xml, rss.xml)에서 나면, 원격 쪽을 받아들인 뒤 `node scripts/magazine.mjs` 로 다시 만들면 됩니다. 다른 사람이 고친 파일은 되돌리지 않습니다.
+    rebase 충돌이 생성 파일(magazine/*.html, rooms/*.html, for/*.html, coworking.html, office.html, index.html, sitemap.xml, rss.xml, llms.txt)에서 나면, 원격 쪽을 받아들인 뒤 `node scripts/magazine.mjs` 로 다시 만들면 됩니다. 다른 사람이 고친 파일은 되돌리지 않습니다.
 11. 위에 적은 파일 말고는 고치지 않습니다. 홈페이지 다른 부분의 오류를 발견하면 고치지 말고 결과 보고에 적습니다.
 
 ## 3. 사실 기준 — 쓰기 전에 확인할 곳
@@ -78,18 +79,20 @@ socialfactory.co.kr/magazine 에 매일 낮 12시 한 편씩 올리는 글의 �
 ```
 ---
 title: 사람이 읽는 제목 (40자 안팎, 핵심 검색어를 자연스럽게 앞쪽에)
-seoTitle: 검색 결과에 보일 제목 (선택, 없으면 title)
+seoTitle: 검색 결과에 보일 제목 (선택, 없으면 title · 42자 이하, 핵심 검색어를 앞 20자 안에)
 slug: english-kebab-case
 date: 2026-11-08
 time: "12:00"
 category: space
 description: 검색 결과 아래에 보일 설명 60~160자. 무엇을 알 수 있는지 구체적으로.
 lead: 제목 아래 첫 문단 한두 문장 (선택)
+summary: ["이 글의 요점 첫 줄", "둘째 줄", "셋째 줄"]   ← 글 맨 위 '이 글의 요점' 상자 (2~4줄, 한 줄 15~110자)
 cover: images/space/room-3-02-front-20261118.webp
 coverAlt: 이미지 설명 (5장 목록의 설명을 그대로 써도 됩니다)
 coverNote: 공간 활용 예시 이미지입니다.   ← images/scenes/ 를 쓸 때만
 tags: ["검색어 1", "검색어 2", "검색어 3"]
 related: ["다른-글-slug"]
+hubs: ["/rooms/3", "/for/study"]   ← 선택. 글 끝 '이 글과 이어지는 안내' 링크. 비우면 제목 · 검색어에 맞춰 자동으로 고릅니다
 cta: rooms
 ---
 본문 (마크다운)
@@ -98,8 +101,20 @@ cta: rooms
 - `category`: `space` 공간 가이드 · `meeting` 모임 준비 · `work` 일과 공부 · `host` 호스트 · 클래스 · `story` 소셜팩토리 이야기 · `local` 건대 · 동네
 - `cta`(글 끝 안내 상자): `rooms` 대관 · `work` 코워킹 · 사무실 · `host` 호스트 모집 · `story` 브랜드
 - 본문 문법: `## 소제목`, `### 작은 소제목`, 문단, `- 목록`, `1. 번호 목록`, `**굵게**`, `[글자](/space#rooms)`, 표(`| a | b |` + `| --- | --- |`), 안내 상자(`> **제목**` 다음 줄부터 `> 내용`), 인용(`> 내용`), 이미지(`![설명](/images/... "캡션")`). html 은 쓰지 않습니다.
-- 쓸 수 있는 내부 주소: `/` `/space` `/pricing` `/booking` `/guide` `/contact` `/about` `/story` `/founder` `/history` `/family` `/shop` `/program` `/parking` `/tour` `/magazine` `/magazine/<다른 글>`. 자주 쓰는 위치: `/space#rooms` `/space#room-1`~`#room-5` `/space#layouts` `/space#floorplan` `/space#coworking` `/space#office` `/pricing#estimate` `/pricing#office` `/pricing#refund` `/guide#rules` `/guide#location` `/guide#faq` `/program#host` `/contact?purpose=partner#inquiry` `/contact?purpose=proposal#inquiry`
-- 검사(`node scripts/magazine.mjs --check`)가 막는 것: 머리말 빠짐, 설명 길이, 본문 1,500자 미만, 소제목 3개 미만, 내부 링크 3개 미만, 없는 주소 · 이미지, 금지 표현.
+- `summary` 는 글을 다 읽지 않아도 답을 얻을 수 있는 **사실 문장**으로 씁니다. '~를 정리했습니다' 같은 소개 문장이 아니라 '3번룸은 최대 {{rate.r3.max}}명이 쓰는 회의실입니다'처럼 씁니다. 숫자는 여기서도 자리표시를 씁니다. 검색 결과와 AI 검색이 이 상자를 가장 먼저 읽습니다.
+- 글 끝에는 '소셜팩토리 건대 한눈에 보기'(위치 · 공간 · 요금 · 예약 · 코워킹)와 '이 글과 이어지는 안내' 링크가 자동으로 붙습니다. 본문에서 같은 내용을 다시 길게 쓰지 않아도 됩니다.
+- 쓸 수 있는 내부 주소: `/` `/space` `/pricing` `/booking` `/guide` `/contact` `/about` `/story` `/founder` `/history` `/family` `/shop` `/program` `/parking` `/tour` `/play` `/community` `/magazine` `/magazine/<다른 글>`, 그리고 안내 페이지 `/rooms/1`~`/rooms/5`(방별) · `/for/seminar` `/for/class` `/for/study` `/for/meeting` `/for/workshop` `/for/gathering`(용도별) · `/coworking` · `/office`. 방이나 코워킹 · 사무실을 소개할 때는 `/space#room-3` 보다 `/rooms/3`, `/coworking`, `/office` 를 먼저 씁니다. 자주 쓰는 위치: `/space#rooms` `/space#room-1`~`#room-5` `/space#layouts` `/space#floorplan` `/space#coworking` `/space#office` `/pricing#estimate` `/pricing#office` `/pricing#refund` `/guide#rules` `/guide#location` `/guide#faq` `/program#host` `/contact?purpose=partner#inquiry` `/contact?purpose=proposal#inquiry`
+- 검사(`node scripts/magazine.mjs --check`)가 막는 것: 머리말 빠짐, 설명 길이, 본문 1,500자 미만, 소제목 3개 미만, 내부 링크 3개 미만, 없는 주소 · 이미지, 금지 표현, summary 줄 수 · 길이. seoTitle 이 42자를 넘거나 summary 가 없으면 경고합니다.
+
+### 검색과 AI 검색에 잘 읽히게 쓰는 법
+
+네이버 AI 브리핑, 구글 AI 개요처럼 검색 결과 위에서 답을 정리해 주는 기능이 늘었습니다. 특별한 기술이 아니라 글쓰기 습관으로 대응합니다.
+
+- **소제목 하나는 질문으로.** 사람들이 실제로 치는 질문('건대 세미나실은 몇 명까지 들어가나요')을 소제목으로 쓰고, **바로 아래 첫 문장에서 답합니다.** 이유와 설명은 그다음에 씁니다.
+- **한 문단만 떼어 읽어도 뜻이 통하게.** '이 방은', '위에서 말한' 대신 '3번룸은'처럼 이름을 다시 씁니다.
+- **사실은 숫자와 함께, 어디서나 같게.** 인원 · 요금 · 시간은 자리표시로 써서 홈페이지 다른 곳과 어긋나지 않게 합니다.
+- **직접 겪은 내용을 씁니다.** 2015년부터의 운영 기록, 실제 사진, 실제 배치처럼 다른 곳에서 베낄 수 없는 내용이 인용됩니다. 어디에나 있는 일반론만으로 채운 글은 쓰지 않습니다.
+- **검색어를 늘어놓지 않습니다.** 제목과 첫 문단에 핵심 검색어가 한 번 자연스럽게 들어가면 충분합니다. 같은 검색어를 노리는 안내 페이지(`/rooms/…`, `/for/…`, `/coworking`, `/office`)가 이미 있으면, 글은 그 페이지가 다루지 않는 각도(진행 방법, 계산 예시, 체크리스트)로 쓰고 그 페이지로 링크합니다.
 
 ## 5. 대표 이미지 고르기
 
