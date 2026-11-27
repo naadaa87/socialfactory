@@ -21,7 +21,11 @@
     .payment-agreement { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0 16px; font-size: 14px; line-height: 1.65; }
     .payment-agreement input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--blue); }
     .payment-submit { width: 100%; min-height: 52px; border-radius: 12px; box-shadow: none; }
-    .payment-submit:disabled { opacity: .65; cursor: wait; }
+    .payment-submit:disabled { background: var(--blue-dark); cursor: wait; }
+    .payment-result .payment-feedback { margin-top: 10px; color: var(--muted); text-align: center; font-size: 14px; line-height: 1.6; }
+    .payment-feedback:empty { margin: 0; }
+    .payment-fallback { display: flex; margin: 2px auto 0; width: fit-content; }
+    .payment-fallback[hidden] { display: none; }
     .payment-support { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 16px; margin-top: 8px; }
     .payment-text-action { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; }
     .payment-text-action:hover { color: var(--navy); }
@@ -46,6 +50,8 @@
     <label class="payment-agreement"><input type="checkbox" id="payment-agree" required><span>예약·청구 내용과 이용·취소 조건, 페이앱 결제를 위한 정보 처리 안내를 확인했습니다.</span></label>
     <button type="submit" class="btn btn-primary payment-submit" id="payment-open">페이앱으로 결제하기</button>
   </form>
+  <p class="payment-feedback" id="payment-feedback" role="status"></p>
+  <a class="payment-text-action payment-fallback" id="payment-fallback" hidden>페이앱 결제창 직접 열기</a>
   <div class="payment-support">
     <button type="button" class="payment-text-action" id="payment-reload">상태 다시 확인</button>
     <a href="/contact" class="payment-text-action">예약·결제 문의</a>
@@ -54,7 +60,7 @@
   <button type="button" class="payment-text-action payment-cancel" id="booking-cancel" hidden>미결제 예약 취소</button>
   <section class="mt-booking" data-meet-booking hidden aria-live="polite"></section>
 </main>
-<script src="/js/booking-status.js?v=payapp-gu-20261116"></script>
+<script src="/js/booking-status.js?v=payment-feedback-20261127"></script>
 <script src="/js/meet.js?v=mk-20261121" defer></script>
 <script defer src="https://choisijun.com/k1.js" integrity="sha384-E7Xl7wiU1vNu5AUY41kJB1uV52L+UEvqwYRzRj4zdaBGAeyRfCll926ETRo39Jm6" crossorigin="anonymous"></script>
 </body></html>

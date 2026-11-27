@@ -6,13 +6,13 @@ import {readFileSync} from 'node:fs';
 const code=readFileSync(new URL('../js/booking-status.js',import.meta.url),'utf8');
 const response=j=>({ok:true,status:200,json:async()=>j});
 const pending={ok:true,code:'BTEST',kind:'room',label:'소셜팩토리 3번룸',amount:20000,status:'pending',booking:{room:'r3',date:'2099-11-06',start_min:600,end_min:720,people:3,status:'awaiting_payment'},sync:{state:'blocked',fresh:false},can_start_payment:true,can_pay:false,can_cancel:true};
-function harness(fetcher){
+function harness(fetcher,{blockedNavigation=false}={}){
   const nodes=new Map(),timers=new Map(),navigations=[];let serial=0;
   function node(id){
-    if(!nodes.has(id))nodes.set(id,{textContent:'',hidden:false,disabled:false,checked:false,children:[],events:{},addEventListener(type,fn){this.events[type]=fn;},append(...els){this.children.push(...els);},replaceChildren(...els){this.children=[...els];},reportValidity(){return node('payment-agree').checked;}});
+    if(!nodes.has(id))nodes.set(id,{textContent:id==='payment-open'?'페이앱으로 결제하기':'',hidden:id==='payment-fallback',disabled:false,checked:false,children:[],events:{},addEventListener(type,fn){this.events[type]=fn;},append(...els){this.children.push(...els);},replaceChildren(...els){this.children=[...els];},removeAttribute(name){delete this[name];},reportValidity(){return node('payment-agree').checked;}});
     return nodes.get(id);
   }
-  const context={document:{getElementById:node,createElement:()=>node(Symbol())},window:{confirm:()=>true},location:{search:'?code=BTEST&t=private-token',assign:value=>navigations.push(value)},URLSearchParams,URL,AbortController,fetch:fetcher,setTimeout:(fn,ms)=>{const id=++serial;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),console};
+  const context={document:{getElementById:node,createElement:()=>node(Symbol())},window:{confirm:()=>true},location:{search:'?code=BTEST&t=private-token',assign(value){if(blockedNavigation)throw new Error('Navigation blocked');navigations.push(value);}},URLSearchParams,URL,AbortController,fetch:fetcher,setTimeout:(fn,ms)=>{const id=++serial;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),console};
   vm.runInNewContext(code,context);
   return {nodes,navigations,timers,context,node,async flush(){await new Promise(resolve=>setImmediate(resolve));},async poll(){const task=[...timers].find(([,t])=>t.ms===2000);assert(task,'poll scheduled');timers.delete(task[0]);task[1].fn();await this.flush();}};
 }
@@ -31,11 +31,43 @@ test('checkout waits for a fresh verification, then continues only the submitted
     return response({...pending,can_pay:++gets>1});
   });
   await h.flush();h.node('payment-agree').checked=true;
-  h.node('payment-consent').events.submit({preventDefault(){}});await h.flush();
+  h.node('payment-consent').events.submit({preventDefault(){}});
+  assert.match(h.node('payment-open').textContent,/연결 확인 중/);
+  await h.flush();
   assert.equal(posts,1);assert.deepEqual(h.navigations,[]);assert.equal(h.node('payment-open').disabled,true);
+  assert.match(h.node('payment-open').textContent,/예약 시간 확인 중/);
+  assert.match(h.node('payment-feedback').textContent,/이 화면을 열어 두세요/);
   await h.poll();
   assert.equal(posts,2);assert.deepEqual(h.navigations,['https://payapp.kr/verified-checkout']);
   assert.equal(calls.filter(c=>c.body).every(c=>c.body.code==='BTEST' && c.body.t==='private-token' && c.body.consent===true),true);
+});
+
+test('blocked automatic navigation offers a temporary direct link after verification',async()=>{
+  const verifiedUrl='https://payapp.kr/verified-checkout';
+  const h=harness(async(_url,options)=>response(options.method==='POST'?{ok:true,url:verifiedUrl}:{...pending,can_pay:true}),{blockedNavigation:true});
+  await h.flush();h.node('payment-agree').checked=true;
+  h.node('payment-consent').events.submit({preventDefault(){}});await h.flush();
+  assert.deepEqual(h.navigations,[]);
+  assert.equal(h.node('payment-fallback').hidden,false);
+  assert.equal(h.node('payment-fallback').href,verifiedUrl);
+  const handoff=[...h.timers.values()].find(t=>t.ms===15000);
+  assert(handoff);
+  handoff.fn();
+  assert.equal(h.node('payment-fallback').hidden,true);
+  assert.equal(h.node('payment-fallback').href,undefined);
+  assert.equal(h.node('payment-open').disabled,false);
+});
+
+test('an in-flight checkout cannot navigate after consent is withdrawn',async()=>{
+  let settle;
+  const h=harness(async(_url,options)=>options.method==='POST'?new Promise(resolve=>{settle=resolve;}):response({...pending,can_pay:true}));
+  await h.flush();h.node('payment-agree').checked=true;
+  h.node('payment-consent').events.submit({preventDefault(){}});
+  h.node('payment-agree').checked=false;h.node('payment-agree').events.change();
+  settle(response({ok:true,url:'https://payapp.kr/verified-checkout'}));await h.flush();
+  assert.deepEqual(h.navigations,[]);
+  assert.equal(h.node('payment-fallback').hidden,true);
+  assert.equal(h.node('payment-open').disabled,false);
 });
 
 test('checkout keeps polling through a full Cron delay without repeating POSTs before a fresh receipt',async()=>{

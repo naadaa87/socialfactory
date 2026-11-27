@@ -2,8 +2,9 @@
   'use strict';
   var title=document.getElementById('payment-title'),message=document.getElementById('payment-message'),detail=document.getElementById('payment-detail'),button=document.getElementById('payment-reload'),form=document.getElementById('payment-consent');
   var pay=document.getElementById('payment-open'),agree=document.getElementById('payment-agree'),cancel=document.getElementById('booking-cancel');
+  var feedback=document.getElementById('payment-feedback'),fallback=document.getElementById('payment-fallback'),paymentLabel=pay.textContent;
   var params=new URLSearchParams(location.search),code=params.get('code') || '',token=params.get('t') || '';
-  var timer,polls=0,checking=false,posting=false,cancelling=false,checkoutRequested=false,latest=null;
+  var timer,handoffTimer,polls=0,checking=false,posting=false,cancelling=false,checkoutRequested=false,latest=null;
   function item(label,value){var dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;detail.append(dt,dd);}
   function readResponse(r){return r.json().then(function(j){if(!r.ok || !j.ok){var e=new Error();e.paymentMessage=j.message || '예약·결제 상태를 확인하지 못했습니다.';throw e;}return j;});}
   function request(url,options){
@@ -15,11 +16,20 @@
     pay.disabled=posting || cancelling || checkoutRequested;
     cancel.disabled=checking || posting || cancelling;
   }
+  function stopCheckout(text){
+    checkoutRequested=false;
+    clearTimeout(handoffTimer);
+    fallback.hidden=true;
+    fallback.removeAttribute('href');
+    pay.textContent=paymentLabel;
+    feedback.textContent=text || '';
+    controls();
+  }
   function poll(){
     clearTimeout(timer);
     if(polls++<60) timer=setTimeout(check,2000);
     else {
-      checkoutRequested=false;controls();
+      if(checkoutRequested)stopCheckout('예약 시간 확인이 지연되고 있습니다. 잠시 후 결제 버튼을 다시 눌러 주세요.');
       message.textContent=latest && (latest.status==='paid_verifying' || (latest.booking && latest.booking.payment_status==='paid_verifying'))?'결제는 확인되었지만 최종 일정 확인이 지연되고 있습니다. 추가 결제 없이 다시 확인을 누르거나 접수번호로 담당자에게 문의해 주세요.':'일정 또는 결제 확인이 지연되고 있습니다. 다시 확인을 눌러 주세요. 이미 결제했다면 추가 결제하지 않고 담당자에게 문의해 주세요.';
     }
   }
@@ -30,7 +40,8 @@
     var paid=j.status==='paid',confirmed=j.booking && j.booking.status==='confirmed',sync=j.sync || {};
     var paidVerifying=j.status==='paid_verifying' || (j.booking && j.booking.payment_status==='paid_verifying');
     var terminal=paid || paidVerifying || ['cancelled','refunded','expired','failed','review','partial_refund','sync_review','sync_conflict'].indexOf(j.status)!==-1 || ['review','conflict','released'].indexOf(sync.state)!==-1 || (j.booking && j.booking.status==='payment_review');
-    if(terminal)checkoutRequested=false;
+    var interrupted=terminal && checkoutRequested;
+    if(interrupted)stopCheckout();
     form.hidden=terminal || !(j.can_pay || j.can_start_payment || checkoutRequested);
     cancel.hidden=paidVerifying || !j.can_cancel;
     if(j.booking){
@@ -66,17 +77,37 @@
       message.textContent=checkoutRequested?'스페이스클라우드의 최신 일정을 확인한 뒤 페이앱으로 연결합니다.':(j.can_pay || j.can_start_payment)?'아래 내용과 조건을 확인한 뒤 페이앱으로 결제해 주세요. 이미 결제했다면 다시 확인을 눌러 주세요.':'결제 결과가 반영되는 데 시간이 걸릴 수 있습니다. 이미 결제했다면 다시 결제하지 않고 잠시 후 확인해 주세요.';
       if(!j.can_pay && (checkoutRequested || !j.can_start_payment))poll();
     }
+    if(interrupted)feedback.textContent=message.textContent;
     controls();
   }
   function openPayment(){
-    if(posting || cancelling || !agree.checked){checkoutRequested=false;controls();return Promise.resolve();}
+    if(posting || cancelling)return Promise.resolve();
+    if(!agree.checked){stopCheckout();return Promise.resolve();}
     clearTimeout(timer);posting=true;checkoutRequested=true;controls();
+    pay.textContent='페이앱 연결 확인 중…';
+    feedback.textContent='결제 가능 상태를 확인하고 있습니다.';
     return request('/api/booking/payment-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,t:token,consent:agree.checked})}).then(function(j){
-      if(j.pending){title.textContent='결제 직전 일정을 다시 확인하고 있습니다';message.textContent=j.message || '스페이스클라우드 최신 일정을 확인하고 있습니다.';poll();return;}
+      if(!checkoutRequested || !agree.checked)return;
+      if(j.pending){
+        title.textContent='결제 직전 일정을 다시 확인하고 있습니다';
+        message.textContent=j.message || '스페이스클라우드 최신 일정을 확인하고 있습니다.';
+        pay.textContent='예약 시간 확인 중…';
+        feedback.textContent='이 화면을 열어 두세요. 시간 확인이 끝나면 페이앱으로 이동합니다.';
+        poll();return;
+      }
       var u=new URL(j.url);
       if(u.protocol!=='https:' || !(u.hostname==='payapp.kr' || u.hostname.endsWith('.payapp.kr')) || u.username || u.password)throw new Error();
-      location.assign(u.href);
-    }).catch(function(e){checkoutRequested=false;message.textContent=e.paymentMessage || '결제 연결을 확인하지 못했습니다. 잠시 후 다시 시도하거나 담당자에게 문의해 주세요.';}).finally(function(){posting=false;controls();});
+      pay.textContent='페이앱으로 이동 중…';
+      feedback.textContent='화면이 이동하지 않으면 아래 링크를 눌러 주세요.';
+      fallback.href=u.href;
+      fallback.hidden=false;
+      handoffTimer=setTimeout(function(){stopCheckout('결제 버튼을 누르면 최신 일정을 확인하고 다시 연결합니다.');},15000);
+      try{location.assign(u.href);}catch(e){/* Keep the verified link available for a direct tap. */}
+    }).catch(function(e){
+      if(!checkoutRequested)return;
+      message.textContent=e.paymentMessage || '결제 연결을 확인하지 못했습니다. 잠시 후 다시 시도하거나 담당자에게 문의해 주세요.';
+      stopCheckout(message.textContent);
+    }).finally(function(){posting=false;controls();});
   }
   function check(){
     clearTimeout(timer);if(checking || posting || cancelling)return Promise.resolve();
@@ -86,15 +117,19 @@
       show(j);
       // Continue only the checkout explicitly requested on this page, after a fresh receipt.
       if(checkoutRequested && j.can_pay && agree.checked)return openPayment();
-    }).catch(function(e){checkoutRequested=false;form.hidden=true;cancel.hidden=true;title.textContent='예약·결제 상태를 확인하지 못했습니다';message.textContent=(e.paymentMessage || '서버 연결을 확인하고 잠시 후 다시 시도해 주세요.')+' 이미 결제했다면 추가 결제 없이 다시 확인해 주세요.';}).finally(function(){checking=false;controls();});
+    }).catch(function(e){
+      form.hidden=true;cancel.hidden=true;title.textContent='예약·결제 상태를 확인하지 못했습니다';
+      message.textContent=(e.paymentMessage || '서버 연결을 확인하고 잠시 후 다시 시도해 주세요.')+' 이미 결제했다면 추가 결제 없이 다시 확인해 주세요.';
+      if(checkoutRequested)stopCheckout(message.textContent);
+    }).finally(function(){checking=false;controls();});
   }
   form.addEventListener('submit',function(e){e.preventDefault();if(posting || cancelling || !form.reportValidity())return;polls=0;openPayment();});
-  agree.addEventListener('change',function(){if(!agree.checked){checkoutRequested=false;controls();}});
+  agree.addEventListener('change',function(){if(!agree.checked)stopCheckout();});
   cancel.addEventListener('click',function(){
     if(cancelling || posting || !latest || !latest.can_cancel)return;
     if(!window.confirm('예약 신청을 취소할까요? 결제 내역과 확보한 시간의 해제를 확인한 뒤 처리됩니다.'))return;
-    clearTimeout(timer);cancelling=true;checkoutRequested=false;controls();var queued=false;
+    clearTimeout(timer);cancelling=true;stopCheckout();var queued=false;
     request('/api/booking/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,t:token})}).then(function(j){queued=true;polls=0;message.textContent=j.message || '예약 신청 취소를 처리하고 있습니다.';}).catch(function(e){message.textContent=e.paymentMessage || '취소 결과를 확인하지 못했습니다. 다시 확인하거나 담당자에게 문의해 주세요.';}).finally(function(){cancelling=false;controls();if(queued)check();});
   });
-  button.addEventListener('click',function(){polls=0;check();});check();
+  button.addEventListener('click',function(){if(!fallback.hidden)stopCheckout();polls=0;check();});check();
 })();
