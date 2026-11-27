@@ -41,8 +41,8 @@ async function nextJob(env) {
   assert.equal(response.status,200);return (await response.json()).job;
 }
 const receipt=(job,extra={})=>({marker:job.marker,room:job.room,date:job.date,start_min:job.start_min,end_min:job.end_min,segments:job.segments,no_conflicts:true,verified_blocked:true,observed_at:Date.now(),...extra});
-async function done(env,job,{status='succeeded',proof=receipt(job)}={}) {
-  return completeWorker({request:post('/api/internal/spacecloud-sync',{action:'complete',job_id:job.id,lease_token:job.lease_token,status,receipt:proof},env.SPACECLOUD_WORKER_TOKEN),env});
+async function done(env,job,{status='succeeded',proof=receipt(job),retryableRead}={}) {
+  return completeWorker({request:post('/api/internal/spacecloud-sync',{action:'complete',job_id:job.id,lease_token:job.lease_token,status,receipt:proof,retryable_read:retryableRead},env.SPACECLOUD_WORKER_TOKEN),env});
 }
 const paymentRow=(env,code)=>env.sqlite.prepare('SELECT * FROM booking_payapp_requests WHERE code=?').get(code);
 const tokenFrom=data=>new URL(data.status_url,ORIGIN).searchParams.get('t');
@@ -417,6 +417,8 @@ test('customer gets one receipt, a verified payment link, then expiry only after
     assert.equal(sms[0].get('receiver'),'01012345678');
     const message=sms[0].get('msg');
     assert.match(message,/결제 기한:/);
+    assert.match(message,/현재 예약은 미확정입니다/);
+    assert(message.endsWith('https://pf.kakao.com/_uTiFX/chat'));
     const link=message.match(/https:\/\/socialfactory\.co\.kr\/booking-status\?[^\s]+/)[0];
     assert.equal(new URL(link).searchParams.get('t'),payment.token);
     assert.doesNotMatch(message,/payapp\.kr/);
@@ -660,4 +662,38 @@ test('a review with a recorded payment cannot be requeued as a new block',async(
   assert.equal((await updateBooking({env,request})).status,409);
   assert.equal((await getSync(env,code)).state,'review');
   assert.equal(calls.filter(call=>call.get('cmd')==='payrequest').length,1);
+}));
+
+test('a transient pre-write failure requeues an unpaid block once and issues payment only after fresh verification',async()=>{
+  const sms=[],alimtalk=[];
+  await withProvider(async calls=>{
+    const env=enableLifecycleNotices(fixture());
+    const {data}=await create(env),first=await nextJob(env);
+    const attempted=await done(env,first,{status:'review',retryableRead:true});
+    assert.equal((await attempted.json()).status,'retrying');
+    assert.equal((await getSync(env,data.code)).state,'pending');
+    assert.equal(sms.length,0);
+    assert.equal(calls.length,0);
+    const second=await nextJob(env);
+    assert.equal(second.id,first.id);
+    assert.equal(second.marker,first.marker);
+    assert.notEqual(second.lease_token,first.lease_token);
+    assert.equal((await done(env,first)).status,409);
+    assert.equal((await done(env,second)).status,200);
+    assert.equal((await done(env,second)).status,200);
+    assert.equal(calls.filter(form=>form.get('cmd')==='payrequest').length,1);
+    assert.equal(sms.length,1);
+    assert.match(sms[0].get('msg'),/예약은 미확정/);
+  },{sms,alimtalk});
+});
+
+test('a repeated unsuccessful read stops in review without issuing or notifying payment',async()=>withProvider(async calls=>{
+  const env=fixture(),{data}=await create(env);
+  const first=await nextJob(env);
+  assert.equal((await (await done(env,first,{status:'review',retryableRead:true})).json()).status,'retrying');
+  const second=await nextJob(env);
+  assert.equal((await (await done(env,second,{status:'review',retryableRead:true})).json()).status,'review');
+  assert.equal(await nextJob(env),null);
+  assert.equal((await getSync(env,data.code)).state,'review');
+  assert.equal(calls.length,0);
 }));

@@ -23,6 +23,7 @@ const paidNotices = `
 `;
 const systemCode = 'spacecloud-system';
 const paymentSmsKind = 'payment_ready'; // UN_4770 requires additional Kakao review.
+const bookingHelpChat = 'https://pf.kakao.com/_uTiFX/chat';
 const customerLifecycleKinds = ['received',paymentSmsKind,'unpaid_expired'];
 const staffUrgentKinds = ['review','paid_delay','sync_issue','sync_outage'];
 const listSql = values => values.map(value=>"'"+value+"'").join(',');
@@ -289,7 +290,9 @@ async function processBookingNotifications(env,{limit=15,code=null,checkIntegrat
         const message=customerNotice(env,booking,job.kind,template);
         result=isAlimtalk
           ? await sendAligo(sendEnv,{phone},message,template)
-          : await sendAligoSms(env,phone,message.fallbackText,{test,long:true});
+          : await sendAligoSms(env,phone,message.fallbackText
+              +'\n\n현재 예약은 미확정입니다. 결제와 최종 일정 확인 후 확정됩니다. 이용 일시와 결제 기한은 한국 시간입니다.'
+              +'\n\n소셜팩토리 카카오톡 문의\n'+bookingHelpChat,{test,long:true});
       } else {
         const {text,long}=staffNotice(booking,job.kind);
         result=await sendAligoSms(env,phone,text,{test,long});

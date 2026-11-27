@@ -19,6 +19,8 @@ const readIssueLabels = new Map([
   ['timeout','조회 시간 초과'], ['network','일시적인 통신 오류'],
   ['login','스페이스클라우드 로그인 또는 접근 권한 확인 필요'], ['rate-limit','스페이스클라우드 요청 제한']
 ]);
+const isTransientRead = error => error instanceof CalendarReadError
+  ? ['network','timeout'].includes(error.kind) : error?.name==='TimeoutError';
 
 const dateOK = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
   && Number.isFinite(Date.parse(value+'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;
@@ -75,9 +77,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
   async function readAgain(read,{host=false}={}) {
     try { return await read(); }
     catch (error) {
-      const temporary = error instanceof CalendarReadError
-        ? ['network','timeout'].includes(error.kind) : error?.name==='TimeoutError';
-      if (!temporary || retriedRead) throw error;
+      if (!isTransientRead(error) || retriedRead) throw error;
       // The callback is a read only. Ownership and conflicts are checked again,
       // even when a previous mutation may already have reached SpaceCloud.
       await heartbeat();
@@ -212,6 +212,8 @@ export async function executeJob(rawJob, driver, heartbeat) {
       : error?.name==='TimeoutError' ? readIssueLabels.get('timeout') : null;
     const detail = reason ? ` · ${reason}` : '';
     const followUp = writeAttempted ? '변경 반영 여부를 확인해 주세요.' : '최신 일정을 다시 확인해 주세요.';
-    return {status:'review',receipt,message:`${stageLabels[phase] || '외부 일정 확인'} 실패${detail}. ${followUp}`};
+    const readOnly = !writeAttempted && ['open-room','read-initial','verify-public-available','read-before-change','verify-public-block'].includes(phase);
+    return {status:'review',receipt,message:`${stageLabels[phase] || '외부 일정 확인'} 실패${detail}. ${followUp}`,
+      retryable_read:readOnly && isTransientRead(error)};
   }
 }
