@@ -29,6 +29,28 @@ test('an already visible host month is reloaded through the month controls befor
   assert.deepEqual(events,[['load','2026.12'],['load','2026.11'],['read','2026-11-23'],['read','2026-11-24'],['read','2026-11-25']]);
 });
 
+test('refreshing December accepts an unpadded January heading before returning',async()=>{
+  const ui=new SpacecloudUI(null,{});
+  let month='2026.12',nextMonth;
+  const directions=[],dates=[];
+  ui.host={
+    locator(){return {async innerText(){return month;}};},
+    getByText(direction){return direction;},
+    async waitForFunction(check,args){
+      const changed=text=>vm.runInNewContext(`(${check})(args)`,{args,document:{querySelector:()=>({textContent:text})}});
+      assert.equal(changed(month),false);
+      assert.equal(changed(nextMonth),true);
+      month=nextMonth;
+    }
+  };
+  ui.click=async direction=>{directions.push(direction);nextMonth=direction==='다음달'?'2027.1':'2026.12';};
+  ui.settle=async()=>{};
+  ui.readDate=async date=>{dates.push(date);return [];};
+  assert.deepEqual(await ui.recordsFor('2026-12-04'),[]);
+  assert.deepEqual(directions,['다음달','이전달']);
+  assert.deepEqual(dates,['2026-12-03','2026-12-04']);
+});
+
 function targetSet(visibleCount,{hiddenCount=0}={}) {
   const calls=[];
   const selected={async count(){return visibleCount;},async isVisible(){return visibleCount===1;},async scrollIntoViewIfNeeded(){calls.push('scroll');},async boundingBox(){return {x:10,y:20,width:30,height:40};},page(){return {mouse:{async click(x,y){calls.push(['click',x,y]);}}};}};
