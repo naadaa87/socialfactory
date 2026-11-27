@@ -1,6 +1,26 @@
 export class ReviewRequired extends Error {
   constructor(message) { super(message); this.name = 'ReviewRequired'; }
 }
+export class CalendarReadError extends ReviewRequired {
+  constructor(kind, message) {
+    super(message);
+    this.kind = kind;
+  }
+}
+
+const stageLabels = {
+  'open-room':'호스트 달력 열기', 'read-initial':'호스트 일정 조회', 'verify-owned':'기존 시간 확보 확인',
+  'verify-public-available':'고객용 예약 가능 시간 조회', 'read-before-change':'변경 전 일정 조회',
+  'create-owned':'외부 시간 확보 요청', 'remove-owned':'외부 시간 해제 요청',
+  'read-after-block':'확보 후 일정 조회', 'read-after-release':'해제 후 일정 조회',
+  'verify-public-block':'고객용 달력에 차단 반영 확인', 'verify-public-release':'고객용 달력에 해제 반영 확인'
+};
+const readIssueLabels = new Map([
+  ['timeout','조회 시간 초과'], ['network','일시적인 통신 오류'],
+  ['login','스페이스클라우드 로그인 또는 접근 권한 확인 필요'], ['rate-limit','스페이스클라우드 요청 제한']
+]);
+const isTransientRead = error => error instanceof CalendarReadError
+  ? ['network','timeout'].includes(error.kind) : error?.name==='TimeoutError';
 
 const dateOK = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
   && Number.isFinite(Date.parse(value+'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;
@@ -52,7 +72,20 @@ export function inspectRecords(records, segment, replacements=[]) {
 
 export async function executeJob(rawJob, driver, heartbeat) {
   const job = planJob(rawJob), receipt = {marker:job.marker,room:job.room,date:job.date,start_min:job.start_min,end_min:job.end_min,segments:job.segments};
-  let changed = false,phase='open-room';const observationTimes=[];
+  let writeAttempted=false,retriedRead=false,phase='open-room';
+  const observationTimes=[];
+  async function readAgain(read,{host=false}={}) {
+    try { return await read(); }
+    catch (error) {
+      if (!isTransientRead(error) || retriedRead) throw error;
+      // The callback is a read only. Ownership and conflicts are checked again,
+      // even when a previous mutation may already have reached SpaceCloud.
+      await heartbeat();
+      retriedRead=true;
+      if (host) await driver.openRoom(job.room);
+      return read();
+    }
+  }
   try {
     driver.job=job;
     driver.managedRecords=[];
@@ -65,7 +98,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
       return result;
     };
     driver.beforeWrite=heartbeat;
-    await driver.openRoom(job.room);
+    await readAgain(()=>driver.openRoom(job.room));
     // Read every affected date before the first change, including the next day for overnight bookings.
     const initial = [],initialReadTimes=[];
     phase='read-initial';
@@ -73,12 +106,12 @@ export async function executeJob(rawJob, driver, heartbeat) {
     const dates=job.segments.map(segment=>segment.date);
     if(grouped) {
       const readStartedAt=Date.now();
-      const records=await driver.recordsForDates(dates);
+      const records=await readAgain(()=>driver.recordsForDates(dates),{host:true});
       initial.push(...job.segments.map((segment,index)=>inspect(records[index],segment)));
       initialReadTimes.push(readStartedAt);
     } else for (const segment of job.segments) {
       const readStartedAt=Date.now();
-      initial.push(inspect(await driver.recordsFor(segment.date),segment));
+      initial.push(inspect(await readAgain(()=>driver.recordsFor(segment.date),{host:true}),segment));
       initialReadTimes.push(readStartedAt);
     }
     if(job.action==='verify' && initial.some(x=>!x.own)) {
@@ -95,7 +128,8 @@ export async function executeJob(rawJob, driver, heartbeat) {
       // Check every unowned date before the first mutation, including tomorrow.
       for(let i=0;i<job.segments.length;i++)if(!initial[i].own){
         if(typeof driver.assertPublicAvailable!=='function')throw new ReviewRequired('공개 일정 사전 확인을 사용할 수 없습니다.');
-        phase='verify-public-available';await heartbeat();await driver.assertPublicAvailable(job.segments[i]);
+        phase='verify-public-available';await heartbeat();
+        await readAgain(()=>driver.assertPublicAvailable(job.segments[i]));
       }
     }
     // A read-only verification needs one fresh host observation and the public
@@ -106,7 +140,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
       for(let i=0;i<job.segments.length;i++) {
         await heartbeat();
         phase='verify-public-block';
-        await driver.verifyPublic(job.segments[i],[initial[i].own]);
+        await readAgain(()=>driver.verifyPublic(job.segments[i],[initial[i].own]));
       }
       // Public rendering and a slow heartbeat cannot refresh the host snapshot.
       // The API retains its 30-second freshness limit for every segment.
@@ -121,24 +155,24 @@ export async function executeJob(rawJob, driver, heartbeat) {
       if(!release && after.conflicts.length)throw new ReviewRequired('차단 등록 후 다른 예약이 확인되었습니다.');
       if(!release && !after.own)throw new ReviewRequired('등록한 외부예약이 호스트 달력에 표시되지 않습니다.');
       phase=release?'verify-public-release':'verify-public-block';
-      await driver.verifyPublic(segment,release?after.conflicts:[after.own]);
+      await readAgain(()=>driver.verifyPublic(segment,release?after.conflicts:[after.own]));
     };
     for (let i=0;i<job.segments.length;i++) {
       const segment=job.segments[i];
       phase='read-before-change';
-      const current=grouped && i===0?initial[0]:inspect(await driver.recordsFor(segment.date),segment);
+      const current=grouped && i===0?initial[0]:inspect(await readAgain(()=>driver.recordsFor(segment.date),{host:true}),segment);
       if(release) {
-        if(current.own) {phase='remove-owned';await heartbeat();await driver.removeSegment(segment,current.own);changed=true;}
+        if(current.own) {phase='remove-owned';await heartbeat();writeAttempted=true;await driver.removeSegment(segment,current.own);}
       } else {
         if(current.conflicts.length)throw new ReviewRequired('작업 도중 다른 예약이 확인되었습니다. 결제를 보류합니다.');
         if(!current.own) {
-          phase='create-owned';await heartbeat();await driver.createSegment(segment);changed=true;
+          phase='create-owned';await heartbeat();writeAttempted=true;await driver.createSegment(segment);
         }
       }
       if(!grouped) {
         phase=release?'read-after-release':'read-after-block';
         const readStartedAt=Date.now();
-        const after=inspect(await driver.recordsFor(segment.date),segment);
+        const after=inspect(await readAgain(()=>driver.recordsFor(segment.date),{host:true}),segment);
         await verifyWrittenSegment(segment,after);
         observationTimes.push(readStartedAt);
       }
@@ -148,7 +182,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
       // must not age while the next night's write is still running.
       phase=release?'read-after-release':'read-after-block';
       let readStartedAt=Date.now();
-      let records=await driver.recordsForDates(dates);
+      let records=await readAgain(()=>driver.recordsForDates(dates),{host:true});
       let inspected=job.segments.map((segment,i)=>inspect(records[i],segment));
       // The host can briefly render an older calendar after accepting a write.
       // Refresh once without repeating the mutation or retrying a real conflict.
@@ -157,7 +191,7 @@ export async function executeJob(rawJob, driver, heartbeat) {
       if(shouldRefresh) {
         await heartbeat();
         readStartedAt=Date.now();
-        records=await driver.recordsForDates(dates);
+        records=await readAgain(()=>driver.recordsForDates(dates),{host:true});
         inspected=job.segments.map((segment,i)=>inspect(records[i],segment));
       }
       for(let i=0;i<job.segments.length;i++) {
@@ -174,6 +208,12 @@ export async function executeJob(rawJob, driver, heartbeat) {
   } catch (error) {
     driver.reportReview?.({phase,kind:error?.name || 'Error',reason:error instanceof ReviewRequired ? error.message : error instanceof TypeError || error?.name==='TimeoutError' ? String(error.message).split('\n')[0].replace(/https?:\/\/\S+/g,'[url]').slice(0,160) : null});
     // The UI may have accepted a write before a timeout. Never blindly retry or delete on uncertainty.
-    return {status:'review',receipt,message:changed ? '외부 예약 변경 후 확인이 중단되었습니다. 점유를 유지하고 확인이 필요합니다.' : '외부 예약 상태를 확인하지 못했습니다. 점유를 유지하고 확인이 필요합니다.'};
+    const reason = error instanceof CalendarReadError ? readIssueLabels.get(error.kind)
+      : error?.name==='TimeoutError' ? readIssueLabels.get('timeout') : null;
+    const detail = reason ? ` · ${reason}` : '';
+    const followUp = writeAttempted ? '변경 반영 여부를 확인해 주세요.' : '최신 일정을 다시 확인해 주세요.';
+    const readOnly = !writeAttempted && ['open-room','read-initial','verify-public-available','read-before-change','verify-public-block'].includes(phase);
+    return {status:'review',receipt,message:`${stageLabels[phase] || '외부 일정 확인'} 실패${detail}. ${followUp}`,
+      retryable_read:readOnly && isTransientRead(error)};
   }
 }

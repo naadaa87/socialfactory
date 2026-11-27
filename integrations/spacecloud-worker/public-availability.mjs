@@ -1,4 +1,4 @@
-import { ReviewRequired } from './safety.mjs';
+import { CalendarReadError, ReviewRequired } from './safety.mjs';
 
 // Public product/type pairs embedded in https://www.spacecloud.kr/space/82026.
 // Its shipped customer calendar uses this same read-only prices endpoint.
@@ -69,16 +69,20 @@ async function readJson(response) {
 export async function readPublicAvailability({room,date},{fetcher=(...args)=>globalThis.fetch(...args),timeoutMs=TIMEOUT_MS}={}) {
   const url=publicAvailabilityURL(room,date);
   const controller=new AbortController();let timer;
-  const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(fail('조회 시간이 초과되었습니다.'));},Math.min(TIMEOUT_MS,Math.max(1,timeoutMs)));});
+  const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{reject(new CalendarReadError('timeout','스페이스클라우드 공개 일정 조회 시간이 초과되었습니다.'));controller.abort();},Math.min(TIMEOUT_MS,Math.max(1,timeoutMs)));});
   const work=(async()=>{
     const response=await fetcher(url,{method:'GET',redirect:'manual',credentials:'omit',cache:'no-store',signal:controller.signal,
       headers:{Accept:'application/json','Cache-Control':'no-cache, no-store',Pragma:'no-cache'}});
+    if(response.status>=500 || response.status===408 || response.status===425)throw new CalendarReadError('network','스페이스클라우드 공개 일정 서버가 일시적으로 응답하지 않았습니다.');
+    if(response.status===429)throw new CalendarReadError('rate-limit','스페이스클라우드 공개 일정 조회 요청이 제한되었습니다.');
     if(response.status!==200 || response.redirected || (response.url && response.url!==url))throw fail('정상 응답이 아닙니다.');
     const age=response.headers.get('age'),warning=response.headers.get('warning') || '',cacheStatus=response.headers.get('cf-cache-status') || '';
     if((age!==null && (!/^\d+$/.test(age) || Number(age)>0)) || /\b11[01]\b/.test(warning) || /^(STALE|UPDATING)$/i.test(cacheStatus))throw fail('캐시된 응답을 최신 일정으로 사용하지 않습니다.');
     return parsePublicAvailability(await readJson(response),{room,date});
   })();
   try{return await Promise.race([work,timeout]);}
-  catch(error){if(error instanceof ReviewRequired)throw error;throw fail('조회 또는 응답 검증에 실패했습니다.');}
+  catch(error){if(error instanceof ReviewRequired)throw error;
+    if(error instanceof TypeError)throw new CalendarReadError('network','스페이스클라우드 공개 일정에 연결하지 못했습니다.');
+    throw fail('조회 또는 응답 검증에 실패했습니다.');}
   finally{clearTimeout(timer);controller.abort();}
 }

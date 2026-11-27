@@ -226,6 +226,28 @@ export async function heartbeatSyncJob(env,body) {
   if (!Number(result.meta?.changes)) throw syncError('sync-lease-expired','연동 작업 유효시간이 지났습니다.',409);
   return {ok:true,lease_until:until};
 }
+
+async function requeueTransientUnpaidBlock(env,job,now) {
+  const results=await env.DB.batch([
+    env.DB.prepare(`UPDATE spacecloud_sync_jobs SET state='queued',lease_token=NULL,lease_until=NULL,updated_at=?3
+      WHERE id=?1 AND lease_token=?2 AND state='leased' AND lease_until>?3
+        AND action='block' AND attempts=1 AND created_at>?3-300000
+        AND EXISTS (SELECT 1 FROM spacecloud_blocks s JOIN booking_requests b ON b.code=s.code
+          WHERE s.code=spacecloud_sync_jobs.booking_code AND s.state='blocking' AND s.cancel_requested=0
+            AND b.status='awaiting_payment' AND b.payment_status='sync_pending'
+            AND b.payment_id IS NULL AND b.payment_url IS NULL AND b.paid_at IS NULL AND b.refund_amount=0
+            AND b.room=s.room AND b.date=s.date AND b.start_min=s.start_min AND b.end_min=s.end_min
+            AND (unixepoch(s.date)-32400+s.start_min*60)*1000>?3
+            AND NOT EXISTS (SELECT 1 FROM booking_payapp_requests p WHERE p.code=b.code))`)
+      .bind(job.id,job.lease_token,now),
+    env.DB.prepare(`UPDATE spacecloud_blocks SET state='pending',verified_at=NULL,error=?4,updated_at=?3
+      WHERE code=?1 AND state='blocking' AND cancel_requested=0 AND EXISTS (
+        SELECT 1 FROM spacecloud_sync_jobs WHERE id=?2 AND state='queued' AND attempts=1 AND updated_at=?3)`)
+      .bind(job.booking_code,job.id,now,'일시적인 조회 오류가 발생해 스페이스클라우드 일정을 자동 재확인합니다.')
+  ]);
+  return Number(results[0]?.meta?.changes)>0;
+}
+
 export async function finishSyncJob(env,body) {
   await ensureSyncSchema(env);
   const job=await leasedJob(env,body,{allowComplete:true});
@@ -233,6 +255,9 @@ export async function finishSyncJob(env,body) {
   const block=await getSync(env,job.booking_code),now=Date.now();
   let status=body.status;
   if (!['succeeded','conflict','review'].includes(status)) throw syncError('sync-result','연동 처리 결과를 확인해 주세요.',400);
+  if (status==='review' && body.retryable_read===true && job.action==='block' && job.attempts===1
+    && await requeueTransientUnpaidBlock(env,job,now))
+    return {ok:true,code:block.code,status:'retrying',state:'pending'};
   // A conflict is safe to release only when the worker proves it created no block.
   if (status==='conflict' && !(job.action==='block' && body.receipt?.verified_released===true && validateReceipt(body.receipt,block,'release'))) status='review';
   if (status==='succeeded' && !validateReceipt(body.receipt,block,job.action)) status='review';

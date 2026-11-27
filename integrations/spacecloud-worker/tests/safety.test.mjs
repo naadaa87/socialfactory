@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { executeJob, planJob, memoFor, inspectRecords, ReviewRequired } from '../safety.mjs';
+import { CalendarReadError, executeJob, planJob, memoFor, inspectRecords, ReviewRequired } from '../safety.mjs';
 import { calendarGridDates, parseCalendarEntry, publicSlotExpectations } from '../calendar.mjs';
 import { readConfig, QueueClient } from '../queue.mjs';
 
@@ -108,6 +108,45 @@ test('the write path retains its before-change and after-change host checks',asy
   const job=makeJob(),driver=fakeDriver();const result=await executeJob(job,driver,async()=>{});
   assert.equal(result.status,'succeeded');assert.deepEqual(driver.hostReads,[job.date,job.date,job.date]);
   assert.equal(driver.created.length,1);assert.equal(driver.removed.length,0);assert.equal(driver.publicChecks.length,1);
+});
+
+test('a transient host read before a write is retried with latest conflict checks',async()=>{
+  const job=makeJob(),driver=fakeDriver();let attempts=0;
+  driver.recordsFor=async ()=>{
+    if(++attempts===1)throw new CalendarReadError('network','upstream response lost');
+    return [{date:job.date,start_min:job.start_min,end_min:job.end_min,name:'existing',manual:false}];
+  };
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(attempts,2);
+  assert.equal(result.status,'conflict');
+  assert.equal(driver.created.length,0);
+});
+
+test('a transient read after an external write retries only the read and never repeats the write',async()=>{
+  const job=makeJob(),driver=fakeDriver();let attempts=0;
+  const read=driver.recordsFor.bind(driver);
+  driver.recordsFor=async date=>{
+    if(++attempts===3)throw new CalendarReadError('timeout','read after registration timed out');
+    return read(date);
+  };
+  const result=await executeJob(job,driver,async()=>{});
+  assert.equal(result.status,'succeeded');
+  assert.equal(attempts,4);
+  assert.equal(driver.created.length,1);
+});
+
+test('remaining failure records the phase and fixed reason without including the provider error text',async()=>{
+  for(const [kind,attempts,label] of [['network',2,'일시적인 통신 오류'],['rate-limit',1,'요청 제한']]) {
+    const driver=fakeDriver();let reads=0;
+    driver.recordsFor=async ()=>{reads++;throw new CalendarReadError(kind,'private-provider-error');};
+    const result=await executeJob(makeJob(),driver,async()=>{});
+    assert.equal(reads,attempts);
+    assert.equal(result.status,'review');
+    assert.match(result.message,/호스트 일정 조회 실패/);
+    assert(result.message.includes(label));
+    assert(!result.message.includes('private-provider-error'));
+    assert.equal(driver.created.length,0);
+  }
 });
 
 test('a partially owned overnight block still uses the full write checks for the missing segment',async()=>{

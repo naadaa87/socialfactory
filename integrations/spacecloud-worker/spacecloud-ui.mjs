@@ -1,4 +1,4 @@
-import { ReviewRequired, memoFor } from './safety.mjs';
+import { CalendarReadError, ReviewRequired, memoFor } from './safety.mjs';
 import { calendarGridDates, parseCalendarEntry, publicSlotExpectations } from './calendar.mjs';
 import { PUBLIC_AVAILABILITY_MODE, readPublicAvailability as fetchPublicAvailability } from './public-availability.mjs';
 
@@ -40,9 +40,9 @@ export function readinessDiagnostic(request,{status=null,failure='network-error'
 /** Observe only application request metadata; never read private response bodies. */
 export class SpacecloudReadiness {
   constructor(page,{now=()=>Date.now(),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),quietMs=750,timeoutMs=15000,report=()=>{}}={}) {
-    this.now=now;this.pause=pause;this.quietMs=quietMs;this.timeoutMs=timeoutMs;this.epoch=0;this.version=0;this.pending=new Set();this.tracked=new WeakMap();this.failed=false;this.lastActivity=now();this.report=report;this.reported=0;this.navigating=false;
+    this.now=now;this.pause=pause;this.quietMs=quietMs;this.timeoutMs=timeoutMs;this.epoch=0;this.version=0;this.pending=new Set();this.tracked=new WeakMap();this.failed=false;this.failureKind=null;this.lastActivity=now();this.report=report;this.reported=0;this.navigating=false;
     const relevant=request=>{try{const url=new URL(request.url());return url.protocol==='https:' && (url.hostname==='spacecloud.kr' || url.hostname.endsWith('.spacecloud.kr')) && ['document','xhr','fetch'].includes(request.resourceType());}catch{return false;}};
-    page.on('framenavigated',frame=>{if(this.navigating && frame===page.mainFrame()){this.epoch++;this.pending.clear();this.failed=false;this.version++;this.lastActivity=this.now();this.navigating=false;}});
+    page.on('framenavigated',frame=>{if(this.navigating && frame===page.mainFrame()){this.epoch++;this.pending.clear();this.failed=false;this.failureKind=null;this.version++;this.lastActivity=this.now();this.navigating=false;}});
     page.on('request',request=>{if(this.navigating || !relevant(request))return;const hints=readinessHints(request);if(hints.prefetch || hints.next_router_prefetch)return;this.tracked.set(request,this.epoch);this.pending.add(request);this.version++;this.lastActivity=this.now();});
     const finish=async(request,failed)=>{
       if(this.tracked.get(request)!==this.epoch || !this.pending.has(request))return;
@@ -51,21 +51,26 @@ export class SpacecloudReadiness {
       else {try{const reason=request.failure()?.errorText;const known=['net::ERR_ABORTED','net::ERR_FAILED','net::ERR_TIMED_OUT','net::ERR_CONNECTION_RESET','net::ERR_CONNECTION_CLOSED','net::ERR_NAME_NOT_RESOLVED'];if(known.includes(reason))failure=reason;}catch{}}
       if(this.tracked.get(request)!==this.epoch)return;
       this.pending.delete(request);this.failed ||= failed;this.version++;this.lastActivity=this.now();
+      if(failed) {
+        const kind=status===401||status===403?'login':status===429?'rate-limit'
+          :status===408||status===425||status>=500||status===null?'network':'response';
+        if(!this.failureKind||this.failureKind==='network')this.failureKind=kind;
+      }
       if(failed && this.reported++<3){try{this.report(readinessDiagnostic(request,{status,failure}));}catch{}}
     };
     page.on('requestfinished',request=>{void finish(request,false);});
     page.on('requestfailed',request=>{void finish(request,true);});
   }
-  navigate(){this.epoch++;this.pending.clear();this.failed=false;this.reported=0;this.version++;this.lastActivity=this.now();this.navigating=true;}
+  navigate(){this.epoch++;this.pending.clear();this.failed=false;this.failureKind=null;this.reported=0;this.version++;this.lastActivity=this.now();this.navigating=true;}
   changed(){this.lastActivity=this.now();}
   async settle(){
     const deadline=this.now()+this.timeoutMs;
     while(this.now()<deadline){
-      if(this.failed)throw new ReviewRequired('스페이스클라우드 일정 조회에 실패하여 최신 상태를 확인하지 못했습니다.');
+      if(this.failed)throw new CalendarReadError(this.failureKind,'스페이스클라우드 일정 조회에 실패하여 최신 상태를 확인하지 못했습니다.');
       if(!this.navigating && !this.pending.size && this.now()-this.lastActivity>=this.quietMs)return this.version;
       await this.pause(100);
     }
-    throw new ReviewRequired('스페이스클라우드 일정 조회가 끝나지 않아 최신 상태 확인을 중단했습니다.');
+    throw new CalendarReadError('timeout','스페이스클라우드 일정 조회가 끝나지 않아 최신 상태 확인을 중단했습니다.');
   }
 }
 
