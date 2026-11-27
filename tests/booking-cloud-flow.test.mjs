@@ -652,6 +652,53 @@ test('an operator can recheck an old unpaid hold once without issuing a payment 
   assert.equal(calls.filter(call=>call.get('cmd')==='payrequest').length,1);
 }));
 
+test('a released expired invoice is replaced once, remains payable until use, and sends no new customer notice',async()=>{
+  const sms=[],alimtalk=[];
+  await withProvider(async calls=>{
+    const env=enableLifecycleNotices(fixture());
+    const {data,input}=await create(env),original=data.code;
+    await done(env,await nextJob(env));
+    env.sqlite.prepare("UPDATE booking_payapp_requests SET mul_no='987653' WHERE code=?").run(original);
+    env.sqlite.prepare("UPDATE booking_requests SET payment_id='987653',approved_at=? WHERE code=?").run(kstTimestamp(Date.now()-3600000),original);
+    await sweepUnpaidBookings(env);
+    const release=await nextJob(env);
+    assert.equal(release.action,'release');
+    const action=()=>updateBooking({env,request:post('/api/admin/booking-requests',{code:original,action:'reissue-payment'},env.ADMIN_KEY)});
+    assert.equal((await action()).status,409);
+    assert.equal((await done(env,release,{proof:receipt(release,{verified_released:true})})).status,200);
+    assert.equal((await getBooking(env,original)).status,'expired');
+    const noticeCount=sms.length+alimtalk.length;
+    const results=await Promise.all([action(),action()]);
+    assert.deepEqual(results.map(result=>result.status),[202,202]);
+    const [first,second]=await Promise.all(results.map(result=>result.json()));
+    const renewal=first.code;
+    assert.equal(renewal,second.code);
+    assert.notEqual(renewal,original);
+    assert.equal(calls.filter(call=>call.get('cmd')==='payrequest').length,1);
+    assert.equal(paymentRow(env,renewal),undefined);
+    const job=await nextJob(env);
+    assert.deepEqual([job.code,job.room,job.date,job.start_min,job.end_min],[renewal,input.room,input.date,input.start_min,input.end_min]);
+    assert.equal((await done(env,job)).status,200);
+    const replacement=await getBooking(env,renewal);
+    assert.equal(replacement.reissued_from,original);
+    assert.equal(replacement.payment_expires_at,`${input.date} 10:00:00`);
+    assert.equal(replacement.amount,data.amount);
+    assert.equal(paymentRow(env,original).status,'cancelled');
+    assert.equal(calls.filter(call=>call.get('cmd')==='payrequest').length,2);
+    assert.notEqual(paymentRow(env,original).token,paymentRow(env,renewal).token);
+    env.sqlite.prepare('UPDATE booking_requests SET approved_at=? WHERE code=?').run(kstTimestamp(Date.now()-86400000),renewal);
+    await sweepUnpaidBookings(env);
+    const {token}=paymentRow(env,renewal);
+    assert.equal((await requestCheckout(env,renewal,token)).status,200);
+    assert.equal((await requestCheckout(env,original,paymentRow(env,original).token)).status,409);
+    assert.equal(sms.length+alimtalk.length,noticeCount);
+    env.sqlite.prepare('UPDATE booking_requests SET payment_expires_at=? WHERE code=?').run(kstTimestamp(Date.now()-1000),renewal);
+    assert.equal((await requestCheckout(env,renewal,token)).status,409);
+    await sweepUnpaidBookings(env);
+    assert.equal(calls.at(-1).get('cmd'),'paycancel');
+  },{sms,alimtalk});
+});
+
 test('a review with a recorded payment cannot be requeued as a new block',async()=>withProvider(async calls=>{
   const env=fixture(),{data}=await create(env),code=data.code,initial=await nextJob(env);
   await done(env,initial);

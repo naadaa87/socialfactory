@@ -4,7 +4,7 @@ import { prepareBookings,BOOKING_COLUMNS,BOOKING_STATUSES,getBooking,externalBoo
 import { createBookingPayment,payappConfig } from '../../_lib/booking-payapp.js';
 import { syncEnabled,getSync,retryUnpaidBookingSync } from '../../_lib/booking-spacecloud-sync.js';
 import { assertCloudAdmission } from '../../_lib/booking-cloud-admission.js';
-import { startSynchronizedBooking,cancelBookingRequest } from '../../_lib/booking-checkout.js';
+import { startSynchronizedBooking,cancelBookingRequest,reissueExpiredBooking } from '../../_lib/booking-checkout.js';
 import { bookingNotificationSettings,ensureBookingNotifications,scheduleBookingNotices,testBookingOperatorSms,recoverBookingOperatorNotices } from '../../_lib/booking-notify.js';
 import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
 
@@ -49,6 +49,13 @@ export async function onRequestPatch({request,env,waitUntil}) {
     await prepareBookings(env);
     const booking = await getBooking(env,code);
     if (!booking) return json({ok:false,error:'not-found',message:'신청을 찾을 수 없습니다.'},404);
+    if(action==='reissue-payment') {
+      if(!sameOrigin(request))return json({ok:false,error:'origin'},403);
+      const replacement=await reissueExpiredBooking(env,booking);
+      const sync=await getSync(env,replacement);
+      if(sync && ['pending','blocking'].includes(sync.state))await wakeCloudRunner(env,{waitUntil});
+      return json({ok:true,code:replacement,message:'시간 확보를 확인하면 새 결제 링크가 목록에 표시됩니다.'},202);
+    }
     if(action==='retry-sync') {
       if(!sameOrigin(request))return json({ok:false,error:'origin'},403);
       if(body.resume_payment!==true)return json({ok:false,error:'sync-retry-confirm',message:'시간 확보 후 결제 안내를 재개할지 확인해 주세요.'},400);
@@ -56,7 +63,9 @@ export async function onRequestPatch({request,env,waitUntil}) {
       await assertCloudAdmission(env);
       const sync=await retryUnpaidBookingSync(env,code);
       await wakeCloudRunner(env,{waitUntil});
-      return json({ok:true,sync_state:sync.state,message:'스페이스클라우드 일정 재확인을 요청했습니다. 시간 확보를 확인한 뒤 결제 안내가 진행됩니다.'},202);
+      return json({ok:true,sync_state:sync.state,message:booking.reissued_from
+        ? '스페이스클라우드 일정 재확인을 요청했습니다. 시간 확보를 확인하면 새 결제 링크가 목록에 표시됩니다.'
+        : '스페이스클라우드 일정 재확인을 요청했습니다. 시간 확보를 확인한 뒤 결제 안내가 진행됩니다.'},202);
     }
     if(action==='notify-operators') {
       if(!sameOrigin(request))return json({ok:false,error:'origin'},403);
@@ -125,7 +134,7 @@ export async function onRequestPatch({request,env,waitUntil}) {
     console.error('admin-bookings-change',error?.code || error?.message);
     return json({ok:false,error:clean(error?.code,60) || 'db-error',message:clean(error?.message,200) || '신청을 변경하지 못했습니다.'},Number(error?.status) || 500);
   } finally {
-    if(code && action!=='notify-operators' && action!=='retry-sync')await scheduleBookingNotices(env,waitUntil,{code});
+    if(code && !['notify-operators','retry-sync','reissue-payment'].includes(action))await scheduleBookingNotices(env,waitUntil,{code});
   }
 }
 

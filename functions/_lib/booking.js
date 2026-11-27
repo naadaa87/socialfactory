@@ -10,7 +10,7 @@ export const BOOKING_RATES = globalThis.SF_BOOKING_RATES;
 export const BOOKING_NOTICE = '2026-11-06';
 export const BOOKING_PURPOSES = ['meeting','education','seminar','study','workshop','shooting','other'];
 export const BOOKING_STATUSES = ['requested','awaiting_payment','confirmed','cancelled','expired','payment_review'];
-export const BOOKING_COLUMNS = 'code, created_at, updated_at, status, room, date, start_min, end_min, people, customer_name, phone, email, company, purpose, purpose_detail, requests, amount, expires_at, payment_expires_at, approved_at, external_checked_at, payment_status, payment_id, payment_url, paid_at, refund_amount, memo';
+export const BOOKING_COLUMNS = 'code, created_at, updated_at, status, room, date, start_min, end_min, people, customer_name, phone, email, company, purpose, purpose_detail, requests, amount, expires_at, payment_expires_at, approved_at, external_checked_at, payment_status, payment_id, payment_url, paid_at, refund_amount, memo, reissued_from';
 export const isBookingConflict = error => /booking-conflict/.test(String(error?.message || error));
 export const kstTimestamp = (now = Date.now()) => new Date(now + 9 * 3600000).toISOString().slice(0,19).replace('T',' ');
 const paidTimestamp = value => {

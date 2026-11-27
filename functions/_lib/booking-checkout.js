@@ -1,6 +1,7 @@
+import { randomToken } from './auth.js';
 import { getBooking, kstTimestamp,applyBookingPayment } from './booking.js';
 import { createBookingPayment, cancelBookingPayment, payappConfig, ensurePayappSchema } from './booking-payapp.js';
-import { syncEnabled, getSync, enqueueSync, queueRelease, requireVerifiedBlock, syncError } from './booking-spacecloud-sync.js';
+import { syncEnabled, getSync, enqueueSync, queueRelease, requireVerifiedBlock, syncError, bookingSegments } from './booking-spacecloud-sync.js';
 import { assertCloudAdmission } from './booking-cloud-admission.js';
 
 export const bookingPaymentHoldMinutes = env => Math.max(5,Math.min(60,Number(env.BOOKING_PAYMENT_HOLD_MINUTES) || 15));
@@ -8,7 +9,7 @@ export const bookingPaymentHoldMinutes = env => Math.max(5,Math.min(60,Number(en
 export function bookingPaymentDeadline(env, booking, synchronized) {
   const start = Date.parse(booking.date+'T00:00:00+09:00') + booking.start_min*60000;
   const time = value => value ? Date.parse(value.replace(' ','T')+'+09:00') : Infinity;
-  const expiry = synchronized
+  const expiry = synchronized && !booking.reissued_from
     ? time(booking.approved_at || booking.created_at) + bookingPaymentHoldMinutes(env)*60000
     : time(booking.payment_expires_at);
   return Math.min(start,expiry);
@@ -20,6 +21,48 @@ export function bookingPaymentOpen(env, booking, synchronized) {
 }
 
 export const syncStatusUrl = row => '/booking-status?code='+encodeURIComponent(row.code)+'&t='+encodeURIComponent(row.access_token);
+
+/** Preserve the original provider record and create at most one replacement for it. */
+export async function reissueExpiredBooking(env, original) {
+  const replacement=()=>env.DB.prepare('SELECT code FROM booking_requests WHERE reissued_from=?1').bind(original.code).first();
+  const existing=await replacement();
+  if(existing)return existing.code;
+  if(!syncEnabled(env) || !payappConfig(env).ready)
+    throw syncError('reissue-unavailable','스페이스클라우드와 페이앱 연결을 확인해 주세요.',503);
+  if(original.status!=='expired' || original.payment_status!=='cancelled')
+    throw syncError('reissue-state','미결제 만료와 기존 청구 취소가 확인된 예약만 재발급할 수 있습니다.');
+  bookingSegments(original);
+  await assertCloudAdmission(env);
+
+  const now=Date.now(),code='B'+original.date.replace(/-/g,'').slice(2)+'-'+randomToken(9).replace(/[^A-Za-z0-9]/g,'').slice(0,10).toUpperCase();
+  // The booking overlap triggers apply to the new hold. All three rows become visible together.
+  const results=await env.DB.batch([
+    env.DB.prepare(`INSERT INTO booking_requests
+      (code,submission_id,fingerprint,created_at,updated_at,status,room,date,start_min,end_min,people,
+      customer_name,phone,email,company,purpose,purpose_detail,requests,amount,consent,notice_version,
+      payment_status,payment_expires_at,reissued_from)
+      SELECT ?2,?3,b.fingerprint,?4,?4,'awaiting_payment',b.room,b.date,b.start_min,b.end_min,b.people,
+      b.customer_name,b.phone,b.email,b.company,b.purpose,b.purpose_detail,b.requests,b.amount,b.consent,b.notice_version,
+      'sync_pending',datetime(b.date,'+'||b.start_min||' minutes'),b.code
+      FROM booking_requests b JOIN booking_payapp_requests p ON p.code=b.code
+      JOIN spacecloud_blocks s ON s.code=b.code
+      WHERE b.code=?1 AND b.status='expired' AND b.payment_status='cancelled' AND b.paid_at IS NULL AND b.refund_amount=0
+      AND s.state='released' AND p.kind='room' AND p.status='cancelled' AND p.mul_no=b.payment_id
+      AND p.paid_at IS NULL AND p.refund_amount=0 AND datetime(b.date,'+'||b.start_min||' minutes')>?4
+      AND NOT EXISTS(SELECT 1 FROM booking_requests r WHERE r.reissued_from=b.code)`)
+      .bind(original.code,code,randomToken(),kstTimestamp(now)),
+    env.DB.prepare(`INSERT INTO spacecloud_blocks(code,room,date,start_min,end_min,marker,access_token,created_at,updated_at)
+      SELECT code,room,date,start_min,end_min,'SFWEB:'||code,?3,?4,?4 FROM booking_requests WHERE code=?1 AND reissued_from=?2`)
+      .bind(code,original.code,randomToken(),now),
+    env.DB.prepare(`INSERT INTO spacecloud_sync_jobs(id,booking_code,room,action,created_at,updated_at)
+      SELECT ?3,code,room,'block',?4,?4 FROM booking_requests WHERE code=?1 AND reissued_from=?2`)
+      .bind(code,original.code,randomToken(18),now)
+  ]);
+  if(Number(results[0]?.meta?.changes))return code;
+  const concurrent=await replacement();
+  if(concurrent)return concurrent.code;
+  throw syncError('reissue-state','이용 시작 시각이나 기존 결제·시간 해제 상태를 다시 확인해 주세요.');
+}
 
 export async function startSynchronizedBooking(env, booking) {
   if (!syncEnabled(env)) return null;
@@ -133,8 +176,9 @@ export async function sweepUnpaidBookings(env) {
   const {results}=await env.DB.prepare(`SELECT b.code FROM booking_requests b LEFT JOIN spacecloud_blocks s ON s.code=b.code
     WHERE b.status='awaiting_payment' AND b.paid_at IS NULL AND b.payment_status IN ('sync_pending','pending','failed')
     AND ((?3 AND s.state IN ('pending','blocking','blocked') AND
-      (CASE WHEN b.payment_status='sync_pending' THEN COALESCE(b.updated_at,b.created_at)
-              ELSE COALESCE(b.approved_at,b.created_at) END<=?1 OR datetime(b.date,'+'||b.start_min||' minutes')<=?2))
+      (CASE WHEN b.payment_status='sync_pending' THEN COALESCE(b.updated_at,b.created_at)<=?1
+            WHEN b.reissued_from IS NOT NULL THEN b.payment_expires_at<=?2
+            ELSE COALESCE(b.approved_at,b.created_at)<=?1 END OR datetime(b.date,'+'||b.start_min||' minutes')<=?2))
       OR (s.code IS NULL AND b.payment_expires_at<=?2 AND EXISTS (SELECT 1 FROM booking_payapp_requests p
         WHERE p.code=b.code AND p.kind='room' AND p.mul_no=b.payment_id AND p.paid_at IS NULL)))
     ORDER BY b.created_at LIMIT 5`).bind(cutoff,now,syncEnabled(env) ? 1 : 0).all();
