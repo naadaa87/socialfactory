@@ -46,18 +46,18 @@ const bookingEvents = `
     LEFT JOIN spacecloud_payment_checks checks ON checks.code=b.code
   ), lifecycle_events AS MATERIALIZED (
     SELECT code,'received',0,created_at,NULL,NULL FROM candidates
-      WHERE status IN ('requested','awaiting_payment') AND payment_status IN ('unpaid','sync_pending','creating','pending')
+      WHERE reissued_from IS NULL AND status IN ('requested','awaiting_payment') AND payment_status IN ('unpaid','sync_pending','creating','pending')
         AND (sync_state IS NULL OR sync_state IN ('pending','blocking','blocked'))
     UNION ALL
     SELECT code,'payment_ready',0,updated_at,token,pay_url FROM candidates
-      WHERE status='awaiting_payment' AND payment_status='pending' AND provider_status IN ('requested','pending')
+      WHERE reissued_from IS NULL AND status='awaiting_payment' AND payment_status='pending' AND provider_status IN ('requested','pending')
         AND paid_at IS NULL AND provider_paid_at IS NULL AND token IS NOT NULL AND payment_id=mul_no
         AND (sync_code IS NULL OR (sync_state='blocked' AND cancel_requested=0))
         AND (payment_expires_at IS NULL OR payment_expires_at>${kst})
         AND datetime(date,'+'||start_min||' minutes')>${kst}
     UNION ALL
     SELECT code,'unpaid_expired',0,updated_at,NULL,NULL FROM candidates
-      WHERE status='expired' AND paid_at IS NULL AND provider_paid_at IS NULL
+      WHERE reissued_from IS NULL AND status='expired' AND paid_at IS NULL AND provider_paid_at IS NULL
         AND (provider_status IS NULL OR provider_status='cancelled')
         AND (sync_code IS NULL OR sync_state='released')
     UNION ALL
