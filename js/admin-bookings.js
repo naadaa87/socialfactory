@@ -45,11 +45,17 @@
     $('#booking-request-list').innerHTML=rows.length?rows.map(function(r){
       var pending=r.status==='requested',canCancel=(pending || r.status==='awaiting_payment') && ['creating','paid','paid_verifying','review','refund_pending','cancelling','releasing'].indexOf(r.payment_status)===-1,syncState=r.sync_state || (r.sync && r.sync.state) || '';
       var automatic=syncEnabled?'<p class="small muted">스페이스클라우드: '+esc(syncLabels[syncState] || '자동 일정 확인 준비 중')+'</p>':'';
+      if(r.sync_error)automatic+='<p class="small muted">'+esc(r.sync_error)+'</p>';
+      var canRetry=syncEnabled&&syncState==='review'&&r.status==='awaiting_payment'&&r.payment_status==='sync_pending'&&
+        !r.payment_id&&!r.payment_url&&!r.paid_at&&!Number(r.refund_amount)&&Date.parse(r.date+'T00:00:00+09:00')+r.start_min*60000>Date.now();
+      var retry=canRetry?'<details class="mt"><summary>연동 재확인 · 결제 안내 재개</summary>'
+        +'<p class="small muted">스페이스클라우드 시간을 다시 확인합니다. 시간이 확보되면 고객에게 새 결제 링크를 자동 안내합니다.</p>'
+        +'<div class="acts"><button class="btn btn-light btn-sm" type="button" data-booking-action="retry-sync" data-code="'+esc(r.code)+'">결제 안내 재개 요청</button></div></details>':'';
       var approval=pending?(syncEnabled?(!syncState?'<div class="acts"><button type="button" class="btn btn-primary btn-sm" data-booking-action="approve" data-code="'+esc(r.code)+'" '+(!ready || !syncReady?'disabled':'')+'>일정 확인 · 결제 준비</button></div>':''):'<label><input type="checkbox" data-external-check="'+esc(r.code)+'"> 외부 채널 일정을 확인하고 해당 시간을 판매 중지했습니다.</label><div class="acts"><button type="button" class="btn btn-primary btn-sm" data-booking-action="approve" data-code="'+esc(r.code)+'" '+(!ready?'disabled':'')+'>승인 · 페이앱 링크 발급</button></div>'):'';
       var operatorNotice=r.status==='confirmed' && r.payment_status==='paid' && r.paid_at && !Number(r.refund_amount)?'<div class="acts"><button class="btn btn-light btn-sm" type="button" data-booking-action="notify-operators" data-code="'+esc(r.code)+'">운영자 결제 문자 보내기</button></div><p class="small muted">발송 기록이 없는 운영자에게만 결제 문자를 보냅니다.</p>':'';
       return '<details class="card mt"><summary><b>'+esc(r.code)+' · '+esc(r.customer_name)+'</b> — '+esc(r.date)+' '+esc(hm(r.start_min))+'–'+esc(hm(r.end_min))+' · '+esc(r.room.replace('r',''))+'번룸 · '+esc(labels[r.status] || r.status)+'</summary><div class="mt"><p>'+esc(r.phone)+' · '+esc(r.company || '개인')+' · '+esc(r.people)+'명 · '+A.won(r.amount)+'</p><p>활용 목적: '+esc(purposes[r.purpose] || r.purpose)+' '+esc(r.purpose_detail || '')+'</p><p>기타 요청: '+esc(r.requests || '없음')+'</p><p class="small muted">결제 상태: '+esc(labels[r.payment_status] || r.payment_status || '미결제')+(r.expires_at?' · 신청 확보 기한: '+esc(r.expires_at):'')+'</p>'+
-        automatic+notificationStatus(r.notifications)+operatorNotice+approval+
-        paymentLink(r.payment_url)+(canCancel?'<div class="acts"><button class="btn btn-light btn-sm" type="button" data-booking-action="cancel" data-code="'+esc(r.code)+'">'+(syncEnabled?'신청 취소 · 확보 시간 해제':'신청 취소 · 미결제 링크 닫기')+'</button></div>':'')+'</div></details>';
+        automatic+retry+notificationStatus(r.notifications)+operatorNotice+approval+
+        paymentLink(r.payment_url)+(canCancel&&syncState!=='review'?'<div class="acts"><button class="btn btn-light btn-sm" type="button" data-booking-action="cancel" data-code="'+esc(r.code)+'">'+(syncEnabled?'신청 취소 · 확보 시간 해제':'신청 취소 · 미결제 링크 닫기')+'</button></div>':'')+'</div></details>';
     }).join(''):A.emptyMsg('접수된 예약 신청이 없습니다.');
   }
   function load(){
@@ -88,7 +94,7 @@
     var b=event.target.closest('[data-booking-action]');
     if(b){var code=b.dataset.code,action=b.dataset.bookingAction,check=Array.from(document.querySelectorAll('[data-external-check]')).find(function(c){return c.dataset.externalCheck===code;});
       if(action==='approve' && !syncEnabled && (!check || !check.checked)){A.toast('외부 일정 확인과 판매 중지를 체크해 주세요.');return;}
-      b.disabled=true;api('/api/admin/booking-requests',{method:'PATCH',body:{code:code,action:action,external_checked:!!(check && check.checked)}}).then(function(result){A.toast(action==='notify-operators'?result.message:action==='approve'?(syncEnabled?'일정 확인 후 결제 링크를 준비합니다.':'승인했습니다. 공간대관 알림에서 결제 안내 문자 상태를 확인할 수 있습니다.'):(syncEnabled?'신청 취소와 외부 시간 해제를 처리합니다.':'신청을 취소했습니다.'));return load();}).catch(err).finally(function(){b.disabled=false;});return;
+      b.disabled=true;api('/api/admin/booking-requests',{method:'PATCH',body:{code:code,action:action,external_checked:!!(check && check.checked),resume_payment:action==='retry-sync'}}).then(function(result){A.toast(action==='notify-operators'||action==='retry-sync'?result.message:action==='approve'?(syncEnabled?'일정 확인 후 결제 링크를 준비합니다.':'승인했습니다. 공간대관 알림에서 결제 안내 문자 상태를 확인할 수 있습니다.'):(syncEnabled?'신청 취소와 외부 시간 해제를 처리합니다.':'신청을 취소했습니다.'));return load();}).catch(err).finally(function(){b.disabled=false;});return;
     }
     b=event.target.closest('[data-office-cancel]');if(b){b.disabled=true;api('/api/admin/booking-payapp',{method:'POST',body:{action:'cancel',code:b.dataset.officeCancel}}).then(load).catch(err).finally(function(){b.disabled=false;});}
   });

@@ -122,6 +122,38 @@ export async function enqueueSync(env,booking,action='block') {
 }
 export const queueRelease = (env,booking) => enqueueSync(env,booking,'release');
 
+// Only the original, unpaid hold can be tried again. The normal worker checks
+// the exact marker on both calendars before writing or preparing a payment.
+export async function retryUnpaidBookingSync(env,code) {
+  if (!syncEnabled(env)) throw syncError('sync-disabled','예약 자동 연동이 준비되지 않았습니다.',503);
+  await ensureSyncSchema(env);
+  const id=randomToken(18),now=Date.now();
+  const inserted="EXISTS (SELECT 1 FROM spacecloud_sync_jobs WHERE id=?2 AND booking_code=?1 AND state='queued')";
+  const results=await env.DB.batch([
+    env.DB.prepare(`INSERT INTO spacecloud_sync_jobs(id,booking_code,room,action,created_at,updated_at)
+      SELECT ?2,s.code,s.room,'block',?3,?3
+      FROM spacecloud_blocks s JOIN booking_requests b ON b.code=s.code
+      WHERE s.code=?1 AND s.state='review' AND s.cancel_requested=0 AND s.verified_at IS NULL
+        AND b.status='awaiting_payment' AND b.payment_status='sync_pending'
+        AND b.paid_at IS NULL AND b.payment_id IS NULL AND b.payment_url IS NULL AND b.refund_amount=0
+        AND b.room=s.room AND b.date=s.date AND b.start_min=s.start_min AND b.end_min=s.end_min
+        AND (unixepoch(s.date)-32400+s.start_min*60)*1000>?3
+        AND NOT EXISTS (SELECT 1 FROM booking_payapp_requests p WHERE p.code=b.code)
+        AND NOT EXISTS (SELECT 1 FROM spacecloud_sync_jobs j WHERE j.booking_code=s.code AND j.state IN ('queued','leased'))
+        AND EXISTS (SELECT 1 FROM spacecloud_sync_jobs j WHERE j.booking_code=s.code AND j.state='review' AND j.action='block')
+        AND NOT EXISTS (SELECT 1 FROM spacecloud_sync_jobs j WHERE j.booking_code=s.code AND j.state='review' AND j.action<>'block')`)
+      .bind(code,id,now),
+    env.DB.prepare(`UPDATE spacecloud_sync_jobs SET state='cancelled',updated_at=?3
+      WHERE booking_code=?1 AND state='review' AND action='block' AND ${inserted}`).bind(code,id,now),
+    env.DB.prepare(`UPDATE spacecloud_blocks SET state='pending',error=NULL,updated_at=?3 WHERE code=?1 AND ${inserted}`)
+      .bind(code,id,now),
+    env.DB.prepare(`UPDATE booking_requests SET updated_at=datetime(?3/1000,'unixepoch','+9 hours') WHERE code=?1 AND ${inserted}`)
+      .bind(code,id,now)
+  ]);
+  if (!Number(results[0]?.meta?.changes)) throw syncError('sync-retry-state','이미 처리 중이거나 결제·취소 이력이 있는 신청입니다. 최신 상태를 확인해 주세요.');
+  return {state:'pending'};
+}
+
 function validateReceipt(receipt,block,action) {
   if (!receipt || !sameScope(receipt,block) || receipt.marker!==block.marker || !Array.isArray(receipt.segments)) return false;
   const expected=bookingSegments(block);
