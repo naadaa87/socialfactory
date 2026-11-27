@@ -2,7 +2,8 @@ import { json,clean,sameOrigin } from '../../_lib/auth.js';
 import { adminGate,kstNow } from '../../_lib/admin.js';
 import { prepareBookings,BOOKING_COLUMNS,BOOKING_STATUSES,getBooking,externalBookingConflict,isBookingConflict } from '../../_lib/booking.js';
 import { createBookingPayment,payappConfig } from '../../_lib/booking-payapp.js';
-import { syncEnabled,getSync } from '../../_lib/booking-spacecloud-sync.js';
+import { syncEnabled,getSync,retryUnpaidBookingSync } from '../../_lib/booking-spacecloud-sync.js';
+import { assertCloudAdmission } from '../../_lib/booking-cloud-admission.js';
 import { startSynchronizedBooking,cancelBookingRequest } from '../../_lib/booking-checkout.js';
 import { bookingNotificationSettings,ensureBookingNotifications,scheduleBookingNotices,testBookingOperatorSms,recoverBookingOperatorNotices } from '../../_lib/booking-notify.js';
 import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
@@ -26,7 +27,8 @@ export async function onRequestGet({request,env}) {
     }
     const {results:recentNotifications}=await env.DB.prepare('SELECT code,kind,recipient,last4,state,updated_at FROM booking_notifications WHERE code<>? ORDER BY updated_at DESC,created_at DESC LIMIT 40').bind('operator-test').all();
     const enriched=await Promise.all((results || []).map(async item=>{
-      const sync=await getSync(env,item.code);return {...item,sync_state:sync?.state || null,notifications:byCode.get(item.code) || []};
+      const sync=await getSync(env,item.code);
+      return {...item,sync_state:sync?.state || null,sync_error:sync?.error || null,notifications:byCode.get(item.code) || []};
     }));
     return json({ok:true,results:enriched,recentNotifications,notificationSettings:await bookingNotificationSettings(env),payapp:{ready:payappConfig(env).ready},sync:{enabled:syncEnabled(env),ready:syncEnabled(env) && String(env.SPACECLOUD_WORKER_TOKEN || '').length>=32}});
   } catch (error) {
@@ -47,6 +49,15 @@ export async function onRequestPatch({request,env,waitUntil}) {
     await prepareBookings(env);
     const booking = await getBooking(env,code);
     if (!booking) return json({ok:false,error:'not-found',message:'신청을 찾을 수 없습니다.'},404);
+    if(action==='retry-sync') {
+      if(!sameOrigin(request))return json({ok:false,error:'origin'},403);
+      if(body.resume_payment!==true)return json({ok:false,error:'sync-retry-confirm',message:'시간 확보 후 결제 안내를 재개할지 확인해 주세요.'},400);
+      if(!payappConfig(env).ready)return json({ok:false,error:'payapp-not-ready',message:'페이앱 연결 설정을 확인해 주세요.'},503);
+      await assertCloudAdmission(env);
+      const sync=await retryUnpaidBookingSync(env,code);
+      await wakeCloudRunner(env,{waitUntil});
+      return json({ok:true,sync_state:sync.state,message:'스페이스클라우드 일정 재확인을 요청했습니다. 시간 확보를 확인한 뒤 결제 안내가 진행됩니다.'},202);
+    }
     if(action==='notify-operators') {
       if(!sameOrigin(request))return json({ok:false,error:'origin'},403);
       if(booking.status!=='confirmed' || booking.payment_status!=='paid' || !booking.paid_at || Number(booking.refund_amount)!==0)
@@ -114,7 +125,7 @@ export async function onRequestPatch({request,env,waitUntil}) {
     console.error('admin-bookings-change',error?.code || error?.message);
     return json({ok:false,error:clean(error?.code,60) || 'db-error',message:clean(error?.message,200) || '신청을 변경하지 못했습니다.'},Number(error?.status) || 500);
   } finally {
-    if(code && action!=='notify-operators')await scheduleBookingNotices(env,waitUntil,{code});
+    if(code && action!=='notify-operators' && action!=='retry-sync')await scheduleBookingNotices(env,waitUntil,{code});
   }
 }
 

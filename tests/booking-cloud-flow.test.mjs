@@ -630,3 +630,34 @@ test('operator recovery revives only a matching skipped confirmation that was ne
   assert.deepEqual(env.sqlite.prepare("SELECT * FROM booking_notifications WHERE code=? AND recipient='customer'").get(code),customerBefore);
   assert.equal((await recoverBookingOperatorNotices(env,code)).accepted,0);assert.equal(sends.length,1);
 });
+
+test('an operator can recheck an old unpaid hold once without issuing a payment before fresh proof',async()=>withProvider(async calls=>{
+  const env=fixture(),{data}=await create(env),code=data.code,initial=await nextJob(env);
+  await done(env,initial,{status:'review'});
+  env.sqlite.prepare('UPDATE booking_requests SET created_at=?,updated_at=? WHERE code=?').run(kstTimestamp(Date.now()-86400000),kstTimestamp(Date.now()-86400000),code);
+  const request=(action,resume_payment=true,origin=ORIGIN)=>new Request(ORIGIN+'/api/admin/booking-requests',{method:'PATCH',headers:{authorization:'Bearer '+env.ADMIN_KEY,origin,'content-type':'application/json'},body:JSON.stringify({code,action,resume_payment})});
+  assert.equal((await updateBooking({env,request:request('cancel')})).status,409);
+  assert.equal((await getBooking(env,code)).payment_status,'sync_pending');
+  assert.equal((await updateBooking({env,request:request('retry-sync',false)})).status,400);
+  assert.equal((await updateBooking({env,request:request('retry-sync',true,'https://other.test')})).status,403);
+  const twice=await Promise.all([1,2].map(()=>updateBooking({env,request:request('retry-sync')})));
+  assert.deepEqual(twice.map(r=>r.status).sort(),[202,409]);
+  assert.equal(calls.length,0);assert(!paymentRow(env,code));
+  const retry=await nextJob(env);assert.equal(retry.action,'block');assert.equal(retry.code,code);
+  assert.equal(retry.marker,initial.marker);assert.notEqual(retry.id,initial.id);
+  assert.equal((await done(env,initial)).status,409);
+  assert.equal((await done(env,retry)).status,200);
+  assert.equal(calls.filter(call=>call.get('cmd')==='payrequest').length,1);
+}));
+
+test('a review with a recorded payment cannot be requeued as a new block',async()=>withProvider(async calls=>{
+  const env=fixture(),{data}=await create(env),code=data.code,initial=await nextJob(env);
+  await done(env,initial);
+  env.sqlite.prepare("UPDATE booking_requests SET payment_status='sync_pending',payment_id=NULL,payment_url=NULL WHERE code=?").run(code);
+  env.sqlite.prepare("UPDATE spacecloud_sync_jobs SET state='review' WHERE id=?").run(initial.id);
+  env.sqlite.prepare("UPDATE spacecloud_blocks SET state='review',verified_at=NULL WHERE code=?").run(code);
+  const request=new Request(ORIGIN+'/api/admin/booking-requests',{method:'PATCH',headers:{authorization:'Bearer '+env.ADMIN_KEY,origin:ORIGIN,'content-type':'application/json'},body:JSON.stringify({code,action:'retry-sync',resume_payment:true})});
+  assert.equal((await updateBooking({env,request})).status,409);
+  assert.equal((await getSync(env,code)).state,'review');
+  assert.equal(calls.filter(call=>call.get('cmd')==='payrequest').length,1);
+}));

@@ -86,6 +86,8 @@ export async function cancelBookingRequest(env, booking, {expired = false, reaso
   const block=await getSync(env,booking.code);
   if (!block && booking.status!=='awaiting_payment') return false;
   if (block && ['released','conflict'].includes(block.state)) {await onSyncCompleted(env,booking.code);return true;}
+  if (block?.state==='review' && !block.cancel_requested)
+    throw syncError('sync-review','스페이스클라우드의 확보 여부를 먼저 다시 확인해 주세요.');
   if (['confirmed','payment_review'].includes(booking.status) || ['creating','review','paid','paid_verifying','refund_pending'].includes(booking.payment_status))
     throw syncError('payment-review','결제·환불 결과를 먼저 확인해야 합니다. 시간은 계속 확보됩니다.');
   if(booking.payment_status==='releasing' || block?.cancel_requested)return true;
@@ -131,7 +133,8 @@ export async function sweepUnpaidBookings(env) {
   const {results}=await env.DB.prepare(`SELECT b.code FROM booking_requests b LEFT JOIN spacecloud_blocks s ON s.code=b.code
     WHERE b.status='awaiting_payment' AND b.paid_at IS NULL AND b.payment_status IN ('sync_pending','pending','failed')
     AND ((?3 AND s.state IN ('pending','blocking','blocked') AND
-      (COALESCE(b.approved_at,b.created_at)<=?1 OR datetime(b.date,'+'||b.start_min||' minutes')<=?2))
+      (CASE WHEN b.payment_status='sync_pending' THEN COALESCE(b.updated_at,b.created_at)
+              ELSE COALESCE(b.approved_at,b.created_at) END<=?1 OR datetime(b.date,'+'||b.start_min||' minutes')<=?2))
       OR (s.code IS NULL AND b.payment_expires_at<=?2 AND EXISTS (SELECT 1 FROM booking_payapp_requests p
         WHERE p.code=b.code AND p.kind='room' AND p.mul_no=b.payment_id AND p.paid_at IS NULL)))
     ORDER BY b.created_at LIMIT 5`).bind(cutoff,now,syncEnabled(env) ? 1 : 0).all();
