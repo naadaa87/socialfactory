@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseHostMonth,collectHostCalendar} from '../calendar.mjs';
+import {readCheckoutHold} from '../checkout-read.mjs';
 const scope={space:'r2',month:'2026-11',product_id:'140235'};
 const grid=()=>Array.from({length:35},()=>({reservations:[],external_schedules:[]}));
 test('host API inclusive hours match the official calendar and only needed manual data is retained',()=>{
@@ -64,4 +65,32 @@ test('rate limits retain the provider retry delay instead of initiating browser 
  const {collectHostCalendarAPI}=await import('../calendar.mjs');
  const state={origins:[{origin:'https://partner.spacecloud.kr',localStorage:[{name:'spacecloud__userInfo',value:JSON.stringify({accessToken:'private'})}]}]};
  await assert.rejects(()=>collectHostCalendarAPI(state,{scopes:[scope]},{fetcher:async()=>new Response('',{status:429,headers:{'Retry-After':'120'}})}),e=>e.code==='host-calendar-rate-limit'&&e.retry_after_ms===120000);
+});
+
+test('checkout verifies matching host ownership and public closure without making any SpaceCloud changes',async()=>{
+ const booking={code:'B261113-TESTCHECK',marker:'SFWEB:B261113-TESTCHECK',date:'2026-11-13',room:'r2',start_min:600,end_min:840};
+ const state={origins:[{origin:'https://partner.spacecloud.kr',localStorage:[{name:'spacecloud__userInfo',value:JSON.stringify({accessToken:'PRIVATE'})}]}]};
+ const verify=async(mode)=>readCheckoutHold(state,booking,{fetcher:async(url,options)=>{
+  assert.equal(options.method,'GET');assert.equal(options.cache,'no-store');
+  assert.equal(new URL(url).origin,'https://api.spacecloud.kr');
+  if(url.includes('/partner/')){
+   assert.equal(options.headers.get('authorization'),'PRIVATE');
+   const raw=grid();
+   raw[12].external_schedules=[{id:55,symd:'20261113',shour:10,ehour:13,name:booking.marker,
+    memo:mode==='foreign'?'다른 일정':`홈페이지 예약 연동 · ${booking.marker} · ${booking.date}`}];
+   if(mode==='overlap')raw[12].reservations=[{id:13,symd:'20261113',shour:11,ehour:11,rsv_stat_cd:'RSCFM'}];
+   if(mode==='unknown-hours')raw[12].reservations=[{id:13,symd:'20261113',rsv_stat_cd:'RSCFM'}];
+   return Response.json(raw,mode==='stale'?{headers:{Age:'2'}}:{});
+  }
+  assert.equal(options.headers.get('authorization'),null);
+  return Response.json({year:2026,month:11,days:[{year:2026,month:11,day:13,available:true,
+   times:Array.from({length:24},(_,hour)=>({hour,available:mode==='open'||hour<10||hour>=14}))}]});
+ }});
+ const proof=await verify('valid');
+ assert.equal(proof.verified_blocked,true);
+ assert.equal(proof.no_conflicts,true);
+ assert.equal(proof.segments[0].marker,booking.marker);
+ assert(!JSON.stringify(proof).includes('PRIVATE'));
+ for(const mode of ['overlap','open'])assert.equal(await verify(mode),null);
+ for(const mode of ['foreign','unknown-hours','stale'])await assert.rejects(()=>verify(mode));
 });

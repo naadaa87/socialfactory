@@ -55,7 +55,7 @@ async function notify(env,code,state,extra={}) {
 }
 const requestCheckout=(env,code,t)=>checkout({request:post('/api/booking/payment-status',{code,t,consent:true}),env});
 const readyCloudStatus=()=>({ok:true,enabled:true,allow_writes:true,login_saved:true,public_login_saved:true,runner:{busy:false,review:false},budget:{utc_day:new Date().toISOString().slice(0,10),utc_month:new Date().toISOString().slice(0,7),daily_limit_ms:2700000,daily_reserved_ms:0,monthly_limit_ms:7200000,monthly_reserved_ms:0,rolling_32d_limit_ms:7200000,rolling_32d_reserved_ms:0}});
-async function withProvider(run,{mode='success',cloudStatus,sms,alimtalk,unapproved=false}={}) {
+async function withProvider(run,{mode='success',cloudStatus,sms,alimtalk,unapproved=false,checkoutRead}={}) {
   const previous=globalThis.fetch,calls=[];
   globalThis.fetch=async(url,options)=>{
     if(String(url)==='https://runner.example.workers.dev/status'){
@@ -65,6 +65,10 @@ async function withProvider(run,{mode='success',cloudStatus,sms,alimtalk,unappro
     if(String(url)==='https://runner.example.workers.dev/run'){
       assert.equal(options?.method,'POST');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-worker-token-more-than-thirty-two-characters');
       return Response.json({ok:true,scheduled:true},{status:202});
+    }
+    if(String(url)==='https://runner.example.workers.dev/checkout-verify'){
+      assert.equal(options?.method,'POST');assert.equal(new Headers(options?.headers).get('authorization'),'Bearer test-only-worker-token-more-than-thirty-two-characters');
+      return Response.json({ok:true,receipt:await checkoutRead?.(JSON.parse(options.body)) || null});
     }
     if(alimtalk && String(url).includes('/template/list/')) {
       const code=options.body.get('tpl_code');
@@ -107,6 +111,31 @@ test('stale checkout waits for a fresh worker verification and only then returns
   const verify=await nextJob(env);assert.equal(verify.action,'verify');await done(env,verify);
   const allowed=await requestCheckout(env,code,t);assert.equal(allowed.status,200);assert((await allowed.json()).url.startsWith('https://payapp.kr/'));assert.equal(calls.length,1);
 }));
+
+test('a fresh direct read opens checkout without waiting for or replacing a durable verification job',async()=>withProvider(async calls=>{
+ const env=fixture(),{data}=await create(env),code=data.code,t=tokenFrom(data);await done(env,await nextJob(env));
+ env.sqlite.prepare('UPDATE spacecloud_blocks SET verified_at=? WHERE code=?').run(Date.now()-31000,code);
+ const allowed=await requestCheckout(env,code,t);
+ assert.equal(allowed.status,200);
+ assert.equal((await allowed.json()).url,'https://payapp.kr/test-sync-payment');
+ assert.equal(await nextJob(env),null);
+ assert.equal(calls.length,1);
+}, {checkoutRead:scope=>receipt({...scope,segments:[{date:scope.date,start_min:scope.start_min,end_min:scope.end_min,marker:scope.marker}]})}));
+
+test('a direct read cannot open checkout if the hold changes before the provider link is returned',async()=>{
+ let env;
+ await withProvider(async calls=>{
+  env=fixture();const {data}=await create(env),code=data.code;await done(env,await nextJob(env));
+  env.sqlite.prepare('UPDATE spacecloud_blocks SET verified_at=? WHERE code=?').run(Date.now()-31000,code);
+  const denied=await requestCheckout(env,code,tokenFrom(data));
+  assert.equal(denied.status,409);
+  assert(!(await denied.json()).url);
+  assert.equal(calls.length,1);
+ },{checkoutRead:scope=>{
+  env.sqlite.prepare("UPDATE spacecloud_blocks SET state='releasing',cancel_requested=1 WHERE code=?").run(scope.code);
+  return receipt({...scope,segments:[{date:scope.date,start_min:scope.start_min,end_min:scope.end_min,marker:scope.marker}]});
+ }});
+});
 
 test('lost capacity or runner readiness after blocking cannot claim creating or issue a PayApp invoice',async()=>{
   for(const reason of ['budget','not-ready']){

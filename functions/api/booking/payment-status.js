@@ -2,8 +2,8 @@ import { json,clean,safeEqual,sameOrigin } from '../../_lib/auth.js';
 import { ensurePayappSchema,validPayappUrl } from '../../_lib/booking-payapp.js';
 import { payappPaymentConfig } from '../../_lib/payapp.js';
 import { prepareBookings,getBooking,externalBookingConflict } from '../../_lib/booking.js';
-import { getSync,requireVerifiedBlock,enqueueSync } from '../../_lib/booking-spacecloud-sync.js';
-import { wakeCloudRunner } from '../../_lib/spacecloud-runner.js';
+import { getSync,requireVerifiedBlock,enqueueSync,validCheckoutRead,requireCurrentCheckoutRead } from '../../_lib/booking-spacecloud-sync.js';
+import { wakeCloudRunner,readCloudCheckoutHold } from '../../_lib/spacecloud-runner.js';
 import { assertCloudAdmission } from '../../_lib/booking-cloud-admission.js';
 
 import { bookingPaymentOpen } from '../../_lib/booking-checkout.js';
@@ -59,6 +59,7 @@ export async function onRequestPost({request,env,waitUntil}) {
   const {row,block,booking}=context;
   if(!row || !['requested','pending'].includes(row.status) || !validPayappUrl(row.pay_url))return json({ok:false,message:'현재 결제를 진행할 수 없습니다. 담당자에게 확인해 주세요.'},409);
   if(!payappPaymentConfig(env,row).configured)return json({ok:false,message:'결제 연결 설정을 확인하고 있습니다. 담당자에게 문의해 주세요.'},503);
+  let directReceipt=null,directStartedAt=0;
   if(row.kind==='room') {
     if(!bookingPaymentOpen(env,booking,!!block))return json({ok:false,message:'예약 상태나 이용시간이 변경되었습니다. 담당자에게 확인해 주세요.'},409);
     if(block) {
@@ -70,9 +71,19 @@ export async function onRequestPost({request,env,waitUntil}) {
           await scheduleBookingNotices(env,waitUntil,{integrationFailed:true});
           return capacityFailure();
         }
-        await enqueueSync(env,booking,'verify');
-        await wakeCloudRunner(env,{waitUntil});
-        return json({ok:true,pending:true,message:'스페이스클라우드 최신 일정을 확인하고 있습니다.'},202);
+        directStartedAt=Date.now();
+        const receipt=await readCloudCheckoutHold(env,block);
+        if(validCheckoutRead(receipt,block,directStartedAt))directReceipt=receipt;
+        else {
+          // Do not clear a receipt that was refreshed while the direct read was running.
+          try {await requireVerifiedBlock(env,booking);}
+          catch {
+            try {await enqueueSync(env,booking,'verify');}
+            catch {return json({ok:false,message:'외부 예약 시간이 변경되어 결제를 진행할 수 없습니다. 담당자에게 확인해 주세요.'},409);}
+            await wakeCloudRunner(env,{waitUntil});
+            return json({ok:true,pending:true,message:'스페이스클라우드 최신 일정을 확인하고 있습니다.'},202);
+          }
+        }
       }
     } else if(await externalBookingConflict(env,booking))return json({ok:false,message:'외부 일정이 변경되었습니다. 담당자에게 확인해 주세요.'},409);
   }
@@ -92,7 +103,10 @@ export async function onRequestPost({request,env,waitUntil}) {
     const latest=await getBooking(env,row.code);
     if(!bookingPaymentOpen(env,latest,!!block))return json({ok:false,message:'예약 상태가 변경되었습니다. 다시 확인해 주세요.'},409);
     // The status request can take time: its response cannot refresh calendar proof.
-    if(block)try{await requireVerifiedBlock(env,latest);}catch{return json({ok:false,message:'스페이스클라우드 최신 일정을 다시 확인한 뒤 결제를 진행해 주세요.'},409);}
+    if(block)try {
+      if(directReceipt)await requireCurrentCheckoutRead(env,latest,block,directReceipt,directStartedAt);
+      else await requireVerifiedBlock(env,latest);
+    }catch{return json({ok:false,message:'스페이스클라우드 최신 일정을 다시 확인한 뒤 결제를 진행해 주세요.'},409);}
   }
   return json({ok:true,url:row.pay_url});
 }

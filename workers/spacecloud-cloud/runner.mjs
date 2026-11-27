@@ -4,6 +4,7 @@ import { QueueClient } from '../../integrations/spacecloud-worker/queue.mjs';
 import { SpacecloudUI } from '../../integrations/spacecloud-worker/spacecloud-ui.mjs';
 import { collectHostPayments, paymentRequest } from './payments.mjs';
 import { collectHostCalendar, collectHostCalendarAPI, calendarRequest } from './calendar.mjs';
+import { readCheckoutHold } from './checkout-read.mjs';
 import { executeSourceJob,sourceRequest,retryableSourceError } from './source-sync.mjs';
 import { executeJob } from '../../integrations/spacecloud-worker/safety.mjs';
 import { ensureStore,problem,lockCalendar,unlockCalendar,loadVersionedHostState,saveRefreshedHostState,loadState,saveState,loadPublicState,savePublicState,onlySpacecloudState,savePublicCandidate,loadPublicCandidate,promotePublicCandidate,publicCandidateStatus,lockRunner,lockSourceRunner,assertLock,unlockRunner,reserveBudget,settleBudget,budgetStatus,paidIncluded } from './store.mjs';
@@ -470,7 +471,7 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
     async fetch(request,env){
       const url=new URL(request.url);
       if(url.pathname==='/health' && request.method==='GET')return response({ok:true,service:'spacecloud-cloud',enabled:env.ENABLED==='true'});
-      if(!controlAllowed(request,env) && !(url.pathname==='/run' && wakeAllowed(request,env)))return response({ok:false,error:'unauthorized'},401);
+      if(!controlAllowed(request,env) && !(['/run','/checkout-verify'].includes(url.pathname) && wakeAllowed(request,env)))return response({ok:false,error:'unauthorized'},401);
       const origin=request.headers.get('origin');if(origin && origin!==url.origin)return response({ok:false,error:'origin'},403);
       try {
         if(url.pathname==='/status' && request.method==='GET')return response(await status(env));
@@ -478,6 +479,13 @@ export function createRunner({launch,connect,Queue=QueueClient,Driver=Spacecloud
         if(url.pathname==='/login/provider' && request.method==='GET')return response(await providerStatus(env));
         if(request.method!=='POST')return response({ok:false,error:'method'},405);
         let body={};const text=await request.text();if(text.length>4096)return response({ok:false,error:'too-large'},413);if(text)body=JSON.parse(text);
+        if(url.pathname==='/checkout-verify'){
+          if(env.ENABLED!=='true' || env.ALLOW_WRITES!=='true' || availabilityMode(env)!=='public-api-v1')return response({ok:true,receipt:null});
+          await ensureStore(env);
+          const state=await loadState(env);
+          const receipt=state ? await readCheckoutHold(state,body,{now}) : null;
+          return response({ok:true,receipt});
+        }
         // A Pages request may disconnect quickly. Only Cron performs browser writes.
         if(url.pathname==='/run'){
           if(env.ENABLED!=='true' || env.ALLOW_WRITES!=='true')throw problem('runner-disabled','자동 연동은 아직 활성화하지 않았습니다.',503);

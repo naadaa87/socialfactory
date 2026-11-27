@@ -172,6 +172,19 @@ export async function requireVerifiedBlock(env,booking,{maxAgeMs=30000}={}) {
   return block;
 }
 
+export function validCheckoutRead(receipt,block,startedAt,now=Date.now()) {
+  return validateReceipt(receipt,block,'verify') && Number.isFinite(receipt.observed_at)
+    && receipt.observed_at>=startedAt-1000 && receipt.observed_at<=now+1000 && now-receipt.observed_at<=30000;
+}
+
+// Inline reads authorize only the current navigation, never a later paid-booking verification.
+export async function requireCurrentCheckoutRead(env,booking,original,receipt,startedAt) {
+  const current=await getSync(env,booking.code);
+  if(!current || current.state!=='blocked' || current.cancel_requested || current.updated_at!==original.updated_at
+    || !sameScope(current,booking) || !validCheckoutRead(receipt,current,startedAt))
+    throw syncError('sync-not-ready','스페이스클라우드 최신 일정과 시간 확보를 확인하고 있습니다. 잠시 후 다시 진행해 주세요.');
+}
+
 async function quarantineExpired(env,now) {
   await env.DB.batch([
     env.DB.prepare(`UPDATE spacecloud_blocks SET state='review',verified_at=NULL,error='연동 작업자 응답 지연: 외부 처리 여부 확인 필요',updated_at=?1
