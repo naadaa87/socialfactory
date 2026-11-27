@@ -61,3 +61,17 @@ export async function wakeCloudRunner(env,{waitUntil} = {}) {
   }
   return task;
 }
+
+/** A read-only check for the already held time. Any failure leaves the durable queue path available. */
+export async function readCloudCheckoutHold(env,{code,room,date,start_min,end_min,marker}) {
+  const config=runnerConfig(env);
+  if(config.reason)return null;
+  try {
+    const response=await fetch(config.origin+'/checkout-verify',{method:'POST',redirect:'manual',signal:AbortSignal.timeout(6500),
+      headers:{Authorization:'Bearer '+config.token,'Content-Type':'application/json','Cache-Control':'no-store'},
+      body:JSON.stringify({code,room,date,start_min,end_min,marker})});
+    if(!response.ok)return null;
+    const data=await response.json();
+    return data?.ok===true ? data.receipt || null : null;
+  }catch{return null;}
+}

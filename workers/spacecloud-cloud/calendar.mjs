@@ -8,12 +8,13 @@ const rateLimit=response=>{
  return Object.assign(fail('host-calendar-rate-limit'),{retry_after_ms:Math.max(30000,Number.isFinite(delay)?delay:60000)});
 };
 const iso=compact=>/^\d{8}$/.test(String(compact))?String(compact).replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3'):String(compact);
+const endDate=(date,endMin)=>endMin<1440?date:new Date(Date.parse(date+'T00:00:00Z')+86400000).toISOString().slice(0,10);
 export function hostKeys(value){
  if(Array.isArray(value))return value.map(hostKeys);
  if(!value || typeof value!=='object')return value;
  return Object.fromEntries(Object.entries(value).map(([key,v])=>[key.replace(/([A-Z]+)([A-Z][a-z])/g,'$1_$2').replace(/([a-z\d])([A-Z])/g,'$1_$2').replace(/[-\s]+/g,'_').toLowerCase(),hostKeys(v)]));
 }
-export function parseHostMonth(raw,scope){
+export function parseHostMonth(raw,scope,{checkoutMarker}={}){
  raw=hostKeys(raw);
  if(!Array.isArray(raw))throw fail('host-calendar-shape');
  const first=Date.parse(scope.month+'-01T00:00:00Z'),last=new Date(first);last.setUTCMonth(last.getUTCMonth()+1);last.setUTCDate(0);
@@ -31,11 +32,17 @@ export function parseHostMonth(raw,scope){
    // A multi-day layout we cannot interpret stays protected by its observed ID.
    // Never infer cancellation merely because its geometry is unsupported.
    const dateOfBooking=iso(row.symd),sh=Number(row.shour),eh=Number(row.ehour);
-   if(dateOfBooking!==date || date.slice(0,7)!==scope.month || row.shour==null || row.ehour==null
-    || !Number.isInteger(sh)||!Number.isInteger(eh)||sh<0||sh>23||eh<0||eh>23)continue;
+   if(date.slice(0,7)!==scope.month)continue;
+   if(dateOfBooking!==date || row.shour==null || row.ehour==null
+    || !Number.isInteger(sh)||!Number.isInteger(eh)||sh<0||sh>23||eh<0||eh>23){
+    if(checkoutMarker)throw fail('host-calendar-paid-hours');
+    continue;
+   }
    const start_min=sh*60,end_min=(eh+1+(eh+1<=sh?24:0))*60;
-   const expectedEnd=new Date(Date.parse(date+'T00:00:00Z')+(end_min>=1440?86400000:0)).toISOString().slice(0,10);
-   if(row.eymd && ![date,expectedEnd].includes(iso(row.eymd)))continue;
+   if(row.eymd && ![date,endDate(date,end_min)].includes(iso(row.eymd))){
+    if(checkoutMarker)throw fail('host-calendar-paid-end');
+    continue;
+   }
    const key='paid:'+id+'|'+date+'|'+start_min+'|'+end_min;
    if(seen.has(key))continue;seen.add(key);
    events.push({id,date,start_min,end_min,title:String(row.user_info?.name||('스페이스클라우드 예약 #'+id)).normalize('NFC').trim().slice(0,200),kind:'reservation'});
@@ -47,9 +54,11 @@ export function parseHostMonth(raw,scope){
    if(!Number.isInteger(sh)||!Number.isInteger(eh)||sh<0||sh>23||eh<0||eh>23)throw fail('host-calendar-hours');
    // The official host calendar renders ehour as its inclusive final hour.
    const start_min=sh*60,end_min=(eh+1+(eh+1<=sh?24:0))*60;
+   if(checkoutMarker && (row.shour==null || row.ehour==null || (row.eymd && ![date,endDate(date,end_min)].includes(iso(row.eymd)))))throw fail('host-calendar-manual-end');
    const key=String(row.id)+'|'+date+'|'+start_min+'|'+end_min;
    if(seen.has(key))throw fail('host-calendar-duplicate');seen.add(key);
-   events.push({id:String(row.id),date,start_min,end_min,title:row.name.normalize('NFC').trim()});
+   const memo=checkoutMarker && typeof row.memo==='string' && row.memo.includes(checkoutMarker) ? row.memo.trim() : undefined;
+   events.push({id:String(row.id),date,start_min,end_min,title:row.name.normalize('NFC').trim(),...(memo===undefined?{}:{memo})});
   }
  }
  return {...scope,events,paid_ids:[...paidIds]};
@@ -86,7 +95,7 @@ export async function calendarRequest(config,body){
 // Normal calendar reads need no Browser Run session. Use only the existing
 // encrypted server-side host profile and the official app's token-refresh flow.
 // Never return credentials, cookies or unrelated profile fields in a receipt.
-export async function collectHostCalendarAPI(savedState,plan,{fetcher=fetch,live=()=>{}}={}){
+export async function collectHostCalendarAPI(savedState,plan,{fetcher=fetch,live=()=>{},checkoutMarker}={}){
  const state=structuredClone(savedState),origin=state?.origins?.find(o=>o.origin===HOST);
  const entry=origin?.localStorage?.find(e=>e.name==='spacecloud__userInfo');
  let user;try{user=JSON.parse(entry?.value||'null');}catch{console.info('spacecloud-host-auth','saved-profile-invalid');return null;}
@@ -117,7 +126,7 @@ export async function collectHostCalendarAPI(savedState,plan,{fetcher=fetch,live
    if(r.status===429)throw rateLimit(r);
    if(r.status===401)throw fail('host-calendar-login');
    if(r.status!==200)throw fail('host-calendar-http');
-   snapshots[index]=parseHostMonth(await r.json(),s);check();
+   snapshots[index]=parseHostMonth(await r.json(),s,{checkoutMarker});check();
   }} catch(error){failed ||= error;throw error;}
  }));
  return {snapshots,state,changed:user.accessToken!==originalToken};
