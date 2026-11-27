@@ -20,6 +20,8 @@ const previousDate=date=>new Date(Date.parse(date+'T00:00:00Z')-86400000).toISOS
 const monthOf=date=>date.slice(0,7).replace('-','.');
 const numberOfMonth=month=>Number(month.slice(0,4))*12+Number(month.slice(5,7));
 const normalize=text=>text.replace(/\s+/g,' ').trim();
+const hostMonthSelector='a[title="달력레이어 팝업 열림"] em';
+const hostMonthPattern=/^(\d{4})\.(0?[1-9]|1[0-2])$/;
 
 const diagnosticPathWords=new Set(['api','v1','v2','v3','partner','reservation','reservations','calendar','user','users','auth','login','logout','profile','space','spaces','product','products','availability','holidays','status','me','host','hosts','qna','notification','notifications','chat','logs','log','track','event','events','booking','bookings','schedule','schedules','external','session','sessions','config','configuration','settings','assets','static','token','refresh','info','information','account','accounts','check','detail','list','search','common','service','services','categories','category','policy','policies','coupon','coupons','payment','payments','banner','banners']);
 const diagnosticQueryKeys=new Set(['_rsc','space','product','date','from','to','year','month','page','limit','offset','q','query','filter','sort','search','space_id','product_id','access_token']);
@@ -106,9 +108,9 @@ export class SpacecloudUI {
     await this.settle(this.host);
   }
   async hostMonth() {
-    const text=normalize(await this.host.locator('a[title="달력레이어 팝업 열림"] em').innerText());
-    if(!/^\d{4}\.\d{2}$/.test(text)) throw new ReviewRequired('호스트 달력의 기준 월을 확인하지 못했습니다.');
-    return text;
+    const month=hostMonthPattern.exec((await this.host.locator(hostMonthSelector).innerText()).trim());
+    if(!month)throw new ReviewRequired('호스트 달력의 기준 월을 확인하지 못했습니다.');
+    return `${month[1]}.${month[2].padStart(2,'0')}`;
   }
   async moveHostMonth(date) {
     for(let tries=0;tries<15;tries++) {
@@ -116,7 +118,10 @@ export class SpacecloudUI {
       if(current===target) return;
       const direction=numberOfMonth(target)>numberOfMonth(current)?'다음달':'이전달';
       await this.click(this.host.getByText(direction,{exact:true}),'호스트 달력 월 이동');
-      await this.host.waitForFunction(({selector,current})=>{const text=document.querySelector(selector)?.textContent.trim();return !!text && text!==current;},{selector:'a[title="달력레이어 팝업 열림"] em',current});
+      await this.host.waitForFunction(({selector,pattern,current})=>{
+        const month=new RegExp(pattern).exec(document.querySelector(selector)?.textContent.trim() || '');
+        return !!month && `${month[1]}.${month[2].padStart(2,'0')}`!==current;
+      },{selector:hostMonthSelector,pattern:hostMonthPattern.source,current});
       await this.settle(this.host);
     }
     throw new ReviewRequired('호스트 달력의 날짜 이동을 완료하지 못했습니다.');
